@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mapia-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mapia
+      POSTGRES_USER: mapia
+      POSTGRES_PASSWORD: mapia
+    ports:
+      - "55432:5432"
+    volumes:
+      - mapia-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapia -d mapia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mapia-postgres-data:

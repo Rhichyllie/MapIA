@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id            String       @id @default(uuid()) @db.Uuid
+  slug          String       @unique @db.VarChar(80)
+  name          String       @db.VarChar(120)
+  ownerIdentity String?      @db.VarChar(255)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  auditEvents   AuditEvent[]
+  projects      Project[]
+
+  @@map("workspaces")
+}
+
+model Project {
+  id            String          @id @default(uuid()) @db.Uuid
+  workspaceId   String          @db.Uuid
+  slug          String          @db.VarChar(80)
+  name          String          @db.VarChar(120)
+  description   String?         @db.VarChar(500)
+  template      ProjectTemplate
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  auditEvents   AuditEvent[]
+  edges         Edge[]
+  externalRefs  ExternalRef[]
+  graphVersions GraphVersion[]
+  nodes         Node[]
+  workspace     Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  wizardDraft   WizardDraft?
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+model WizardDraft {
+  id          String            @id @default(uuid()) @db.Uuid
+  projectId   String            @unique @db.Uuid
+  status      WizardDraftStatus @default(draft)
+  currentStep WizardStep        @default(template)
+  payload     Json
+  lastError   String?           @db.VarChar(500)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("wizard_drafts")
+}
+
+model GraphVersion {
+  id                String   @id @default(uuid()) @db.Uuid
+  projectId         String   @db.Uuid
+  versionNumber     Int
+  label             String?  @db.VarChar(200)
+  snapshot          Json
+  viewport          Json
+  createdByIdentity String?  @db.VarChar(255)
+  createdAt         DateTime @default(now())
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId, createdAt])
+  @@map("graph_versions")
+}
+
+model Node {
+  id           String        @id @default(uuid()) @db.Uuid
+  projectId    String        @db.Uuid
+  kind         NodeKind
+  label        String        @db.VarChar(200)
+  positionX    Float
+  positionY    Float
+  data         Json
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  outgoing     Edge[]        @relation("EdgeSource")
+  incoming     Edge[]        @relation("EdgeTarget")
+  externalRefs ExternalRef[]
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("nodes")
+}
+
+model Edge {
+  id           String        @id @default(uuid()) @db.Uuid
+  projectId    String        @db.Uuid
+  sourceNodeId String        @db.Uuid
+  targetNodeId String        @db.Uuid
+  kind         EdgeKind
+  label        String?       @db.VarChar(200)
+  data         Json
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sourceNode   Node          @relation("EdgeSource", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode   Node          @relation("EdgeTarget", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  externalRefs ExternalRef[]
+
+  @@index([projectId])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+  @@map("edges")
+}
+
+model ExternalRef {
+  id         String         @id @default(uuid()) @db.Uuid
+  projectId  String         @db.Uuid
+  nodeId     String?        @db.Uuid
+  edgeId     String?        @db.Uuid
+  system     ExternalSystem
+  externalId String         @db.VarChar(255)
+  locator    Json
+  metadata   Json
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  edge       Edge?          @relation(fields: [edgeId], references: [id], onDelete: Cascade)
+  node       Node?          @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, system, externalId, nodeId, edgeId])
+  @@index([projectId])
+  @@index([nodeId])
+  @@index([edgeId])
+  @@map("external_refs")
+}
+
+model AuditEvent {
+  id            String          @id @default(uuid()) @db.Uuid
+  workspaceId   String?         @db.Uuid
+  projectId     String?         @db.Uuid
+  entityType    AuditEntityType
+  entityId      String          @db.VarChar(255)
+  action        AuditAction
+  actorIdentity String?         @db.VarChar(255)
+  payload       Json
+  createdAt     DateTime        @default(now())
+  project       Project?        @relation(fields: [projectId], references: [id])
+  workspace     Workspace?      @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([entityType, entityId])
+  @@map("audit_events")
+}
+
+enum ProjectTemplate {
+  sitemap
+  flowchart
+  erd
+  graph
+}
+
+enum NodeKind {
+  workspace
+  project
+  entity
+  page
+  flow_step
+  note
+}
+
+enum EdgeKind {
+  contains
+  references
+  depends_on
+  flows_to
+  relates_to
+}
+
+enum ExternalSystem {
+  manual
+  postgres
+  prisma
+}
+
+enum AuditEntityType {
+  workspace
+  project
+  graph_version
+  node
+  edge
+}
+
+enum AuditAction {
+  created
+  updated
+  deleted
+  restored
+  imported
+  exported
+}
+
+enum WizardDraftStatus {
+  draft
+  validating
+  generating
+  ready
+  error
+}
+
+enum WizardStep {
+  template
+  diagram_type
+  data_source
+  config
+  review
+}
