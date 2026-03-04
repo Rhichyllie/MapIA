@@ -31,7 +31,7 @@ export function ProtectedShell({ children, session }: ProtectedShellProps) {
         <aside className="side-nav" aria-label="Navegacao principal">
           <ul className="nav-list">
             <li>
-              <NavLink href="/dashboard" label="Dashboard" />
+              <NavLink href="/dashboard" label="Workspace" />
             </li>
             <li>
               <NavLink href="/wizard" label="Wizard" />
