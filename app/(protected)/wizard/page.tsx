@@ -18,9 +18,21 @@ function getStringParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getSupportedDiagramTypeParam(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const value = getStringParam(searchParams, "diagramType");
+  if (value === "tree" || value === "flow" || value === "mindmap") {
+    return value;
+  }
+
+  return undefined;
+}
+
 export default async function WizardPage({ searchParams }: WizardPageProps) {
   const params = await searchParams;
   const projectId = getStringParam(params, "projectId");
+  const preselectedDiagramType = getSupportedDiagramTypeParam(params);
 
   if (!projectId) {
     return (
@@ -28,13 +40,13 @@ export default async function WizardPage({ searchParams }: WizardPageProps) {
         <header className="panel-header">
           <div>
             <h2>Wizard de criacao</h2>
-            <p>Selecione um projeto no Dashboard para abrir o wizard.</p>
+            <p>Selecione um projeto no Workspace para abrir o wizard.</p>
           </div>
         </header>
         <div className="panel-body">
           <p className="muted">
-            O wizard da Fase 1 opera sobre um projeto persistido. Crie um
-            projeto no Dashboard e abra pelo link &quot;Abrir Wizard&quot;.
+            O wizard opera sobre um projeto persistido. Crie um projeto no
+            Workspace e abra pelo link &quot;Abrir Wizard&quot;.
           </p>
         </div>
       </section>
@@ -130,6 +142,7 @@ export default async function WizardPage({ searchParams }: WizardPageProps) {
         <WizardStepperShell
           project={viewModel.project}
           initialDraft={viewModel.draft}
+          preselectedDiagramType={preselectedDiagramType}
         />
       </div>
     </section>
