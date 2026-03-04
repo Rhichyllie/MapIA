@@ -29,12 +29,12 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
         <header className="panel-header">
           <div>
             <h2>Editor visual</h2>
-            <p>Selecione um projeto pelo Dashboard para abrir o editor.</p>
+            <p>Selecione um projeto no Workspace para abrir o editor.</p>
           </div>
         </header>
         <div className="panel-body">
           <p className="muted">
-            O editor da Fase 1 trabalha sobre o snapshot persistido do projeto.
+            O editor trabalha sobre o snapshot de trabalho persistido do projeto.
           </p>
         </div>
       </section>
@@ -99,12 +99,12 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
     <section className="panel">
       <header className="panel-header">
         <div>
-          <h2>Editor visual</h2>
-          <p>
-            CRUD basico de nodes/edges sobre snapshot de trabalho persistido.
-          </p>
-        </div>
-        <span className="badge">{viewModel.project.name}</span>
+            <h2>Editor visual</h2>
+            <p>
+              Ambiente de edicao com salvamento, versoes e inspector tecnico.
+            </p>
+          </div>
+          <span className="badge">{viewModel.project.name}</span>
       </header>
       <div className="panel-body">
         {viewModel.initialSnapshot ? (
@@ -116,8 +116,7 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
           <div className="tile">
             <h3>Snapshot ainda nao gerado</h3>
             <p>
-              Execute o wizard deste projeto para gerar o snapshot inicial antes
-              de editar.
+              Execute o wizard para gerar o snapshot inicial antes de editar.
             </p>
             <div className="row-actions">
               <Link
