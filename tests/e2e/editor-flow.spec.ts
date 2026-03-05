@@ -216,7 +216,10 @@ async function waitForDashboardCreateFormReady(page: Page) {
 async function createProjectFromDashboard(
   page: Page,
   prefix = "E2E Editor",
-  options?: { openWizard?: boolean },
+  options?: {
+    openWizard?: boolean;
+    template?: "graph" | "sitemap" | "flowchart" | "erd";
+  },
 ) {
   const project = buildProjectIdentity(prefix);
 
@@ -225,6 +228,12 @@ async function createProjectFromDashboard(
   const nameInput = page.getByTestId("dashboard-project-name-input");
   await nameInput.fill(project.name);
   await expect(nameInput).toHaveValue(project.name);
+
+  if (options?.template) {
+    await page
+      .getByTestId("dashboard-project-template-select")
+      .selectOption(options.template);
+  }
 
   await waitForApiResponse({
     page,
@@ -268,12 +277,18 @@ async function createProjectFromDashboard(
   return { id: projectId, name: project.name } satisfies CreatedProject;
 }
 
-async function completeWizardAndOpenEditor(page: Page, projectId: string) {
+async function completeWizardAndOpenEditor(
+  page: Page,
+  projectId: string,
+  options?: { diagramType?: "tree" | "flow" | "mindmap" },
+) {
+  const diagramType = options?.diagramType ?? "tree";
+
   await expect(page.getByTestId("wizard-stepper")).toBeVisible();
   await expect(page.getByTestId("wizard-current-panel")).toContainText(
     "1. Tipo de diagrama",
   );
-  await page.getByTestId("wizard-diagram-type-tree").click();
+  await page.getByTestId(`wizard-diagram-type-${diagramType}`).click();
   await waitForApiResponse({
     page,
     method: "PUT",
@@ -489,7 +504,12 @@ async function loadEditorSnapshot(page: Page, projectId: string) {
             position: { x: number; y: number };
             data: Record<string, unknown>;
           }>;
-          edges: Array<{ id: string }>;
+          edges: Array<{
+            id: string;
+            sourceNodeId: string;
+            targetNodeId: string;
+            kind: string;
+          }>;
           rootNodeName?: string;
           allowReapplyLayout?: boolean;
         } | null;
@@ -503,6 +523,101 @@ async function loadEditorSnapshot(page: Page, projectId: string) {
   }
 
   return snapshot;
+}
+
+async function forceSnapshotDiagramType(
+  page: Page,
+  projectId: string,
+  diagramType: "erd" | "tree" | "flow" | "mindmap",
+) {
+  const loadResponse = await page.request.get(`/api/projects/${projectId}/editor-snapshot`);
+  await assertApiResponseOk(loadResponse, "load snapshot before overriding diagram type");
+  const loadPayload = (await loadResponse.json()) as {
+    data?: {
+      workingSnapshot?: {
+        snapshot?: Record<string, unknown>;
+      } | null;
+    };
+  };
+
+  const snapshot = loadPayload.data?.workingSnapshot?.snapshot as
+    | Record<string, unknown>
+    | undefined;
+  if (!snapshot) {
+    throw new Error("Could not load working snapshot before overriding diagram type.");
+  }
+
+  const response = await page.request.put(
+    `/api/projects/${projectId}/working-snapshot`,
+    {
+      data: {
+        label: `e2e-semantic-${Date.now()}`,
+        snapshot: {
+          ...snapshot,
+          diagramType,
+        },
+      },
+    },
+  );
+
+  await assertApiResponseOk(response, "override snapshot diagram type");
+}
+
+async function waitForSemanticConnectHook(page: Page) {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const globalState = window as Window & {
+            __mapiaE2eConnectNodes?: unknown;
+          };
+          return typeof globalState.__mapiaE2eConnectNodes;
+        }),
+      { timeout: 8_000 },
+    )
+    .toBe("function");
+}
+
+async function connectNodesViaSemanticHook(
+  page: Page,
+  sourceNodeId: string,
+  targetNodeId: string,
+) {
+  await waitForSemanticConnectHook(page);
+  return page.evaluate(
+    ({ sourceNodeId: source, targetNodeId: target }) => {
+      const globalState = window as Window & {
+        __mapiaE2eConnectNodes?: (
+          sourceNodeId: string,
+          targetNodeId: string,
+        ) => boolean;
+      };
+
+      return globalState.__mapiaE2eConnectNodes?.(source, target) ?? false;
+    },
+    { sourceNodeId, targetNodeId },
+  );
+}
+
+async function hasEdgeBetweenNodes(
+  page: Page,
+  projectId: string,
+  sourceNodeId: string,
+  targetNodeId: string,
+  expectedKind?: string,
+) {
+  const snapshot = await loadEditorSnapshot(page, projectId);
+  return snapshot.edges.some((edge) => {
+    if (edge.sourceNodeId !== sourceNodeId || edge.targetNodeId !== targetNodeId) {
+      return false;
+    }
+
+    if (expectedKind && edge.kind !== expectedKind) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 async function tryCreateEdgeViaUi(
@@ -573,7 +688,19 @@ async function createEdgeViaApiFallback(
       },
     },
   });
-  await assertApiResponseOk(response, "create edge via API fallback");
+
+  if (response.ok()) {
+    return true;
+  }
+
+  const body = await readResponseDebugBody(response);
+  if (response.status() === 400 && body.toLowerCase().includes("already exists")) {
+    return false;
+  }
+
+  throw new Error(
+    `[create edge via API fallback] request failed (${response.status()}): ${body}`,
+  );
 }
 
 async function clickEditorPane(page: Page) {
@@ -586,9 +713,20 @@ async function clickEditorPane(page: Page) {
   await page.mouse.click(box.x + 24, box.y + 24);
 }
 
-async function createProjectAndOpenEditor(page: Page, prefix: string) {
-  const project = await createProjectFromDashboard(page, prefix);
-  await completeWizardAndOpenEditor(page, project.id);
+async function createProjectAndOpenEditor(
+  page: Page,
+  prefix: string,
+  options?: {
+    diagramType?: "tree" | "flow" | "mindmap";
+    template?: "graph" | "sitemap" | "flowchart" | "erd";
+  },
+) {
+  const project = await createProjectFromDashboard(page, prefix, {
+    template: options?.template,
+  });
+  await completeWizardAndOpenEditor(page, project.id, {
+    diagramType: options?.diagramType,
+  });
   await waitForEditorReady(page);
   return project;
 }
@@ -806,6 +944,192 @@ test.describe("Editor E2E (Fase 3A)", () => {
     await expect(page.getByTestId("add-node-dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("add-node-dialog")).toHaveCount(0);
+  });
+
+  test("Fase 5.7 Semantica: bloqueia conexao invalida em ERD com assistant", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Semantic ERD");
+
+    await runActionAndWaitForAutosave(
+      page,
+      () => addNodeViaGuidedFlow(page, { title: `Entidade ${Date.now()}`, kind: "entity" }),
+      { context: "add entity node before ERD semantic validation" },
+    );
+    await setInspectorMode(page, "technical");
+    const entityNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "entity node id",
+    );
+
+    await runActionAndWaitForAutosave(
+      page,
+      () =>
+        addNodeViaGuidedFlow(page, {
+          title: `Etapa ${Date.now()}`,
+          kind: "flow-step",
+        }),
+      { context: "add flow-step node before ERD semantic validation" },
+    );
+    const flowStepNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "flow-step node id",
+    );
+
+    await forceSnapshotDiagramType(page, project.id, "erd");
+    await page.reload();
+    await waitForEditorReady(page);
+    await assertCanvasRenderer(page, "erd");
+
+    const createdEdge = await connectNodesViaSemanticHook(page, entityNodeId, flowStepNodeId);
+    expect(createdEdge).toBe(false);
+    await expect(page.getByTestId("semantic-connection-assistant")).toBeVisible();
+    await expect(page.getByTestId("semantic-connection-assistant")).toContainText(
+      "Conexao invalida",
+    );
+    await page.getByTestId("semantic-connection-cancel").click();
+    await expect(page.getByTestId("semantic-connection-assistant")).toHaveCount(0);
+  });
+
+  test("Fase 5.7 Semantica: troca de tipo abre repair dialog e aplica correcao", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Semantic Repair", {
+      diagramType: "flow",
+    });
+
+    await setInspectorMode(page, "technical");
+
+    await runActionAndWaitForAutosave(
+      page,
+      () =>
+        addNodeViaGuidedFlow(page, {
+          title: `Etapa A ${Date.now()}`,
+          kind: "flow-step",
+        }),
+      { context: "add first flow-step before repair dialog scenario" },
+    );
+    const sourceNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "source node id",
+    );
+
+    await runActionAndWaitForAutosave(
+      page,
+      () =>
+        addNodeViaGuidedFlow(page, {
+          title: `Etapa B ${Date.now()}`,
+          kind: "flow-step",
+        }),
+      { context: "add second flow-step before repair dialog scenario" },
+    );
+    const targetNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "target node id",
+    );
+
+    const hasFlowEdgeBeforeCreation = await hasEdgeBetweenNodes(
+      page,
+      project.id,
+      sourceNodeId,
+      targetNodeId,
+      "flows-to",
+    );
+
+    if (!hasFlowEdgeBeforeCreation) {
+      const createdViaHook = await connectNodesViaSemanticHook(
+        page,
+        sourceNodeId,
+        targetNodeId,
+      );
+      if (createdViaHook) {
+        await waitForAutosaveCycle(page, { requireDirty: false });
+      } else {
+        const createdViaApi = await createEdgeViaApiFallback(
+          page,
+          project.id,
+          sourceNodeId,
+          targetNodeId,
+        );
+        if (createdViaApi) {
+          await page.reload();
+          await waitForEditorReady(page);
+          await setInspectorMode(page, "technical");
+        }
+      }
+    }
+
+    const hasFlowEdgeAfterCreation = await hasEdgeBetweenNodes(
+      page,
+      project.id,
+      sourceNodeId,
+      targetNodeId,
+      "flows-to",
+    );
+    expect(hasFlowEdgeAfterCreation).toBe(true);
+
+    const edgeLocator = page.locator('[data-testid^="editor-edge-"]');
+    const edgeCountBeforeRepair = await edgeLocator.count();
+    expect(edgeCountBeforeRepair).toBeGreaterThan(0);
+
+    await page.getByTestId(`editor-node-${sourceNodeId}`).click();
+    await page.getByTestId("inspector-node-kind").selectOption("entity");
+    await page.getByTestId("inspector-apply-node").click();
+
+    await expect(page.getByTestId("semantic-repair-dialog")).toBeVisible();
+    await runActionAndWaitForAutosave(
+      page,
+      () => page.getByTestId("semantic-repair-apply-fix").click(),
+      { context: "apply semantic repair after node kind change" },
+    );
+    await expect(page.getByTestId("semantic-repair-dialog")).toHaveCount(0);
+
+    await expect
+      .poll(async () => edgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBeLessThan(edgeCountBeforeRepair);
+    await expect(
+      page.getByTestId(`editor-node-${sourceNodeId}`).locator('[data-node-kind="entity"]'),
+    ).toBeVisible();
+  });
+
+  test("Fase 5.7 Semantica: Verificar lista issues e Ir para seleciona item", async ({
+    authenticatedPage: page,
+  }) => {
+    await createProjectAndOpenEditor(page, "E2E Semantic Audit", {
+      diagramType: "flow",
+    });
+    await setInspectorMode(page, "technical");
+
+    await runActionAndWaitForAutosave(
+      page,
+      () =>
+        addNodeViaGuidedFlow(page, {
+          title: `No fora do perfil ${Date.now()}`,
+          kind: "entity",
+        }),
+      { context: "create semantic issue before audit panel assertion" },
+    );
+    const problematicNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "problematic node id",
+    );
+
+    await clickEditorPane(page);
+    await page.getByTestId("semantic-audit-button").click();
+
+    await expect(page.getByTestId("semantic-audit-panel")).toBeVisible();
+    await expect(page.getByTestId("semantic-audit-issues")).toBeVisible();
+    await page
+      .locator('[data-testid^="semantic-issue-item-"]')
+      .filter({ hasText: "No fora do perfil" })
+      .first()
+      .getByRole("button", { name: "Ir para" })
+      .click();
+
+    await expect(page.getByTestId("inspector-node-id")).toContainText(problematicNodeId);
+    await expect(page.getByTestId("canvas-selection-semantic-status")).toContainText(
+      "Semantica",
+    );
   });
 
   test("fluxo principal Dashboard -> Wizard -> Editor com persistencia", async ({

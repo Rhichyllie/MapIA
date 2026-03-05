@@ -1166,6 +1166,14 @@ select {
   justify-content: space-between;
   align-items: center;
   gap: 0.55rem;
+  pointer-events: none;
+}
+
+.canvas-top-bar-main,
+.canvas-top-bar-actions,
+.canvas-top-bar-main *,
+.canvas-top-bar-actions * {
+  pointer-events: auto;
 }
 
 .canvas-top-bar.is-focus-mode {
@@ -1252,6 +1260,20 @@ select {
 .canvas-selection-kind-chip {
   font-size: 0.78rem;
   border-style: dashed;
+}
+
+.canvas-selection-semantic-status {
+  border-style: dashed;
+}
+
+.canvas-selection-semantic-status-error {
+  border-color: color-mix(in srgb, var(--color-danger) 56%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+}
+
+.canvas-selection-semantic-status-warning {
+  border-color: color-mix(in srgb, var(--color-warning) 58%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
 }
 
 .canvas-selection-hud-actions {
@@ -1355,6 +1377,113 @@ select {
 
 .add-node-dialog-actions {
   justify-content: flex-end;
+}
+
+.semantic-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  background: color-mix(in srgb, var(--color-bg) 62%, transparent);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.semantic-dialog {
+  width: min(96vw, 640px);
+  border: 1px solid var(--border);
+  border-radius: 0.9rem;
+  background: var(--surface-elevation-2);
+  box-shadow: var(--shadow);
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.72rem;
+}
+
+.semantic-dialog:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.semantic-dialog-header {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.semantic-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.52rem;
+}
+
+.semantic-kind-card {
+  border: 1px solid var(--border);
+  border-radius: 0.72rem;
+  background: var(--surface-elevation-1);
+  padding: 0.56rem;
+  text-align: left;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.semantic-kind-card.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 56%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+
+.semantic-kind-title {
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.semantic-dialog-actions {
+  justify-content: flex-end;
+}
+
+.semantic-repair-list {
+  margin-top: 0.2rem;
+}
+
+.semantic-audit-panel {
+  border: 1px solid var(--editor-meta-border);
+  border-radius: 0.72rem;
+  background: var(--editor-meta-bg);
+  padding: 0.62rem;
+  display: grid;
+  gap: 0.42rem;
+}
+
+.semantic-audit-header {
+  justify-content: space-between;
+}
+
+.semantic-audit-list {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.semantic-audit-item {
+  border: 1px dashed var(--border);
+  border-radius: 0.62rem;
+  background: var(--surface-elevation-1);
+  padding: 0.46rem 0.52rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.semantic-audit-item-main {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.semantic-audit-item-error {
+  border-color: color-mix(in srgb, var(--color-danger) 52%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 9%, var(--surface-elevation-1));
+}
+
+.semantic-audit-item-warning {
+  border-color: color-mix(in srgb, var(--color-warning) 56%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--surface-elevation-1));
 }
 
 .inspector {
@@ -1690,6 +1819,18 @@ select {
   transition: stroke 120ms ease, stroke-width 120ms ease;
 }
 
+.react-flow__edge-path.editor-edge-invalid {
+  stroke-width: 2.6px;
+}
+
+.react-flow__edge-path.editor-edge-invalid-error {
+  stroke: color-mix(in srgb, var(--color-danger) 74%, var(--canvas-edge-color));
+}
+
+.react-flow__edge-path.editor-edge-invalid-warning {
+  stroke: color-mix(in srgb, var(--color-warning) 70%, var(--canvas-edge-color));
+}
+
 .react-flow__edge-path.editor-edge-kind-flows-to,
 .react-flow__edge-path.editor-edge-kind-contains {
   stroke-dasharray: none;
@@ -1775,6 +1916,20 @@ select {
   color: var(--color-text);
   box-shadow: var(--diagram-node-shadow);
   padding: 0.54rem 0.64rem;
+}
+
+.react-flow__node.editor-node-has-issue .diagram-node {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 40%, transparent),
+    var(--diagram-node-shadow);
+}
+
+.react-flow__node.editor-node-issue-error .diagram-node {
+  border-color: color-mix(in srgb, var(--color-danger) 64%, transparent);
+}
+
+.react-flow__node.editor-node-issue-warning .diagram-node {
+  border-color: color-mix(in srgb, var(--color-warning) 62%, transparent);
 }
 
 .diagram-node__title {
@@ -1978,6 +2133,10 @@ select {
   }
 
   .add-node-kind-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .semantic-kind-grid {
     grid-template-columns: 1fr;
   }
 

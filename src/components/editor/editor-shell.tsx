@@ -102,6 +102,18 @@ import {
   buildVersionDiffSummary,
   type VersionDiffSummaryResult,
 } from "./versions/diff-summary";
+import { ConnectionAssistant } from "./semantics/connection-assistant";
+import { RepairDialog } from "./semantics/repair-dialog";
+import {
+  runGraphAudit,
+  validateEdgeCreation,
+  validateEdgeKindChange,
+  validateNodeKindChange,
+  type RepairAction,
+  type RepairPlan,
+  type SemanticIssue,
+  type SemanticViolation,
+} from "./semantics/semantics";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const DEFAULT_SNAPSHOT_LABEL = "fase1-working-v1";
@@ -157,6 +169,24 @@ type SelectionHudQuickAction = {
   label: string;
   edgeKind: EdgeKind;
   nodeKind: NodeKind;
+};
+
+type PendingConnectionAssistantState = {
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceLabel: string;
+  targetLabel: string;
+  attemptedEdgeKind: EdgeKind;
+  allowedEdgeKinds: EdgeKind[];
+  recommendedEdgeKind?: EdgeKind;
+  message: string;
+  details?: string;
+};
+
+type PendingNodeRepairState = {
+  command: Extract<EditorCommand, { type: "updateNode" }>;
+  repairPlan: RepairPlan;
+  violations: SemanticViolation[];
 };
 
 type EditorPanelState = {
@@ -269,6 +299,26 @@ function resolveDiagramTypeForQuickActions(rendererKey: DiagramRendererKey): Dia
 
   if (rendererKey === "mindmap") {
     return "mindmap";
+  }
+
+  return undefined;
+}
+
+function resolveSemanticDiagramType(
+  diagramType: string | undefined,
+  rendererKey: DiagramRendererKey,
+) {
+  if (
+    diagramType === "tree" ||
+    diagramType === "flow" ||
+    diagramType === "mindmap" ||
+    diagramType === "erd"
+  ) {
+    return diagramType;
+  }
+
+  if (rendererKey === "erd") {
+    return "erd";
   }
 
   return undefined;
@@ -657,6 +707,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     description: "",
     tagsText: "",
   });
+  const [pendingConnectionAssistant, setPendingConnectionAssistant] =
+    useState<PendingConnectionAssistantState | null>(null);
+  const [pendingNodeRepair, setPendingNodeRepair] =
+    useState<PendingNodeRepairState | null>(null);
+  const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -846,36 +901,144 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       }),
     [layoutMetadata.diagramType, layoutMetadata.layoutOptions, project.template],
   );
+  const semanticDiagramType = resolveSemanticDiagramType(
+    layoutMetadata.diagramType,
+    renderer.key,
+  );
+  const semanticRootNodeId =
+    renderer.key === "mindmap"
+      ? getMindmapRootNodeId(nodes, layoutMetadata.rootNodeName)
+      : null;
+  const semanticAudit = useMemo(
+    () =>
+      runGraphAudit(
+        {
+          nodes: nodes.map((node) => ({
+            id: node.id,
+            kind: node.data.kind,
+            label: node.data.label,
+          })),
+          edges: edges.map((edge) => ({
+            id: edge.id,
+            sourceNodeId: edge.source,
+            targetNodeId: edge.target,
+            kind: edge.data?.kind ?? "flows-to",
+            label: edge.label ? String(edge.label) : undefined,
+          })),
+          rootNodeId: semanticRootNodeId,
+        },
+        semanticDiagramType,
+        inspectorMode,
+      ),
+    [edges, inspectorMode, nodes, semanticDiagramType, semanticRootNodeId],
+  );
+  const semanticIssuesByNodeId = useMemo(() => {
+    const map = new Map<string, SemanticIssue[]>();
+    for (const issue of semanticAudit.issues) {
+      if (issue.targetType !== "node" || !issue.targetId) {
+        continue;
+      }
+
+      const current = map.get(issue.targetId) ?? [];
+      current.push(issue);
+      map.set(issue.targetId, current);
+    }
+    return map;
+  }, [semanticAudit.issues]);
+  const semanticIssuesByEdgeId = useMemo(() => {
+    const map = new Map<string, SemanticIssue[]>();
+    for (const issue of semanticAudit.issues) {
+      if (issue.targetType !== "edge" || !issue.targetId) {
+        continue;
+      }
+
+      const current = map.get(issue.targetId) ?? [];
+      current.push(issue);
+      map.set(issue.targetId, current);
+    }
+    return map;
+  }, [semanticAudit.issues]);
+  const selectedSemanticIssues = useMemo(() => {
+    if (selectedNode) {
+      return semanticIssuesByNodeId.get(selectedNode.id) ?? [];
+    }
+
+    if (selectedEdge) {
+      return semanticIssuesByEdgeId.get(selectedEdge.id) ?? [];
+    }
+
+    return [];
+  }, [selectedEdge, selectedNode, semanticIssuesByEdgeId, semanticIssuesByNodeId]);
+  const selectedSemanticSeverity: "error" | "warning" | null =
+    selectedSemanticIssues.some((issue) => issue.severity === "error")
+      ? "error"
+      : selectedSemanticIssues.some((issue) => issue.severity === "warning")
+        ? "warning"
+        : null;
+  const selectedSemanticStatusLabel = selectedSemanticSeverity
+    ? selectedSemanticSeverity === "error"
+      ? "Semantica: atencao"
+      : "Semantica: aviso"
+    : "Semantica: OK";
   const renderedNodes = useMemo(() => {
     const mindmapRootNodeId =
       renderer.key === "mindmap"
         ? getMindmapRootNodeId(nodes, layoutMetadata.rootNodeName)
         : null;
 
-    return nodes.map((node) => ({
-      ...node,
-      type: renderer.nodeType,
-      className: [node.className, `editor-node-renderer-${renderer.key}`]
-        .filter(Boolean)
-        .join(" "),
-      data: {
-        ...node.data,
-        rendererDirection: renderer.treeDirection,
-        rendererIsRoot: node.id === mindmapRootNodeId,
-        presentationMode: inspectorMode,
-        displayLabel:
-          inspectorMode === "operational"
-            ? getOperationalDisplayLabel({
-                label: node.data.label,
-                payload: node.data.payload,
-              })
-            : node.data.label,
-      },
-    }));
-  }, [inspectorMode, layoutMetadata.rootNodeName, nodes, renderer]);
+    return nodes.map((node) => {
+      const nodeIssues = semanticIssuesByNodeId.get(node.id) ?? [];
+      const highlightedIssueClass =
+        nodeIssues.length > 0 && (isValidationPanelOpen || selectedNodeId === node.id)
+          ? nodeIssues.some((issue) => issue.severity === "error")
+            ? "editor-node-has-issue editor-node-issue-error"
+            : "editor-node-has-issue editor-node-issue-warning"
+          : null;
+
+      return {
+        ...node,
+        type: renderer.nodeType,
+        className: [
+          node.className,
+          `editor-node-renderer-${renderer.key}`,
+          highlightedIssueClass,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        data: {
+          ...node.data,
+          rendererDirection: renderer.treeDirection,
+          rendererIsRoot: node.id === mindmapRootNodeId,
+          presentationMode: inspectorMode,
+          displayLabel:
+            inspectorMode === "operational"
+              ? getOperationalDisplayLabel({
+                  label: node.data.label,
+                  payload: node.data.payload,
+                })
+              : node.data.label,
+        },
+      };
+    });
+  }, [
+    inspectorMode,
+    isValidationPanelOpen,
+    layoutMetadata.rootNodeName,
+    nodes,
+    renderer,
+    selectedNodeId,
+    semanticIssuesByNodeId,
+  ]);
   const renderedEdges = useMemo(() => {
     const baseEdges = edges.map((edge) => {
       const edgeKind = edge.data?.kind ?? "flows-to";
+      const edgeIssues = semanticIssuesByEdgeId.get(edge.id) ?? [];
+      const highlightedIssueClass =
+        edgeIssues.length > 0 && (isValidationPanelOpen || selectedEdgeId === edge.id)
+          ? edgeIssues.some((issue) => issue.severity === "error")
+            ? "editor-edge-invalid editor-edge-invalid-error"
+            : "editor-edge-invalid editor-edge-invalid-warning"
+          : null;
 
       return {
         ...edge,
@@ -902,6 +1065,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           `editor-edge-kind-${edgeKind}`,
           `editor-edge-tone-${getEdgeKindPresentation(edgeKind).tone}`,
           `editor-edge-renderer-${renderer.key}`,
+          highlightedIssueClass,
         ]
           .filter(Boolean)
           .join(" "),
@@ -913,7 +1077,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     return computeParallelEdgeMeta(baseEdges);
-  }, [edges, renderer]);
+  }, [
+    edges,
+    isValidationPanelOpen,
+    renderer,
+    selectedEdgeId,
+    semanticIssuesByEdgeId,
+  ]);
   const isReapplyLayoutBlockedByPolicy = layoutMetadata.allowReapplyLayout === false;
   const canReapplyLayout = useMemo(
     () =>
@@ -1854,6 +2024,35 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   }, [quickFindActiveIndex, quickFindOptions.length]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const globalWindow = window as Window & {
+      __mapiaE2eConnectNodes?: (
+        sourceNodeId: string,
+        targetNodeId: string,
+      ) => boolean;
+    };
+
+    globalWindow.__mapiaE2eConnectNodes = (sourceNodeId: string, targetNodeId: string) => {
+      return tryCreateEdgeWithSemanticRules({
+        sourceNodeId,
+        targetNodeId,
+        edgeKind: quickAction.edgeKind,
+        explicitKind: false,
+        openAssistantOnInvalid: true,
+      });
+    };
+
+    return () => {
+      delete globalWindow.__mapiaE2eConnectNodes;
+    };
+  // E2E hook only depends on the quick-action default kind; semantic checks read current refs/state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickAction.edgeKind]);
+
+  useEffect(() => {
     if (isAddNodeDialogOpen) {
       return;
     }
@@ -1993,6 +2192,153 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     });
   }
 
+  function handleFocusSemanticIssue(issue: SemanticIssue) {
+    if (issue.targetType === "node" && issue.targetId) {
+      focusNodeById(issue.targetId);
+      return;
+    }
+
+    if (issue.targetType === "edge" && issue.targetId) {
+      const edge = edgesRef.current.find((candidate) => candidate.id === issue.targetId);
+      if (!edge) {
+        return;
+      }
+
+      selectItem({ nodeId: null, edgeId: edge.id });
+      const sourceNode = nodesRef.current.find((node) => node.id === edge.source);
+      const targetNode = nodesRef.current.find((node) => node.id === edge.target);
+
+      if (sourceNode && targetNode) {
+        reactFlowInstanceRef.current?.setCenter(
+          (sourceNode.position.x + targetNode.position.x) / 2,
+          (sourceNode.position.y + targetNode.position.y) / 2,
+          {
+            zoom: Math.max(viewportRef.current.zoom, 1),
+            duration: 220,
+          },
+        );
+      }
+      return;
+    }
+
+    handleFitView();
+  }
+
+  function applySemanticRepairAction(action: RepairAction) {
+    if (action.type === "updateEdgeKind") {
+      return applyLocalCommandAndQueue({
+        type: "updateEdge",
+        edgeId: action.edgeId,
+        patch: {
+          kind: action.nextKind,
+          label: getEdgeKindLabel(action.nextKind, "operational"),
+        },
+      });
+    }
+
+    if (action.type === "removeEdge") {
+      return applyLocalCommandAndQueue({
+        type: "removeEdge",
+        edgeId: action.edgeId,
+      });
+    }
+
+    return applyLocalCommandAndQueue({
+      type: "updateNode",
+      nodeId: action.nodeId,
+      patch: {
+        kind: action.nextKind,
+      },
+    });
+  }
+
+  function tryCreateEdgeWithSemanticRules(input: {
+    sourceNodeId: string;
+    targetNodeId: string;
+    edgeKind: EdgeKind;
+    explicitKind: boolean;
+    openAssistantOnInvalid: boolean;
+  }) {
+    const sourceNode = nodesRef.current.find((node) => node.id === input.sourceNodeId);
+    const targetNode = nodesRef.current.find((node) => node.id === input.targetNodeId);
+
+    if (!sourceNode || !targetNode) {
+      setGlobalErrorMessage("Nao foi possivel conectar: no de origem/destino nao encontrado.");
+      return false;
+    }
+
+    const validation = validateEdgeCreation({
+      diagramType: semanticDiagramType,
+      sourceNode: {
+        id: sourceNode.id,
+        kind: sourceNode.data.kind,
+        label: sourceNode.data.label,
+      },
+      targetNode: {
+        id: targetNode.id,
+        kind: targetNode.data.kind,
+        label: targetNode.data.label,
+      },
+      edgeKind: input.edgeKind,
+      mode: inspectorMode,
+    });
+
+    let nextEdgeKind = input.edgeKind;
+
+    if (!validation.ok) {
+      if (input.openAssistantOnInvalid) {
+        setPendingConnectionAssistant({
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          sourceLabel:
+            nodeLabelById.get(sourceNode.id) ?? sourceNode.data.label ?? sourceNode.id,
+          targetLabel:
+            nodeLabelById.get(targetNode.id) ?? targetNode.data.label ?? targetNode.id,
+          attemptedEdgeKind: input.edgeKind,
+          allowedEdgeKinds: validation.allowedEdgeKinds,
+          recommendedEdgeKind: validation.recommendedEdgeKind,
+          message:
+            validation.violation?.message ??
+            "Esta conexao nao respeita as regras semanticas do diagrama.",
+          details: validation.violation?.details,
+        });
+        return false;
+      }
+
+      if (validation.allowedEdgeKinds.length === 0) {
+        setGlobalErrorMessage(
+          validation.violation?.message ??
+            "Conexao invalida para o tipo atual de diagrama.",
+        );
+        return false;
+      }
+
+      nextEdgeKind = validation.recommendedEdgeKind ?? validation.allowedEdgeKinds[0];
+      setQuerySyncMessage(
+        `Relacao ajustada automaticamente para '${getEdgeKindLabel(nextEdgeKind, "operational")}'.`,
+      );
+    } else if (
+      !input.explicitKind &&
+      inspectorMode === "operational" &&
+      validation.recommendedEdgeKind &&
+      validation.recommendedEdgeKind !== input.edgeKind
+    ) {
+      nextEdgeKind = validation.recommendedEdgeKind;
+    }
+
+    return applyLocalCommandAndQueue({
+      type: "addEdge",
+      edge: {
+        id: crypto.randomUUID(),
+        sourceNodeId: sourceNode.id,
+        targetNodeId: targetNode.id,
+        kind: nextEdgeKind,
+        label: getEdgeKindLabel(nextEdgeKind, "operational"),
+        data: {},
+      },
+    });
+  }
+
   function enterCanvasFocusMode() {
     if (isCanvasFocusMode) {
       return;
@@ -2034,6 +2380,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
   function handleToggleInspectorVisibility() {
     setIsFocusInspectorCollapsed((current) => !current);
+  }
+
+  function handleToggleValidationPanel() {
+    setIsValidationPanelOpen((current) => {
+      const next = !current;
+      if (next) {
+        setIsFocusInspectorCollapsed(false);
+      }
+      return next;
+    });
   }
 
   function clonePayload(payload: Record<string, unknown>) {
@@ -2113,16 +2469,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     if (input.sourceNodeId && input.relationKind) {
-      applyLocalCommandAndQueue({
-        type: "addEdge",
-        edge: {
-          id: crypto.randomUUID(),
-          sourceNodeId: input.sourceNodeId,
-          targetNodeId: nextNodeId,
-          kind: input.relationKind,
-          label: getEdgeKindLabel(input.relationKind, "operational"),
-          data: {},
-        },
+      tryCreateEdgeWithSemanticRules({
+        sourceNodeId: input.sourceNodeId,
+        targetNodeId: nextNodeId,
+        edgeKind: input.relationKind,
+        explicitKind: false,
+        openAssistantOnInvalid: false,
       });
     }
 
@@ -2147,6 +2499,22 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && pendingConnectionAssistant) {
+        event.preventDefault();
+        setPendingConnectionAssistant(null);
+        return;
+      }
+
+      if (event.key === "Escape" && pendingNodeRepair) {
+        event.preventDefault();
+        setPendingNodeRepair(null);
+        return;
+      }
+
+      if (pendingConnectionAssistant || pendingNodeRepair) {
+        return;
+      }
+
       if (event.key === "Escape" && isAddNodeDialogOpen) {
         event.preventDefault();
         setIsAddNodeDialogOpen(false);
@@ -2227,6 +2595,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     isAddNodeDialogOpen,
     isCanvasFocusMode,
     isQuickFindOpen,
+    pendingConnectionAssistant,
+    pendingNodeRepair,
     panelState,
   ]);
 
@@ -2280,6 +2650,70 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       sourceNodeId: selectedNode.id,
       relationKind: quickAction.edgeKind,
     });
+  }
+
+  function handleCancelConnectionAssistant() {
+    setPendingConnectionAssistant(null);
+    setQuerySyncMessage("Conexao cancelada pelo usuario.");
+  }
+
+  function handleSelectConnectionAssistantKind(kind: EdgeKind) {
+    const pending = pendingConnectionAssistant;
+    if (!pending) {
+      return;
+    }
+
+    setPendingConnectionAssistant(null);
+    tryCreateEdgeWithSemanticRules({
+      sourceNodeId: pending.sourceNodeId,
+      targetNodeId: pending.targetNodeId,
+      edgeKind: kind,
+      explicitKind: true,
+      openAssistantOnInvalid: false,
+    });
+  }
+
+  function handleCancelPendingNodeRepair() {
+    setPendingNodeRepair(null);
+    setNodeInspectorMessage("Alteracao de tipo cancelada.");
+  }
+
+  function handleApplyPendingNodeRepair(mode: "repair" | "remove") {
+    const pending = pendingNodeRepair;
+    if (!pending) {
+      return;
+    }
+
+    const nodeApplied = applyLocalCommandAndQueue(
+      pending.command,
+      "No atualizado. Salvamento automatico agendado.",
+    );
+
+    if (!nodeApplied) {
+      return;
+    }
+
+    const selectedActions =
+      mode === "repair"
+        ? pending.repairPlan.actions
+        : pending.repairPlan.actions.filter(
+            (action) =>
+              action.type === "removeEdge" || action.type === "updateNodeKind",
+          );
+
+    let appliedActions = 0;
+    for (const action of selectedActions) {
+      if (applySemanticRepairAction(action)) {
+        appliedActions += 1;
+      }
+    }
+
+    setPendingNodeRepair(null);
+    setNodeInspectorMessage(
+      mode === "repair"
+        ? `Tipo aplicado com reparo automatico (${appliedActions}).`
+        : `Tipo aplicado com remocao de relacoes invalidas (${appliedActions}).`,
+    );
   }
 
   function handleDuplicateSelectedNode() {
@@ -2368,18 +2802,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
+    setPendingConnectionAssistant(null);
     const defaultRelation = quickAction.edgeKind;
-
-    applyLocalCommandAndQueue({
-      type: "addEdge",
-      edge: {
-        id: crypto.randomUUID(),
-        sourceNodeId: connection.source,
-        targetNodeId: connection.target,
-        kind: defaultRelation,
-        label: getEdgeKindLabel(defaultRelation, "operational"),
-        data: {},
-      },
+    tryCreateEdgeWithSemanticRules({
+      sourceNodeId: connection.source,
+      targetNodeId: connection.target,
+      edgeKind: defaultRelation,
+      explicitKind: false,
+      openAssistantOnInvalid: true,
     });
   }
 
@@ -2559,6 +2989,66 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         return;
       }
 
+      if (command.type !== "updateNode") {
+        return;
+      }
+
+      const nextNodeKind = command.patch.kind ?? selectedNode.data.kind;
+      const isKindChange = nextNodeKind !== selectedNode.data.kind;
+
+      if (isKindChange) {
+        const validation = validateNodeKindChange({
+          diagramType: semanticDiagramType,
+          mode: inspectorMode,
+          nodeId: selectedNode.id,
+          nextKind: nextNodeKind,
+          nodes: nodesRef.current.map((node) => ({
+            id: node.id,
+            kind: node.data.kind,
+            label: node.data.label,
+          })),
+          edges: edgesRef.current.map((edge) => ({
+            id: edge.id,
+            sourceNodeId: edge.source,
+            targetNodeId: edge.target,
+            kind: edge.data?.kind ?? "flows-to",
+            label: edge.label ? String(edge.label) : undefined,
+          })),
+        });
+
+        const blockingViolation = validation.violations.find(
+          (violation) => violation.severity === "error",
+        );
+        if (blockingViolation && !validation.repairPlan) {
+          setNodeInspectorErrors({
+            kind: blockingViolation.message,
+          });
+          setNodeInspectorMessage(blockingViolation.details ?? blockingViolation.message);
+          return;
+        }
+
+        if (validation.repairPlan && validation.repairPlan.actions.length > 0) {
+          setPendingNodeRepair({
+            command,
+            repairPlan: validation.repairPlan,
+            violations: validation.violations,
+          });
+          return;
+        }
+
+        const warningViolation = validation.violations.find(
+          (violation) => violation.severity === "warning",
+        );
+        if (warningViolation && inspectorMode === "technical") {
+          const shouldApplyWarningOverride = window.confirm(
+            `${warningViolation.message}\n\nDeseja aplicar no modo tecnico mesmo assim?`,
+          );
+          if (!shouldApplyWarningOverride) {
+            return;
+          }
+        }
+      }
+
       applyLocalCommandAndQueue(command, "No atualizado. Salvamento automatico agendado.");
     } catch (error) {
       const feedback = getFriendlyInspectorFeedback(error);
@@ -2574,7 +3064,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setEdgeInspectorMessage(null);
 
     try {
-      const command =
+      let command =
         inspectorMode === "operational" && operationalEdgeDraft
           ? buildUpdateEdgeCommandFromInspectorForm({
               edgeId: selectedEdge.id,
@@ -2593,6 +3083,69 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
       if (!command) {
         return;
+      }
+
+      if (command.type !== "updateEdge") {
+        return;
+      }
+
+      const sourceNode = nodesRef.current.find((node) => node.id === selectedEdge.source);
+      const targetNode = nodesRef.current.find((node) => node.id === selectedEdge.target);
+      const nextKind = command.patch.kind ?? (selectedEdge.data?.kind ?? "flows-to");
+      const kindValidation = validateEdgeKindChange({
+        diagramType: semanticDiagramType,
+        mode: inspectorMode,
+        edge: {
+          id: selectedEdge.id,
+          sourceNodeId: selectedEdge.source,
+          targetNodeId: selectedEdge.target,
+          kind: selectedEdge.data?.kind ?? "flows-to",
+          label: selectedEdge.label ? String(selectedEdge.label) : undefined,
+        },
+        sourceNode: sourceNode
+          ? {
+              id: sourceNode.id,
+              kind: sourceNode.data.kind,
+              label: sourceNode.data.label,
+            }
+          : undefined,
+        targetNode: targetNode
+          ? {
+              id: targetNode.id,
+              kind: targetNode.data.kind,
+              label: targetNode.data.label,
+            }
+          : undefined,
+        nextKind,
+      });
+
+      if (!kindValidation.ok) {
+        setEdgeInspectorErrors({
+          kind: kindValidation.violation?.message ?? "Relacao invalida para esta conexao.",
+        });
+        const recommendation = kindValidation.recommendedEdgeKind
+          ? ` Sugestao: ${getEdgeKindLabel(kindValidation.recommendedEdgeKind, "operational")}.`
+          : "";
+        setEdgeInspectorMessage(
+          `${kindValidation.violation?.details ?? "Escolha uma relacao permitida."}${recommendation}`,
+        );
+        return;
+      }
+
+      if (
+        inspectorMode === "operational" &&
+        command.patch.kind &&
+        kindValidation.recommendedEdgeKind &&
+        command.patch.kind !== kindValidation.recommendedEdgeKind
+      ) {
+        command = {
+          ...command,
+          patch: {
+            ...command.patch,
+            kind: kindValidation.recommendedEdgeKind,
+            label: getEdgeKindLabel(kindValidation.recommendedEdgeKind, "operational"),
+          },
+        };
       }
 
       applyLocalCommandAndQueue(command, "Aresta atualizada. Salvamento automatico agendado.");
@@ -3110,6 +3663,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               <button
                 className="btn"
                 type="button"
+                onClick={handleToggleValidationPanel}
+                data-testid="semantic-audit-button"
+              >
+                {isValidationPanelOpen ? "Ocultar verificacao" : "Verificar"}
+              </button>
+              <button
+                className="btn"
+                type="button"
                 onClick={handleToggleInspectorVisibility}
                 data-testid="canvas-top-inspector-toggle"
               >
@@ -3155,6 +3716,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                       : ""}
                   </span>
                 ) : null}
+                <span
+                  className={`badge canvas-selection-semantic-status ${
+                    selectedSemanticSeverity
+                      ? `canvas-selection-semantic-status-${selectedSemanticSeverity}`
+                      : ""
+                  }`}
+                  data-testid="canvas-selection-semantic-status"
+                >
+                  {selectedSemanticStatusLabel}
+                </span>
               </div>
               <div className="row-actions canvas-selection-hud-actions">
                 <button
@@ -3369,6 +3940,51 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           </div>
         ) : null}
 
+        <ConnectionAssistant
+          open={pendingConnectionAssistant !== null}
+          mode={inspectorMode}
+          message={
+            pendingConnectionAssistant?.message ??
+            "Conexao invalida para as regras do diagrama."
+          }
+          details={pendingConnectionAssistant?.details}
+          sourceLabel={pendingConnectionAssistant?.sourceLabel}
+          targetLabel={pendingConnectionAssistant?.targetLabel}
+          allowedEdgeKinds={pendingConnectionAssistant?.allowedEdgeKinds ?? []}
+          recommendedEdgeKind={pendingConnectionAssistant?.recommendedEdgeKind}
+          onCancel={handleCancelConnectionAssistant}
+          onSelectKind={handleSelectConnectionAssistantKind}
+        />
+
+        <RepairDialog
+          open={pendingNodeRepair !== null}
+          summary={
+            pendingNodeRepair?.repairPlan.summary ??
+            "A troca de tipo exige reparo para manter consistencia."
+          }
+          bullets={
+            pendingNodeRepair
+              ? [
+                  ...pendingNodeRepair.violations.map(
+                    (violation) => `${violation.severity.toUpperCase()}: ${violation.message}`,
+                  ),
+                  ...pendingNodeRepair.repairPlan.actions.map((action) => {
+                    if (action.type === "updateEdgeKind") {
+                      return `Atualizar relacao ${action.edgeId} para '${getEdgeKindLabel(action.nextKind, "operational")}'.`;
+                    }
+                    if (action.type === "removeEdge") {
+                      return `Remover relacao invalida ${action.edgeId}.`;
+                    }
+                    return `Ajustar tipo do no para '${getNodeKindLabel(action.nextKind, "operational")}'.`;
+                  }),
+                ].slice(0, 8)
+              : []
+          }
+          onApplyAndRepair={() => handleApplyPendingNodeRepair("repair")}
+          onApplyAndRemoveInvalid={() => handleApplyPendingNodeRepair("remove")}
+          onCancel={handleCancelPendingNodeRepair}
+        />
+
         <CommandPalette
           isOpen={isQuickFindOpen}
           query={quickFindQuery}
@@ -3434,6 +4050,54 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               Tecnico
             </button>
           </div>
+
+          <section
+            className={`semantic-audit-panel ${isValidationPanelOpen ? "is-open" : ""}`}
+            aria-label="Verificacao semantica"
+            data-testid="semantic-audit-panel"
+          >
+            <div className="row-actions semantic-audit-header">
+              <strong>Verificacao semantica</strong>
+              <span className="badge">
+                {semanticAudit.counters.total} issue(s) | {semanticAudit.bySeverity.error} erro(s)
+              </span>
+            </div>
+
+            {isValidationPanelOpen ? (
+              semanticAudit.issues.length > 0 ? (
+                <ul className="summary-list semantic-audit-list" data-testid="semantic-audit-issues">
+                  {semanticAudit.issues.slice(0, 40).map((issue, index) => (
+                    <li
+                      key={issue.id}
+                      className={`semantic-audit-item semantic-audit-item-${issue.severity}`}
+                      data-testid={`semantic-issue-item-${index}`}
+                    >
+                      <div className="semantic-audit-item-main">
+                        <strong>{issue.severity === "error" ? "Erro" : "Aviso"}</strong>
+                        <span>{issue.message}</span>
+                      </div>
+                      <div className="row-actions">
+                        <button
+                          className="btn btn-link"
+                          type="button"
+                          onClick={() => handleFocusSemanticIssue(issue)}
+                          data-testid={`semantic-issue-goto-${index}`}
+                        >
+                          Ir para
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="helper" data-testid="semantic-audit-empty">
+                  Nenhuma inconsistencia semantica detectada.
+                </p>
+              )
+            ) : (
+              <p className="helper">Abra para navegar pelas validacoes e focar os itens.</p>
+            )}
+          </section>
 
           {selectedNode && inspectorMode === "operational" && operationalNodeDraft ? (
             <div className="stack-sm">
