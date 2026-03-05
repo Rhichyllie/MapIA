@@ -1,22 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Background,
-  Controls,
+  MarkerType,
   MiniMap,
   ReactFlow,
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
 import type { Connection, ReactFlowInstance } from "@xyflow/react";
-import { EdgeKindSchema, NodeKindSchema } from "@/src/domain";
+import { EdgeKindSchema, type EdgeKind, type NodeKind } from "@/src/domain";
+import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import {
   getDiagramTypeLabel,
   isSupportedDiagramType,
   reapplyLayoutForSnapshot,
+  type DiagramType,
 } from "@/src/modules/graph/domain";
 import type { EditorCommand } from "@/src/modules/editor/application";
+import {
+  computeParallelEdgeMeta,
+  resolveDiagramRenderer,
+  type DiagramRendererKey,
+} from "./diagram-renderers";
 import {
   applyEditorCommandLocally,
   applyEditorCommandRemotely,
@@ -45,6 +53,31 @@ import {
   type NodeInspectorDraft,
 } from "./editor-inspector-schemas";
 import {
+  createOperationalNodeDraft,
+  getFriendlyEdgeKindDescription,
+  getFriendlyEdgeKindLabel,
+  getFriendlyNodeKindDescription,
+  getFriendlyNodeKindLabel,
+  mergeOperationalNodePayload,
+  normalizeTagsInput,
+  type InspectorMode,
+  type OperationalNodeDraft,
+} from "./editor-inspector-personas";
+import { CanvasToolbar } from "./canvas-toolbar";
+import { CommandPalette } from "./command-palette";
+import { filterNodeQuickFindOptions } from "./editor-quick-find";
+import {
+  getContextualAddActionForDiagram,
+  getDefaultNodeKindForDiagram,
+  getEdgeKindLabel,
+  getEdgeKindPresentation,
+  getNodeKindDescription,
+  getNodeKindLabel,
+  getNodeKindOptions,
+  getNodeKindPresentation,
+  getOperationalDisplayLabel,
+} from "./presentation/kinds";
+import {
   fromCanonicalSnapshotToFlowState,
   toCanonicalSnapshotFromFlowState,
   type EditorSnapshotLayoutMetadata,
@@ -55,6 +88,7 @@ import {
   createSnapshotVersionForEditor,
   importPrismaSchemaForEditor,
   listSnapshotVersionsForEditor,
+  loadSnapshotVersionDetailForEditor,
   loadSnapshotVersionDiffForEditor,
   loadWorkingSnapshotForEditor,
   restoreSnapshotVersionForEditor,
@@ -64,15 +98,24 @@ import {
   type EditorSnapshotVersionSummary,
 } from "./editor-query-service";
 import { usePendingChangesGuard } from "./use-pending-changes-guard";
+import {
+  buildVersionDiffSummary,
+  type VersionDiffSummaryResult,
+} from "./versions/diff-summary";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const DEFAULT_SNAPSHOT_LABEL = "fase1-working-v1";
 const VERSION_NAMES_STORAGE_KEY_PREFIX = "mapia.editor.version-names";
+const EDITOR_PANELS_STORAGE_KEY_PREFIX = "mapia-editor-panels";
+const EDITOR_FOCUS_STORAGE_KEY_PREFIX = "mapia-editor-focus";
+const INSPECTOR_MODE_STORAGE_KEY = "mapia-inspector-mode";
+const INSPECTOR_SECTIONS_STORAGE_KEY_PREFIX = "mapia-inspector-sections";
 
 type EditorProjectViewModel = {
   id: string;
   name: string;
   slug: string;
+  template: ProjectTemplate;
 };
 
 type EditorShellProps = {
@@ -98,6 +141,55 @@ type PrismaSchemaImportFeedback =
   | { kind: "success" | "error"; message: string }
   | null;
 
+type OperationalEdgeDraft = {
+  label: string;
+  kind: EdgeInspectorDraft["kind"];
+};
+
+type AddNodeDraft = {
+  kind: NodeKind;
+  title: string;
+  description: string;
+  tagsText: string;
+};
+
+type SelectionHudQuickAction = {
+  label: string;
+  edgeKind: EdgeKind;
+  nodeKind: NodeKind;
+};
+
+type EditorPanelState = {
+  metadata: boolean;
+  prismaImport: boolean;
+  versions: boolean;
+};
+
+type InspectorSectionState = {
+  general: boolean;
+  details: boolean;
+  relations: boolean;
+  advanced: boolean;
+};
+
+const DEFAULT_EDITOR_PANEL_STATE: EditorPanelState = {
+  metadata: true,
+  prismaImport: true,
+  versions: true,
+};
+
+const DEFAULT_INSPECTOR_SECTION_STATE: InspectorSectionState = {
+  general: true,
+  details: true,
+  relations: true,
+  advanced: false,
+};
+
+const DEFAULT_ADD_NODE_OFFSET = {
+  x: 220,
+  y: 64,
+};
+
 function formatErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -116,6 +208,14 @@ function formatVersionCreatedAtLabel(createdAt: string) {
   return parsed.toLocaleString("pt-BR");
 }
 
+function formatVersionOriginLabel(origin: EditorSnapshotVersionSummary["origin"]) {
+  if (origin === "manual") {
+    return "Manual";
+  }
+
+  return origin;
+}
+
 function buildVersionDiffFeedbackMessage(diff: EditorSnapshotVersionDiff) {
   if (!diff.hasChanges) {
     return "Sem alteracoes entre a versao selecionada e o snapshot de trabalho.";
@@ -124,22 +224,22 @@ function buildVersionDiffFeedbackMessage(diff: EditorSnapshotVersionDiff) {
   const parts: string[] = [];
 
   if (diff.nodesAdded.length > 0) {
-    parts.push(`${diff.nodesAdded.length} node(s) adicionados`);
+    parts.push(`${diff.nodesAdded.length} no(s) adicionados`);
   }
   if (diff.nodesRemoved.length > 0) {
-    parts.push(`${diff.nodesRemoved.length} node(s) removidos`);
+    parts.push(`${diff.nodesRemoved.length} no(s) removidos`);
   }
   if (diff.nodesChanged.length > 0) {
-    parts.push(`${diff.nodesChanged.length} node(s) alterados`);
+    parts.push(`${diff.nodesChanged.length} no(s) alterados`);
   }
   if (diff.edgesAdded.length > 0) {
-    parts.push(`${diff.edgesAdded.length} edge(s) adicionadas`);
+    parts.push(`${diff.edgesAdded.length} aresta(s) adicionadas`);
   }
   if (diff.edgesRemoved.length > 0) {
-    parts.push(`${diff.edgesRemoved.length} edge(s) removidas`);
+    parts.push(`${diff.edgesRemoved.length} aresta(s) removidas`);
   }
   if (diff.edgesChanged.length > 0) {
-    parts.push(`${diff.edgesChanged.length} edge(s) alteradas`);
+    parts.push(`${diff.edgesChanged.length} aresta(s) alteradas`);
   }
   if (diff.viewportChanged) {
     parts.push("viewport alterado");
@@ -155,7 +255,102 @@ function buildPrismaSchemaImportFeedbackMessage(
     return "Schema Prisma importado com sucesso para o snapshot de trabalho.";
   }
 
-  return `Schema Prisma importado com sucesso (${summary.modelsCount} model(s), ${summary.relationsCount} relacao(oes), ${summary.scalarFieldsCount} campo(s) escalar(es)).`;
+  return `Schema Prisma importado com sucesso (${summary.modelsCount} modelo(s), ${summary.relationsCount} relacao(oes), ${summary.scalarFieldsCount} campo(s) escalar(es)).`;
+}
+
+function resolveDiagramTypeForQuickActions(rendererKey: DiagramRendererKey): DiagramType | undefined {
+  if (rendererKey === "tree") {
+    return "tree";
+  }
+
+  if (rendererKey === "flow") {
+    return "flow";
+  }
+
+  if (rendererKey === "mindmap") {
+    return "mindmap";
+  }
+
+  return undefined;
+}
+
+function buildDefaultNodeTitle(kind: NodeKind, nextIndex: number) {
+  const nodeKindLabel = getNodeKindLabel(kind, "operational");
+  return `${nodeKindLabel} ${nextIndex}`;
+}
+
+function buildQuickActionFromDiagramType(
+  diagramType: DiagramType | undefined,
+): SelectionHudQuickAction {
+  const action = getContextualAddActionForDiagram(diagramType);
+  return {
+    label: action.label,
+    nodeKind: action.nodeKind,
+    edgeKind: action.edgeKind,
+  };
+}
+
+function resolveEdgeMarker(edgeKind: EdgeKind) {
+  const presentation = getEdgeKindPresentation(edgeKind);
+
+  if (presentation.arrowStyle === "none") {
+    return undefined;
+  }
+
+  if (presentation.arrowStyle === "open") {
+    return {
+      type: MarkerType.Arrow,
+      color: "var(--canvas-edge-color)",
+    } as const;
+  }
+
+  return {
+    type: MarkerType.ArrowClosed,
+    color: "var(--canvas-edge-color)",
+  } as const;
+}
+
+function resolveEdgeDashArray(edgeKind: EdgeKind) {
+  const presentation = getEdgeKindPresentation(edgeKind);
+
+  if (presentation.lineStyle === "dashed") {
+    return "8 6";
+  }
+
+  if (presentation.lineStyle === "dotted") {
+    return "2 7";
+  }
+
+  return undefined;
+}
+
+function getMindmapRootNodeId(
+  nodes: RFNode[],
+  rootNodeName: string | undefined,
+) {
+  const normalizedRootName = rootNodeName?.trim().toLowerCase();
+
+  if (normalizedRootName) {
+    const byName = nodes.find(
+      (node) => node.data.label.trim().toLowerCase() === normalizedRootName,
+    );
+
+    if (byName) {
+      return byName.id;
+    }
+  }
+
+  if (nodes.length === 0) {
+    return null;
+  }
+
+  return [...nodes]
+    .sort(
+      (nodeA, nodeB) =>
+        Math.hypot(nodeA.position.x, nodeA.position.y) -
+        Math.hypot(nodeB.position.x, nodeB.position.y),
+    )
+    .at(0)?.id ?? null;
 }
 
 function createNodeInspectorDraft(node: RFNode): NodeInspectorDraft {
@@ -235,6 +430,126 @@ function sanitizeVersionNameMap(value: unknown) {
   }, {});
 }
 
+function sanitizeEditorPanelState(value: unknown): EditorPanelState {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_EDITOR_PANEL_STATE;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return {
+    metadata:
+      typeof candidate.metadata === "boolean"
+        ? candidate.metadata
+        : DEFAULT_EDITOR_PANEL_STATE.metadata,
+    prismaImport:
+      typeof candidate.prismaImport === "boolean"
+        ? candidate.prismaImport
+        : DEFAULT_EDITOR_PANEL_STATE.prismaImport,
+    versions:
+      typeof candidate.versions === "boolean"
+        ? candidate.versions
+        : DEFAULT_EDITOR_PANEL_STATE.versions,
+  };
+}
+
+function sanitizeInspectorSectionState(value: unknown): InspectorSectionState {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_INSPECTOR_SECTION_STATE;
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  return {
+    general:
+      typeof candidate.general === "boolean"
+        ? candidate.general
+        : DEFAULT_INSPECTOR_SECTION_STATE.general,
+    details:
+      typeof candidate.details === "boolean"
+        ? candidate.details
+        : DEFAULT_INSPECTOR_SECTION_STATE.details,
+    relations:
+      typeof candidate.relations === "boolean"
+        ? candidate.relations
+        : DEFAULT_INSPECTOR_SECTION_STATE.relations,
+    advanced:
+      typeof candidate.advanced === "boolean"
+        ? candidate.advanced
+        : DEFAULT_INSPECTOR_SECTION_STATE.advanced,
+  };
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return (
+    target.isContentEditable ||
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select"
+  );
+}
+
+function areOperationalNodeDraftValuesEqual(
+  node: RFNode | null,
+  draft: OperationalNodeDraft | null,
+) {
+  if (!node || !draft) {
+    return false;
+  }
+
+  const baseline = createOperationalNodeDraft({
+    label: node.data.label,
+    kind: node.data.kind,
+    payload: node.data.payload,
+  });
+
+  const baselineTags = normalizeTagsInput(baseline.tagsText).join("|");
+  const draftTags = normalizeTagsInput(draft.tagsText).join("|");
+
+  return (
+    baseline.label === draft.label &&
+    baseline.kind === draft.kind &&
+    baseline.description.trim() === draft.description.trim() &&
+    baselineTags === draftTags
+  );
+}
+
+function areOperationalEdgeDraftValuesEqual(
+  edge: RFEdge | null,
+  draft: OperationalEdgeDraft | null,
+) {
+  if (!edge || !draft) {
+    return false;
+  }
+
+  return (
+    (edge.label ? String(edge.label) : "") === draft.label &&
+    (edge.data?.kind ?? "flows-to") === draft.kind
+  );
+}
+
 export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const initialFlowState = useMemo(
     () => fromCanonicalSnapshotToFlowState(initialSnapshot),
@@ -277,6 +592,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     useState<VersionActionFeedback>(null);
   const [versionDiffFeedback, setVersionDiffFeedback] =
     useState<VersionDiffFeedback>(null);
+  const [versionDiffSummary, setVersionDiffSummary] =
+    useState<VersionDiffSummaryResult | null>(null);
   const [activeVersionCompareId, setActiveVersionCompareId] = useState<
     string | null
   >(null);
@@ -293,6 +610,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     useState<NodeInspectorDraft | null>(null);
   const [edgeInspectorDraft, setEdgeInspectorDraft] =
     useState<EdgeInspectorDraft | null>(null);
+  const [operationalNodeDraft, setOperationalNodeDraft] =
+    useState<OperationalNodeDraft | null>(null);
+  const [operationalEdgeDraft, setOperationalEdgeDraft] =
+    useState<OperationalEdgeDraft | null>(null);
   const [nodeInspectorErrors, setNodeInspectorErrors] =
     useState<InspectorFieldErrors>({});
   const [edgeInspectorErrors, setEdgeInspectorErrors] =
@@ -305,9 +626,37 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   );
   const [isRefreshingFromQuery, setIsRefreshingFromQuery] = useState(false);
   const versionNamesStorageKey = `${VERSION_NAMES_STORAGE_KEY_PREFIX}:${project.id}`;
+  const editorPanelsStorageKey = `${EDITOR_PANELS_STORAGE_KEY_PREFIX}:${project.id}`;
+  const editorFocusStorageKey = `${EDITOR_FOCUS_STORAGE_KEY_PREFIX}:${project.id}`;
+  const inspectorSectionsStorageKey = `${INSPECTOR_SECTIONS_STORAGE_KEY_PREFIX}:${project.id}`;
   const canImportPrismaSchema = prismaSchemaImportText.trim().length > 0;
   const hasPendingChangesGuard =
     pendingCommands.length > 0 || saveState.isDirty || saveState.status === "saving";
+  const [panelState, setPanelState] = useState<EditorPanelState>(
+    DEFAULT_EDITOR_PANEL_STATE,
+  );
+  const [isCanvasFocusMode, setIsCanvasFocusMode] = useState(false);
+  const [isFocusInspectorCollapsed, setIsFocusInspectorCollapsed] = useState(false);
+  const [inspectorMode, setInspectorMode] = useState<InspectorMode>("operational");
+  const [hasHydratedEditorPreferences, setHasHydratedEditorPreferences] =
+    useState(false);
+  const [hasHydratedInspectorMode, setHasHydratedInspectorMode] = useState(false);
+  const [inspectorSections, setInspectorSections] = useState<InspectorSectionState>(
+    DEFAULT_INSPECTOR_SECTION_STATE,
+  );
+  const [hasHydratedInspectorSections, setHasHydratedInspectorSections] =
+    useState(false);
+  const [isQuickFindOpen, setIsQuickFindOpen] = useState(false);
+  const [quickFindQuery, setQuickFindQuery] = useState("");
+  const [quickFindActiveIndex, setQuickFindActiveIndex] = useState(0);
+  const [isAddNodeDialogOpen, setIsAddNodeDialogOpen] = useState(false);
+  const [addNodeErrorMessage, setAddNodeErrorMessage] = useState<string | null>(null);
+  const [addNodeDraft, setAddNodeDraft] = useState<AddNodeDraft>({
+    kind: "note",
+    title: "",
+    description: "",
+    tagsText: "",
+  });
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -326,9 +675,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       void autosaveFlushRef.current?.();
     }, AUTOSAVE_DELAY_MS),
   );
+  const panelStateBeforeFocusRef = useRef<EditorPanelState>(
+    DEFAULT_EDITOR_PANEL_STATE,
+  );
+  const canvasRegionRef = useRef<HTMLDivElement | null>(null);
   const reactFlowInstanceRef = useRef<ReactFlowInstance<RFNode, RFEdge> | null>(
     null,
   );
+  const quickFindReturnFocusRef = useRef<HTMLElement | null>(null);
 
   usePendingChangesGuard(hasPendingChangesGuard);
 
@@ -355,6 +709,126 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const rawPanelState = window.localStorage.getItem(editorPanelsStorageKey);
+      const parsedPanelState = rawPanelState
+        ? sanitizeEditorPanelState(JSON.parse(rawPanelState))
+        : DEFAULT_EDITOR_PANEL_STATE;
+      const persistedFocus = window.localStorage.getItem(editorFocusStorageKey) === "true";
+
+      panelStateBeforeFocusRef.current = parsedPanelState;
+      setPanelState(persistedFocus ? {
+        metadata: false,
+        prismaImport: false,
+        versions: false,
+      } : parsedPanelState);
+      setIsCanvasFocusMode(persistedFocus);
+      setIsFocusInspectorCollapsed(persistedFocus);
+    } catch {
+      panelStateBeforeFocusRef.current = DEFAULT_EDITOR_PANEL_STATE;
+      setPanelState(DEFAULT_EDITOR_PANEL_STATE);
+      setIsCanvasFocusMode(false);
+      setIsFocusInspectorCollapsed(false);
+    } finally {
+      setHasHydratedEditorPreferences(true);
+    }
+  }, [editorFocusStorageKey, editorPanelsStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedEditorPreferences) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(editorPanelsStorageKey, JSON.stringify(panelState));
+    } catch {
+      // Ignora indisponibilidade de storage local.
+    }
+  }, [editorPanelsStorageKey, hasHydratedEditorPreferences, panelState]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedEditorPreferences) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(editorFocusStorageKey, String(isCanvasFocusMode));
+    } catch {
+      // Ignora indisponibilidade de storage local.
+    }
+  }, [editorFocusStorageKey, hasHydratedEditorPreferences, isCanvasFocusMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const persistedMode = window.localStorage.getItem(INSPECTOR_MODE_STORAGE_KEY);
+      if (persistedMode === "technical" || persistedMode === "operational") {
+        setInspectorMode(persistedMode);
+      } else {
+        setInspectorMode("operational");
+      }
+    } catch {
+      setInspectorMode("operational");
+    } finally {
+      setHasHydratedInspectorMode(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedInspectorMode) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(INSPECTOR_MODE_STORAGE_KEY, inspectorMode);
+    } catch {
+      // Ignora indisponibilidade de storage local.
+    }
+  }, [hasHydratedInspectorMode, inspectorMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const persisted = window.localStorage.getItem(inspectorSectionsStorageKey);
+      if (!persisted) {
+        setInspectorSections(DEFAULT_INSPECTOR_SECTION_STATE);
+      } else {
+        const parsed = JSON.parse(persisted);
+        setInspectorSections(sanitizeInspectorSectionState(parsed));
+      }
+    } catch {
+      setInspectorSections(DEFAULT_INSPECTOR_SECTION_STATE);
+    } finally {
+      setHasHydratedInspectorSections(true);
+    }
+  }, [inspectorSectionsStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedInspectorSections) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        inspectorSectionsStorageKey,
+        JSON.stringify(inspectorSections),
+      );
+    } catch {
+      // Ignora indisponibilidade de storage local.
+    }
+  }, [hasHydratedInspectorSections, inspectorSections, inspectorSectionsStorageKey]);
+
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) ?? null,
     [nodes, selectedNodeId],
@@ -363,13 +837,89 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     () => edges.find((edge) => edge.id === selectedEdgeId) ?? null,
     [edges, selectedEdgeId],
   );
-  const currentDiagramTypeLabel = useMemo(
-    () => getDiagramTypeLabel(layoutMetadata.diagramType),
-    [layoutMetadata.diagramType],
+  const renderer = useMemo(
+    () =>
+      resolveDiagramRenderer({
+        diagramType: layoutMetadata.diagramType,
+        template: project.template,
+        layoutOptions: layoutMetadata.layoutOptions,
+      }),
+    [layoutMetadata.diagramType, layoutMetadata.layoutOptions, project.template],
   );
+  const renderedNodes = useMemo(() => {
+    const mindmapRootNodeId =
+      renderer.key === "mindmap"
+        ? getMindmapRootNodeId(nodes, layoutMetadata.rootNodeName)
+        : null;
+
+    return nodes.map((node) => ({
+      ...node,
+      type: renderer.nodeType,
+      className: [node.className, `editor-node-renderer-${renderer.key}`]
+        .filter(Boolean)
+        .join(" "),
+      data: {
+        ...node.data,
+        rendererDirection: renderer.treeDirection,
+        rendererIsRoot: node.id === mindmapRootNodeId,
+        presentationMode: inspectorMode,
+        displayLabel:
+          inspectorMode === "operational"
+            ? getOperationalDisplayLabel({
+                label: node.data.label,
+                payload: node.data.payload,
+              })
+            : node.data.label,
+      },
+    }));
+  }, [inspectorMode, layoutMetadata.rootNodeName, nodes, renderer]);
+  const renderedEdges = useMemo(() => {
+    const baseEdges = edges.map((edge) => {
+      const edgeKind = edge.data?.kind ?? "flows-to";
+
+      return {
+        ...edge,
+        data: {
+          kind: edgeKind,
+          payload: edge.data?.payload ?? {},
+          externalRefs: edge.data?.externalRefs ?? [],
+          parallelIndex: edge.data?.parallelIndex,
+          parallelTotal: edge.data?.parallelTotal,
+        },
+        type: edge.type ?? renderer.defaultEdgeOptions.type,
+        markerEnd:
+          resolveEdgeMarker(edgeKind) ??
+          edge.markerEnd ??
+          renderer.defaultEdgeOptions.markerEnd,
+        animated: edge.animated ?? renderer.defaultEdgeOptions.animated,
+        style: {
+          ...(edge.style ?? {}),
+          strokeDasharray: resolveEdgeDashArray(edgeKind),
+        },
+        className: [
+          edge.className,
+          renderer.defaultEdgeOptions.className,
+          `editor-edge-kind-${edgeKind}`,
+          `editor-edge-tone-${getEdgeKindPresentation(edgeKind).tone}`,
+          `editor-edge-renderer-${renderer.key}`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      };
+    });
+
+    if (!renderer.supportsParallelEdges) {
+      return baseEdges;
+    }
+
+    return computeParallelEdgeMeta(baseEdges);
+  }, [edges, renderer]);
+  const isReapplyLayoutBlockedByPolicy = layoutMetadata.allowReapplyLayout === false;
   const canReapplyLayout = useMemo(
-    () => isSupportedDiagramType(layoutMetadata.diagramType),
-    [layoutMetadata.diagramType],
+    () =>
+      isSupportedDiagramType(layoutMetadata.diagramType) &&
+      !isReapplyLayoutBlockedByPolicy,
+    [layoutMetadata.diagramType, isReapplyLayoutBlockedByPolicy],
   );
 
   const selectedNodeSyncKey = useMemo(
@@ -393,12 +943,20 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     if (!selectedNodeForInspector) {
       setNodeInspectorDraft(null);
+      setOperationalNodeDraft(null);
       setNodeInspectorErrors({});
       setNodeInspectorMessage(null);
       return;
     }
 
     setNodeInspectorDraft(createNodeInspectorDraft(selectedNodeForInspector));
+    setOperationalNodeDraft(
+      createOperationalNodeDraft({
+        label: selectedNodeForInspector.data.label,
+        kind: selectedNodeForInspector.data.kind,
+        payload: selectedNodeForInspector.data.payload,
+      }),
+    );
     setNodeInspectorErrors({});
     setNodeInspectorMessage(null);
   }, [selectedNodeSyncKey]);
@@ -408,12 +966,17 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     if (!selectedEdgeForInspector) {
       setEdgeInspectorDraft(null);
+      setOperationalEdgeDraft(null);
       setEdgeInspectorErrors({});
       setEdgeInspectorMessage(null);
       return;
     }
 
     setEdgeInspectorDraft(createEdgeInspectorDraft(selectedEdgeForInspector));
+    setOperationalEdgeDraft({
+      label: selectedEdgeForInspector.label ? String(selectedEdgeForInspector.label) : "",
+      kind: selectedEdgeForInspector.data?.kind ?? "flows-to",
+    });
     setEdgeInspectorErrors({});
     setEdgeInspectorMessage(null);
   }, [selectedEdgeSyncKey]);
@@ -480,13 +1043,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
   function hasInspectorDraftPendingChanges() {
     const nodeDirty =
-      selectedNode !== null &&
-      nodeInspectorDraft !== null &&
-      !areNodeDraftValuesEqual(selectedNode, nodeInspectorDraft);
+      inspectorMode === "operational"
+        ? selectedNode !== null &&
+          operationalNodeDraft !== null &&
+          !areOperationalNodeDraftValuesEqual(selectedNode, operationalNodeDraft)
+        : selectedNode !== null &&
+          nodeInspectorDraft !== null &&
+          !areNodeDraftValuesEqual(selectedNode, nodeInspectorDraft);
     const edgeDirty =
-      selectedEdge !== null &&
-      edgeInspectorDraft !== null &&
-      !areEdgeDraftValuesEqual(selectedEdge, edgeInspectorDraft);
+      inspectorMode === "operational"
+        ? selectedEdge !== null &&
+          operationalEdgeDraft !== null &&
+          !areOperationalEdgeDraftValuesEqual(selectedEdge, operationalEdgeDraft)
+        : selectedEdge !== null &&
+          edgeInspectorDraft !== null &&
+          !areEdgeDraftValuesEqual(selectedEdge, edgeInspectorDraft);
 
     return nodeDirty || edgeDirty;
   }
@@ -497,7 +1068,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     return window.confirm(
-      "Existem alteracoes no inspector ainda nao aplicadas. Deseja descartar?",
+      "Existem alteracoes no inspetor ainda nao aplicadas. Deseja descartar?",
     );
   }
 
@@ -722,6 +1293,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       setNewVersionName("");
       setVersionActionFeedback(null);
       setVersionDiffFeedback(null);
+      setVersionDiffSummary(null);
       void (async () => {
         try {
           const versions = await listSnapshotVersionsForEditor(project.id);
@@ -814,15 +1386,27 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     setActiveVersionCompareId(versionId);
     setVersionDiffFeedback(null);
+    setVersionDiffSummary(null);
 
     try {
-      const diff = await loadSnapshotVersionDiffForEditor(project.id, versionId);
+      const [diff, snapshotVersion] = await Promise.all([
+        loadSnapshotVersionDiffForEditor(project.id, versionId),
+        loadSnapshotVersionDetailForEditor(project.id, versionId),
+      ]);
+      const executiveSummary = buildVersionDiffSummary({
+        baseSnapshot: snapshotVersion.snapshot,
+        targetSnapshot: getCurrentSnapshot(),
+        diff,
+      });
+
+      setVersionDiffSummary(executiveSummary);
       setVersionDiffFeedback({
         kind: "info",
         message: buildVersionDiffFeedbackMessage(diff),
       });
       setVersionActionFeedback(null);
     } catch (error) {
+      setVersionDiffSummary(null);
       setVersionDiffFeedback({
         kind: "error",
         message: formatErrorMessage(error, "Falha ao comparar versao."),
@@ -855,6 +1439,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setActiveVersionRestoreId(version.id);
     setVersionActionFeedback(null);
     setVersionDiffFeedback(null);
+    setVersionDiffSummary(null);
 
     try {
       const result = await restoreSnapshotVersionForEditor({
@@ -940,6 +1525,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         lastSavedAt: Date.now(),
       });
       setVersionDiffFeedback(null);
+      setVersionDiffSummary(null);
       setGlobalErrorMessage(null);
       setQuerySyncMessage("Snapshot importado de schema Prisma.");
       setPrismaSchemaImportFeedback({
@@ -1119,51 +1705,621 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const lastSavedAtLabel = saveState.lastSavedAt
     ? new Date(saveState.lastSavedAt).toLocaleTimeString("pt-BR")
     : null;
+  const layoutPolicyLabel = isReapplyLayoutBlockedByPolicy
+    ? "Layout bloqueado"
+    : "Reaplicacao permitida";
   const nodeInspectorDirty =
-    selectedNode !== null && nodeInspectorDraft !== null
-      ? !areNodeDraftValuesEqual(selectedNode, nodeInspectorDraft)
-      : false;
+    inspectorMode === "operational"
+      ? selectedNode !== null && operationalNodeDraft !== null
+        ? !areOperationalNodeDraftValuesEqual(selectedNode, operationalNodeDraft)
+        : false
+      : selectedNode !== null && nodeInspectorDraft !== null
+        ? !areNodeDraftValuesEqual(selectedNode, nodeInspectorDraft)
+        : false;
   const edgeInspectorDirty =
-    selectedEdge !== null && edgeInspectorDraft !== null
-      ? !areEdgeDraftValuesEqual(selectedEdge, edgeInspectorDraft)
-      : false;
+    inspectorMode === "operational"
+      ? selectedEdge !== null && operationalEdgeDraft !== null
+        ? !areOperationalEdgeDraftValuesEqual(selectedEdge, operationalEdgeDraft)
+        : false
+      : selectedEdge !== null && edgeInspectorDraft !== null
+        ? !areEdgeDraftValuesEqual(selectedEdge, edgeInspectorDraft)
+        : false;
   const nodeInspectorHasErrors = Object.keys(nodeInspectorErrors).length > 0;
   const edgeInspectorHasErrors = Object.keys(edgeInspectorErrors).length > 0;
+  const operationalTagPreview = operationalNodeDraft
+    ? normalizeTagsInput(operationalNodeDraft.tagsText)
+    : [];
 
-  const nodeKindOptions = NodeKindSchema.options;
+  const nodeKindOptions = useMemo(() => {
+    const options = [...getNodeKindOptions(inspectorMode)];
+    const selectedKind = selectedNode?.data.kind;
+
+    if (selectedKind && !options.includes(selectedKind)) {
+      options.push(selectedKind);
+    }
+
+    return options;
+  }, [inspectorMode, selectedNode?.data.kind]);
   const edgeKindOptions = EdgeKindSchema.options;
+  const nodeLabelById = useMemo(
+    () =>
+      new Map(
+        nodes.map((node) => [
+          node.id,
+          inspectorMode === "operational"
+            ? getOperationalDisplayLabel({
+                label: node.data.label,
+                payload: node.data.payload,
+              })
+            : node.data.label,
+        ]),
+      ),
+    [inspectorMode, nodes],
+  );
+  const selectedNodeRelations = useMemo(() => {
+    if (!selectedNode) {
+      return {
+        incomingCount: 0,
+        outgoingCount: 0,
+        preview: [] as Array<{
+          id: string;
+          direction: "incoming" | "outgoing";
+          relation: string;
+          otherLabel: string;
+          otherNodeId: string;
+        }>,
+      };
+    }
 
-  function handleAddNode() {
+    const incoming = edges.filter((edge) => edge.target === selectedNode.id);
+    const outgoing = edges.filter((edge) => edge.source === selectedNode.id);
+    const preview = [...incoming, ...outgoing].slice(0, 6).map((edge) => ({
+      id: edge.id,
+      direction: edge.target === selectedNode.id ? "incoming" : "outgoing",
+      relation: getEdgeKindLabel(
+        edge.data?.kind ?? "flows-to",
+        inspectorMode === "technical" ? "technical" : "operational",
+      ),
+      otherNodeId: edge.target === selectedNode.id ? edge.source : edge.target,
+      otherLabel:
+        nodeLabelById.get(
+          edge.target === selectedNode.id ? edge.source : edge.target,
+        ) ?? "No sem titulo",
+    }));
+
+    return {
+      incomingCount: incoming.length,
+      outgoingCount: outgoing.length,
+      preview,
+    };
+  }, [edges, inspectorMode, nodeLabelById, selectedNode]);
+  const selectedEdgeSourceLabel = selectedEdge
+    ? nodeLabelById.get(selectedEdge.source) ?? selectedEdge.source
+    : null;
+  const selectedEdgeTargetLabel = selectedEdge
+    ? nodeLabelById.get(selectedEdge.target) ?? selectedEdge.target
+    : null;
+  const quickFindOptions = useMemo(
+    () => filterNodeQuickFindOptions(nodes, quickFindQuery, inspectorMode),
+    [inspectorMode, nodes, quickFindQuery],
+  );
+  const selectedItemLabel = selectedNode
+    ? nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label
+    : selectedEdge
+      ? selectedEdge.label
+        ? String(selectedEdge.label)
+        : `${selectedEdgeSourceLabel ?? selectedEdge.source} -> ${
+            selectedEdgeTargetLabel ?? selectedEdge.target
+          }`
+      : "Nenhum item selecionado";
+  const inspectorSelectionBadge = selectedNode
+    ? "No selecionado"
+    : selectedEdge
+      ? "Aresta selecionada"
+      : "Sem selecao";
+  const hasInspectorDirtyDraft = nodeInspectorDirty || edgeInspectorDirty;
+  const isInspectorVisible = !isFocusInspectorCollapsed;
+  const shouldShowMetadataPanel = !isCanvasFocusMode;
+  const shouldShowPrismaPanel = !isCanvasFocusMode;
+  const shouldShowVersionsPanel = !isCanvasFocusMode;
+  const currentSupportedDiagramType = isSupportedDiagramType(layoutMetadata.diagramType)
+    ? layoutMetadata.diagramType
+    : resolveDiagramTypeForQuickActions(renderer.key);
+  const quickAction = useMemo(
+    () => buildQuickActionFromDiagramType(currentSupportedDiagramType),
+    [currentSupportedDiagramType],
+  );
+  const selectionNodeKindPresentation = selectedNode
+    ? getNodeKindPresentation(selectedNode.data.kind)
+    : null;
+  const inspectorToggleLabel = isInspectorVisible
+    ? "Ocultar inspetor"
+    : "Mostrar inspetor";
+  const diagramDefinitionLabel = isSupportedDiagramType(layoutMetadata.diagramType)
+    ? `Diagrama atual: ${getDiagramTypeLabel(layoutMetadata.diagramType)}`
+    : "Diagrama: A definir no Wizard";
+  const hasDiagramRendererMismatch =
+    isSupportedDiagramType(layoutMetadata.diagramType) &&
+    renderer.key !== layoutMetadata.diagramType;
+
+  useEffect(() => {
+    if (quickFindOptions.length === 0) {
+      setQuickFindActiveIndex(0);
+      return;
+    }
+
+    if (quickFindActiveIndex > quickFindOptions.length - 1) {
+      setQuickFindActiveIndex(quickFindOptions.length - 1);
+    }
+  }, [quickFindActiveIndex, quickFindOptions.length]);
+
+  useEffect(() => {
+    if (isAddNodeDialogOpen) {
+      return;
+    }
+
+    setAddNodeDraft((current) => ({
+      ...current,
+      kind: getDefaultNodeKindForDiagram(currentSupportedDiagramType),
+    }));
+  }, [currentSupportedDiagramType, isAddNodeDialogOpen]);
+
+  function handleTogglePanel(panelKey: keyof EditorPanelState) {
+    setPanelState((current) => ({
+      ...current,
+      [panelKey]: !current[panelKey],
+    }));
+  }
+
+  function handleToggleInspectorSection(sectionKey: keyof InspectorSectionState) {
+    setInspectorSections((current) => ({
+      ...current,
+      [sectionKey]: !current[sectionKey],
+    }));
+  }
+
+  function handleZoomIn() {
+    reactFlowInstanceRef.current?.zoomIn({ duration: 180 });
+  }
+
+  function handleZoomOut() {
+    reactFlowInstanceRef.current?.zoomOut({ duration: 180 });
+  }
+
+  function handleFitView() {
+    reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 220 });
+  }
+
+  function handleCenterView() {
+    const instance = reactFlowInstanceRef.current;
+
+    if (!instance) {
+      return;
+    }
+
+    if (selectedNode) {
+      instance.setCenter(selectedNode.position.x, selectedNode.position.y, {
+        zoom: Math.max(viewportRef.current.zoom, 1),
+        duration: 220,
+      });
+      return;
+    }
+
+    if (selectedEdge) {
+      const source = nodesRef.current.find((node) => node.id === selectedEdge.source);
+      const target = nodesRef.current.find((node) => node.id === selectedEdge.target);
+      if (source && target) {
+        instance.setCenter(
+          (source.position.x + target.position.x) / 2,
+          (source.position.y + target.position.y) / 2,
+          {
+            zoom: Math.max(viewportRef.current.zoom, 1),
+            duration: 220,
+          },
+        );
+        return;
+      }
+    }
+
+    handleFitView();
+  }
+
+  function handleOpenQuickFind() {
+    quickFindReturnFocusRef.current = document.activeElement as HTMLElement | null;
+    setQuickFindQuery("");
+    setQuickFindActiveIndex(0);
+    setIsQuickFindOpen(true);
+  }
+
+  function handleCloseQuickFind() {
+    setIsQuickFindOpen(false);
+    setQuickFindQuery("");
+    window.requestAnimationFrame(() => {
+      quickFindReturnFocusRef.current?.focus();
+    });
+  }
+
+  function handleMoveQuickFindActiveIndex(direction: "next" | "previous") {
+    if (quickFindOptions.length === 0) {
+      setQuickFindActiveIndex(0);
+      return;
+    }
+
+    setQuickFindActiveIndex((current) => {
+      if (direction === "next") {
+        return (current + 1) % quickFindOptions.length;
+      }
+
+      return current - 1 < 0 ? quickFindOptions.length - 1 : current - 1;
+    });
+  }
+
+  function handleSelectQuickFindByIndex(index: number) {
+    const option = quickFindOptions[index];
+
+    if (!option) {
+      return;
+    }
+
+    focusNodeById(option.id);
+    setQuickFindActiveIndex(index);
+    handleCloseQuickFind();
+  }
+
+  function focusNodeById(nodeId: string) {
+    const targetNode = nodesRef.current.find((node) => node.id === nodeId);
+    if (!targetNode) {
+      return;
+    }
+
+    selectItem({ nodeId: targetNode.id, edgeId: null });
+    reactFlowInstanceRef.current?.setCenter(targetNode.position.x, targetNode.position.y, {
+      zoom: Math.max(viewportRef.current.zoom, 1.05),
+      duration: 220,
+    });
+  }
+
+  function handleFocusRelation(edgeId: string, relatedNodeId: string) {
+    selectItem({ nodeId: null, edgeId });
+
+    const relatedNode = nodesRef.current.find((node) => node.id === relatedNodeId);
+    if (!relatedNode) {
+      return;
+    }
+
+    reactFlowInstanceRef.current?.setCenter(relatedNode.position.x, relatedNode.position.y, {
+      zoom: Math.max(viewportRef.current.zoom, 1.05),
+      duration: 220,
+    });
+  }
+
+  function enterCanvasFocusMode() {
+    if (isCanvasFocusMode) {
+      return;
+    }
+
+    setIsQuickFindOpen(false);
+    panelStateBeforeFocusRef.current = panelState;
+    setPanelState({
+      metadata: false,
+      prismaImport: false,
+      versions: false,
+    });
+    setIsCanvasFocusMode(true);
+    setIsFocusInspectorCollapsed(true);
+    window.requestAnimationFrame(() => {
+      canvasRegionRef.current?.focus();
+    });
+  }
+
+  function exitCanvasFocusMode() {
+    if (!isCanvasFocusMode) {
+      return;
+    }
+
+    setIsQuickFindOpen(false);
+    setIsCanvasFocusMode(false);
+    setPanelState(panelStateBeforeFocusRef.current);
+    setIsFocusInspectorCollapsed(false);
+  }
+
+  function handleToggleCanvasFocusMode() {
+    if (isCanvasFocusMode) {
+      exitCanvasFocusMode();
+      return;
+    }
+
+    enterCanvasFocusMode();
+  }
+
+  function handleToggleInspectorVisibility() {
+    setIsFocusInspectorCollapsed((current) => !current);
+  }
+
+  function clonePayload(payload: Record<string, unknown>) {
+    return JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
+  }
+
+  function resolveNodeInsertPosition(referenceNode: RFNode | null) {
+    if (referenceNode) {
+      return {
+        x: referenceNode.position.x + DEFAULT_ADD_NODE_OFFSET.x,
+        y: referenceNode.position.y + DEFAULT_ADD_NODE_OFFSET.y,
+      };
+    }
+
+    const containerRect = canvasRegionRef.current?.getBoundingClientRect();
+    const currentViewport = viewportRef.current;
+
+    if (containerRect) {
+      return {
+        x: (containerRect.width / 2 - currentViewport.x) / currentViewport.zoom,
+        y: (containerRect.height / 2 - currentViewport.y) / currentViewport.zoom,
+      };
+    }
+
+    const fallbackOffset = nodesRef.current.length * 28;
+    return {
+      x: 120 + fallbackOffset,
+      y: 120 + fallbackOffset / 2,
+    };
+  }
+
+  function buildAddNodePayloadFromDraft(draft: AddNodeDraft) {
+    const nextPayload: Record<string, unknown> = {};
+    const normalizedDescription = draft.description.trim();
+    const normalizedTags = normalizeTagsInput(draft.tagsText);
+
+    if (normalizedDescription) {
+      nextPayload.description = normalizedDescription;
+    }
+
+    if (normalizedTags.length > 0) {
+      nextPayload.tags = normalizedTags;
+    }
+
+    return nextPayload;
+  }
+
+  function insertNodeFromDraft(input: {
+    draft: AddNodeDraft;
+    sourceNodeId?: string;
+    relationKind?: EdgeKind;
+  }) {
+    const referenceNode = input.sourceNodeId
+      ? nodesRef.current.find((node) => node.id === input.sourceNodeId) ?? null
+      : null;
     const nextNodeId = crypto.randomUUID();
-    const offset = nodes.length * 32;
-    const applied = applyLocalCommandAndQueue({
+    const nextNodeIndex = nodesRef.current.length + 1;
+    const title = input.draft.title.trim() || buildDefaultNodeTitle(input.draft.kind, nextNodeIndex);
+    const payload =
+      inspectorMode === "operational"
+        ? buildAddNodePayloadFromDraft(input.draft)
+        : {};
+
+    const nodeApplied = applyLocalCommandAndQueue({
       type: "addNode",
       node: {
         id: nextNodeId,
-        kind: "note",
-        label: `Novo no ${nodes.length + 1}`,
-        position: { x: 120 + offset, y: 120 + offset / 2 },
-        data: {},
+        kind: input.draft.kind,
+        label: title,
+        position: resolveNodeInsertPosition(referenceNode),
+        data: payload,
       },
     });
 
-    if (applied) {
-      selectItem({ nodeId: nextNodeId, edgeId: null });
+    if (!nodeApplied) {
+      return null;
     }
+
+    if (input.sourceNodeId && input.relationKind) {
+      applyLocalCommandAndQueue({
+        type: "addEdge",
+        edge: {
+          id: crypto.randomUUID(),
+          sourceNodeId: input.sourceNodeId,
+          targetNodeId: nextNodeId,
+          kind: input.relationKind,
+          label: getEdgeKindLabel(input.relationKind, "operational"),
+          data: {},
+        },
+      });
+    }
+
+    selectItem({ nodeId: nextNodeId, edgeId: null });
+    return nextNodeId;
   }
 
-  function handleCenterDiagram() {
-    reactFlowInstanceRef.current?.fitView({
-      padding: 0.2,
+  const handleOpenAddDialog = useCallback(() => {
+    const defaultKind = selectedNodeId
+      ? quickAction.nodeKind
+      : getDefaultNodeKindForDiagram(currentSupportedDiagramType);
+
+    setAddNodeErrorMessage(null);
+    setAddNodeDraft({
+      kind: defaultKind,
+      title: "",
+      description: "",
+      tagsText: "",
     });
+    setIsAddNodeDialogOpen(true);
+  }, [currentSupportedDiagramType, quickAction.nodeKind, selectedNodeId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && isAddNodeDialogOpen) {
+        event.preventDefault();
+        setIsAddNodeDialogOpen(false);
+        setAddNodeErrorMessage(null);
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        quickFindReturnFocusRef.current = document.activeElement as HTMLElement | null;
+        setQuickFindQuery("");
+        setQuickFindActiveIndex(0);
+        setIsQuickFindOpen(true);
+        return;
+      }
+
+      if (event.key === "Escape" && isQuickFindOpen) {
+        event.preventDefault();
+        setIsQuickFindOpen(false);
+        setQuickFindQuery("");
+        window.requestAnimationFrame(() => {
+          quickFindReturnFocusRef.current?.focus();
+        });
+        return;
+      }
+
+      if (event.key === "Escape" && isCanvasFocusMode) {
+        event.preventDefault();
+        setIsCanvasFocusMode(false);
+        setPanelState(panelStateBeforeFocusRef.current);
+        setIsFocusInspectorCollapsed(false);
+        return;
+      }
+
+      if (event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+
+        if (isCanvasFocusMode) {
+          setIsCanvasFocusMode(false);
+          setPanelState(panelStateBeforeFocusRef.current);
+          setIsFocusInspectorCollapsed(false);
+          return;
+        }
+
+        panelStateBeforeFocusRef.current = panelState;
+        setPanelState({
+          metadata: false,
+          prismaImport: false,
+          versions: false,
+        });
+        setIsCanvasFocusMode(true);
+        setIsFocusInspectorCollapsed(true);
+        window.requestAnimationFrame(() => {
+          canvasRegionRef.current?.focus();
+        });
+        return;
+      }
+
+      if (
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "a" &&
+        !isEditableKeyboardTarget(event.target)
+      ) {
+        event.preventDefault();
+        handleOpenAddDialog();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [
+    handleOpenAddDialog,
+    isAddNodeDialogOpen,
+    isCanvasFocusMode,
+    isQuickFindOpen,
+    panelState,
+  ]);
+
+  function handleCloseAddDialog() {
+    setIsAddNodeDialogOpen(false);
+    setAddNodeErrorMessage(null);
+  }
+
+  function handleSubmitAddDialog() {
+    const normalizedTitle = addNodeDraft.title.trim();
+    if (!normalizedTitle) {
+      setAddNodeErrorMessage("Titulo obrigatorio.");
+      return;
+    }
+
+    const appliedNodeId = insertNodeFromDraft({
+      draft: {
+        ...addNodeDraft,
+        title: normalizedTitle,
+      },
+      sourceNodeId: selectedNode?.id,
+      relationKind: selectedNode ? quickAction.edgeKind : undefined,
+    });
+
+    if (!appliedNodeId) {
+      setAddNodeErrorMessage("Nao foi possivel inserir o novo no.");
+      return;
+    }
+
+    handleCloseAddDialog();
+  }
+
+  function handleAddNode() {
+    handleOpenAddDialog();
+  }
+
+  function handleAddContextualNode() {
+    if (!selectedNode) {
+      handleOpenAddDialog();
+      return;
+    }
+
+    const nextNodeIndex = nodesRef.current.length + 1;
+    insertNodeFromDraft({
+      draft: {
+        kind: quickAction.nodeKind,
+        title: buildDefaultNodeTitle(quickAction.nodeKind, nextNodeIndex),
+        description: "",
+        tagsText: "",
+      },
+      sourceNodeId: selectedNode.id,
+      relationKind: quickAction.edgeKind,
+    });
+  }
+
+  function handleDuplicateSelectedNode() {
+    if (!selectedNode) {
+      return;
+    }
+
+    const duplicatedNodeId = crypto.randomUUID();
+    const duplicated = applyLocalCommandAndQueue({
+      type: "addNode",
+      node: {
+        id: duplicatedNodeId,
+        kind: selectedNode.data.kind,
+        label: `${selectedNode.data.label} (copia)`,
+        position: {
+          x: selectedNode.position.x + 56,
+          y: selectedNode.position.y + 56,
+        },
+        data: clonePayload(selectedNode.data.payload),
+      },
+    });
+
+    if (duplicated) {
+      selectItem({ nodeId: duplicatedNodeId, edgeId: null });
+    }
   }
 
   function handleReapplyLayout() {
     const currentSnapshot = getCurrentSnapshot();
 
+    if (currentSnapshot.allowReapplyLayout === false) {
+      setGlobalErrorMessage(
+        "Layout bloqueado por politica definida no Wizard. Ajuste antes de tentar novamente.",
+      );
+      return;
+    }
+
     if (!isSupportedDiagramType(currentSnapshot.diagramType)) {
       setGlobalErrorMessage(
-        "Reaplicar layout automatico exige tipo suportado (tree, flow ou mindmap).",
+        "Reaplicar layout automatico exige um tipo suportado (hierarquia, processo ou mapa mental).",
       );
       return;
     }
@@ -1192,6 +2348,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
+    if (!window.confirm("Deseja remover a aresta selecionada?")) {
+      return;
+    }
+
     const removed = applyLocalCommandAndQueue({
       type: "removeEdge",
       edgeId: selectedEdgeId,
@@ -1208,14 +2368,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
+    const defaultRelation = quickAction.edgeKind;
+
     applyLocalCommandAndQueue({
       type: "addEdge",
       edge: {
         id: crypto.randomUUID(),
         sourceNodeId: connection.source,
         targetNodeId: connection.target,
-        kind: "flows-to",
-        label: "relacao",
+        kind: defaultRelation,
+        label: getEdgeKindLabel(defaultRelation, "operational"),
         data: {},
       },
     });
@@ -1232,6 +2394,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   function handleNodeInspectorReset() {
     if (!selectedNode) return;
     setNodeInspectorDraft(createNodeInspectorDraft(selectedNode));
+    setOperationalNodeDraft(
+      createOperationalNodeDraft({
+        label: selectedNode.data.label,
+        kind: selectedNode.data.kind,
+        payload: selectedNode.data.payload,
+      }),
+    );
     setNodeInspectorErrors({});
     setNodeInspectorMessage(null);
   }
@@ -1239,25 +2408,158 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   function handleEdgeInspectorReset() {
     if (!selectedEdge) return;
     setEdgeInspectorDraft(createEdgeInspectorDraft(selectedEdge));
+    setOperationalEdgeDraft({
+      label: selectedEdge.label ? String(selectedEdge.label) : "",
+      kind: selectedEdge.data?.kind ?? "flows-to",
+    });
     setEdgeInspectorErrors({});
     setEdgeInspectorMessage(null);
   }
 
+  function handleFormatNodeJson() {
+    if (!nodeInspectorDraft) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(nodeInspectorDraft.dataJson || "{}") as Record<
+        string,
+        unknown
+      >;
+      setNodeInspectorDraft((current) =>
+        current
+          ? {
+              ...current,
+              dataJson: formatInspectorJson(parsed),
+            }
+          : current,
+      );
+      setNodeInspectorMessage("JSON formatado.");
+      setNodeInspectorErrors((current) => {
+        const next = { ...current };
+        delete next.dataJson;
+        return next;
+      });
+    } catch {
+      setNodeInspectorMessage("Nao foi possivel formatar: JSON invalido.");
+    }
+  }
+
+  function handleFormatEdgeJson() {
+    if (!edgeInspectorDraft) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(edgeInspectorDraft.dataJson || "{}") as Record<
+        string,
+        unknown
+      >;
+      setEdgeInspectorDraft((current) =>
+        current
+          ? {
+              ...current,
+              dataJson: formatInspectorJson(parsed),
+            }
+          : current,
+      );
+      setEdgeInspectorMessage("JSON formatado.");
+      setEdgeInspectorErrors((current) => {
+        const next = { ...current };
+        delete next.dataJson;
+        return next;
+      });
+    } catch {
+      setEdgeInspectorMessage("Nao foi possivel formatar: JSON invalido.");
+    }
+  }
+
+  async function handleCopyNodeId() {
+    if (!selectedNode) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(selectedNode.id);
+      setNodeInspectorMessage("ID copiado para a area de transferencia.");
+    } catch {
+      setNodeInspectorMessage("Falha ao copiar ID do no.");
+    }
+  }
+
+  async function handleCopyEdgeId() {
+    if (!selectedEdge) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(selectedEdge.id);
+      setEdgeInspectorMessage("ID copiado para a area de transferencia.");
+    } catch {
+      setEdgeInspectorMessage("Falha ao copiar ID da aresta.");
+    }
+  }
+
+  async function handleCopyNodeJson() {
+    if (!nodeInspectorDraft) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(nodeInspectorDraft.dataJson);
+      setNodeInspectorMessage("JSON copiado para a area de transferencia.");
+    } catch {
+      setNodeInspectorMessage("Falha ao copiar JSON.");
+    }
+  }
+
+  async function handleCopyEdgeJson() {
+    if (!edgeInspectorDraft) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(edgeInspectorDraft.dataJson);
+      setEdgeInspectorMessage("JSON copiado para a area de transferencia.");
+    } catch {
+      setEdgeInspectorMessage("Falha ao copiar JSON.");
+    }
+  }
+
   function handleApplyNodeInspector() {
-    if (!selectedNode || !nodeInspectorDraft) return;
+    if (!selectedNode) return;
 
     setNodeInspectorErrors({});
     setNodeInspectorMessage(null);
 
     try {
-      const command = buildUpdateNodeCommandFromInspectorForm({
-        nodeId: selectedNode.id,
-        label: nodeInspectorDraft.label,
-        kind: nodeInspectorDraft.kind,
-        dataJson: nodeInspectorDraft.dataJson,
-      });
+      const command =
+        inspectorMode === "operational" && operationalNodeDraft
+          ? buildUpdateNodeCommandFromInspectorForm({
+              nodeId: selectedNode.id,
+              label: operationalNodeDraft.label,
+              kind: operationalNodeDraft.kind,
+              dataJson: formatInspectorJson(
+                mergeOperationalNodePayload(selectedNode.data.payload, {
+                  description: operationalNodeDraft.description,
+                  tagsText: operationalNodeDraft.tagsText,
+                }),
+              ),
+            })
+          : nodeInspectorDraft
+            ? buildUpdateNodeCommandFromInspectorForm({
+                nodeId: selectedNode.id,
+                label: nodeInspectorDraft.label,
+                kind: nodeInspectorDraft.kind,
+                dataJson: nodeInspectorDraft.dataJson,
+              })
+            : null;
 
-      applyLocalCommandAndQueue(command, "Node atualizado. Autosave agendado.");
+      if (!command) {
+        return;
+      }
+
+      applyLocalCommandAndQueue(command, "No atualizado. Salvamento automatico agendado.");
     } catch (error) {
       const feedback = getFriendlyInspectorFeedback(error);
       setNodeInspectorErrors(feedback.fieldErrors);
@@ -1266,20 +2568,34 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   }
 
   function handleApplyEdgeInspector() {
-    if (!selectedEdge || !edgeInspectorDraft) return;
+    if (!selectedEdge) return;
 
     setEdgeInspectorErrors({});
     setEdgeInspectorMessage(null);
 
     try {
-      const command = buildUpdateEdgeCommandFromInspectorForm({
-        edgeId: selectedEdge.id,
-        label: edgeInspectorDraft.label,
-        kind: edgeInspectorDraft.kind,
-        dataJson: edgeInspectorDraft.dataJson,
-      });
+      const command =
+        inspectorMode === "operational" && operationalEdgeDraft
+          ? buildUpdateEdgeCommandFromInspectorForm({
+              edgeId: selectedEdge.id,
+              label: operationalEdgeDraft.label,
+              kind: operationalEdgeDraft.kind,
+              dataJson: formatInspectorJson(selectedEdge.data?.payload ?? {}),
+            })
+          : edgeInspectorDraft
+            ? buildUpdateEdgeCommandFromInspectorForm({
+                edgeId: selectedEdge.id,
+                label: edgeInspectorDraft.label,
+                kind: edgeInspectorDraft.kind,
+                dataJson: edgeInspectorDraft.dataJson,
+              })
+            : null;
 
-      applyLocalCommandAndQueue(command, "Edge atualizada. Autosave agendado.");
+      if (!command) {
+        return;
+      }
+
+      applyLocalCommandAndQueue(command, "Aresta atualizada. Salvamento automatico agendado.");
     } catch (error) {
       const feedback = getFriendlyInspectorFeedback(error);
       setEdgeInspectorErrors(feedback.fieldErrors);
@@ -1288,315 +2604,441 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   }
 
   return (
-    <div className="editor-grid">
-      <div>
-        <section className="panel">
-          <header className="panel-header">
-            <div>
-              <h3>{project.name}</h3>
-              <p>
-                Editor visual do snapshot de trabalho com versoes e inspector.
-              </p>
-            </div>
-            <div className="row-actions">
-              <span className="badge" data-testid="diagram-type-badge">
-                Tipo: {currentDiagramTypeLabel}
-              </span>
-              <span
-                className={saveStatusClassName}
-                aria-live="polite"
-                data-testid="save-status-badge"
-                data-save-status={saveState.status}
-              >
-                {saveStatusLabel}
-              </span>
-            </div>
-          </header>
-          <div className="panel-body">
-            <div className="row-actions editor-toolbar editor-toolbar-meta">
-              <span className="badge">
-                <span className="badge-dot" aria-hidden="true" />
-                Snapshot de trabalho
-              </span>
-              <span className="muted">
-                {pendingCommands.length} pendente(s) | {nodes.length} nos | {edges.length}{" "}
-                arestas
-              </span>
-              {lastSavedAtLabel ? (
-                <span className="muted">Ultimo salvamento: {lastSavedAtLabel}</span>
-              ) : null}
-              <span className="helper">{saveState.message}</span>
-              {isRefreshingFromQuery ? (
-                <span className="helper">Sincronizando query...</span>
-              ) : null}
-              {querySyncMessage ? <span className="helper">{querySyncMessage}</span> : null}
-            </div>
-
-            <div className="row-actions editor-toolbar editor-toolbar-actions">
-              <button
-                className="btn"
-                type="button"
-                onClick={handleAddNode}
-                disabled={saveState.status === "saving"}
-                data-testid="add-node-button"
-              >
-                Adicionar no
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleRemoveSelected}
-                disabled={
-                  saveState.status === "saving" || (!selectedNodeId && !selectedEdgeId)
-                }
-                data-testid="remove-selected-button"
-              >
-                Remover selecionado
-              </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={handleManualSave}
-                disabled={saveState.status === "saving" || isCreatingVersion}
-                data-testid="save-button"
-              >
-                {saveState.status === "saving" ? "Salvando..." : "Salvar"}
-              </button>
-              <div className="field">
-                <label className="sr-only" htmlFor="new-version-name-input">
-                  Nome da nova versao
-                </label>
-                <input
-                  id="new-version-name-input"
-                  value={newVersionName}
-                  onChange={(event) => setNewVersionName(event.target.value)}
-                  placeholder="Nome da nova versao (opcional)"
-                  aria-label="Nome da nova versao"
-                />
+    <div
+      className={`editor-grid ${isCanvasFocusMode ? "editor-grid-focus" : ""} ${
+        isInspectorVisible ? "" : "editor-grid-inspector-hidden"
+      }`}
+    >
+      <div className="editor-main-column">
+        {shouldShowMetadataPanel ? (
+          <section className="panel">
+            <header className="panel-header">
+              <div>
+                <h3>{project.name}</h3>
+                <p>
+                  Snapshot de trabalho com salvamento continuo, versoes e inspetor.
+                </p>
               </div>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleCreateVersion}
-                disabled={saveState.status === "saving" || isCreatingVersion}
-                data-testid="create-version-button"
-              >
-                {isCreatingVersion ? "Criando versao..." : "Criar versao"}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleCenterDiagram}
-                data-testid="center-diagram-button"
-              >
-                Centralizar diagrama
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleReapplyLayout}
-                disabled={saveState.status === "saving" || !canReapplyLayout}
-                data-testid="reapply-layout-button"
-              >
-                Reaplicar layout
-              </button>
-              {versionCreateFeedback ? (
+              <div className="row-actions">
                 <span
-                  className="helper"
-                  aria-live="polite"
-                  role={versionCreateFeedback.kind === "error" ? "alert" : "status"}
-                  data-testid="create-version-feedback"
-                  data-feedback-kind={versionCreateFeedback.kind}
+                  className={`badge ${isSupportedDiagramType(layoutMetadata.diagramType) ? "" : "badge-warning"}`}
+                  data-testid="diagram-type-badge"
                 >
-                  {versionCreateFeedback.message}
+                  {diagramDefinitionLabel}
                 </span>
-              ) : null}
-            </div>
-          </div>
-        </section>
-
-        <section
-          className="panel stack-sm"
-          aria-label="Importar schema Prisma"
-          data-testid="prisma-schema-import-panel"
-        >
-          <div className="row-actions">
-            <strong>Importar schema Prisma</strong>
-            <button
-              className="btn"
-              type="button"
-              onClick={() => {
-                void handleImportPrismaSchema();
-              }}
-              disabled={
-                saveState.status === "saving" ||
-                isImportingPrismaSchema ||
-                !canImportPrismaSchema
-              }
-              data-testid="prisma-schema-import-button"
-            >
-              {isImportingPrismaSchema ? "Importando..." : "Importar"}
-            </button>
-            <span className="helper">
-              Cole seu `.prisma`. A importacao sobrescreve o snapshot de trabalho.
-            </span>
-          </div>
-
-          <textarea
-            className="mono"
-            rows={8}
-            value={prismaSchemaImportText}
-            onChange={(event) => setPrismaSchemaImportText(event.target.value)}
-            placeholder={`model User {\n  id String @id\n  posts Post[]\n}\n\nmodel Post {\n  id String @id\n  author User?\n}`}
-            data-testid="prisma-schema-import-textarea"
-          />
-
-          {prismaSchemaImportFeedback ? (
-            <div
-              className="helper"
-              role={prismaSchemaImportFeedback.kind === "error" ? "alert" : "status"}
-              data-testid="prisma-schema-import-feedback"
-              data-feedback-kind={prismaSchemaImportFeedback.kind}
-            >
-              {prismaSchemaImportFeedback.message}
-            </div>
-          ) : null}
-        </section>
-
-        <section
-          className="panel stack-sm"
-          aria-label="Versoes do snapshot"
-        >
-          <div className="row-actions">
-            <strong>Versoes</strong>
-            <button
-              className="btn"
-              type="button"
-              onClick={handleRefreshVersionList}
-              disabled={
-                isRefreshingVersionList ||
-                saveState.status === "saving" ||
-                activeVersionRestoreId !== null
-              }
-              data-testid="version-list-refresh-button"
-            >
-              {isRefreshingVersionList ? "Atualizando..." : "Atualizar versoes"}
-            </button>
-            <span className="helper">
-              Compare, restaure e nomeie localmente as versoes para consulta rapida.
-            </span>
-          </div>
-
-          {versionActionFeedback ? (
-            <div
-              className="helper"
-              role={versionActionFeedback.kind === "error" ? "alert" : "status"}
-              data-testid="version-action-feedback"
-              data-feedback-kind={versionActionFeedback.kind}
-            >
-              {versionActionFeedback.message}
-            </div>
-          ) : null}
-
-          {versionDiffFeedback ? (
-            <div
-              className="helper"
-              role={versionDiffFeedback.kind === "error" ? "alert" : "status"}
-              data-testid="version-diff-feedback"
-              data-feedback-kind={versionDiffFeedback.kind}
-            >
-              {versionDiffFeedback.message}
-            </div>
-          ) : null}
-
-          <div className="stack-sm" data-testid="version-list">
-            {snapshotVersions.length === 0 ? (
-              <div className="helper">
-                Nenhuma versao encontrada para este projeto.
-              </div>
-            ) : (
-              snapshotVersions.map((version) => (
-                <div
-                  key={version.id}
-                  className="tile"
-                  data-testid={`version-item-${version.id}`}
+                <span className="badge" data-testid="visual-mode-badge">
+                  Modo visual: {renderer.label}
+                </span>
+                <Link
+                  className="btn btn-link"
+                  href={`/wizard?projectId=${project.id}`}
+                  data-testid="layout-policy-open-wizard-link"
                 >
-                  <div className="row-actions" style={{ justifyContent: "space-between" }}>
-                    <span className="badge">
-                      {getVersionDisplayName(version)} | {version.origin}
-                    </span>
-                    <span className="muted">
-                      {formatVersionCreatedAtLabel(version.createdAt)}
-                    </span>
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor={`version-name-input-${version.id}`}>
-                      Nome da versao
-                    </label>
-                    <div className="row-actions">
-                      <input
-                        id={`version-name-input-${version.id}`}
-                        value={versionNameDrafts[version.id] ?? ""}
-                        onChange={(event) =>
-                          handleVersionNameDraftChange(version.id, event.target.value)
-                        }
-                        placeholder="Ex.: baseline onboarding"
-                        data-testid={`version-name-input-${version.id}`}
-                      />
-                      <button
-                        className="btn"
-                        type="button"
-                        onClick={() => handleSaveVersionName(version.id)}
-                        disabled={saveState.status === "saving"}
-                        data-testid={`version-save-name-button-${version.id}`}
-                      >
-                        Salvar nome
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="row-actions">
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => {
-                        void handleCompareVersion(version.id);
-                      }}
-                      disabled={
-                        saveState.status === "saving" ||
-                        activeVersionRestoreId !== null ||
-                        activeVersionCompareId !== null
-                      }
-                      data-testid={`version-compare-button-${version.id}`}
-                    >
-                      {activeVersionCompareId === version.id
-                        ? "Comparando..."
-                        : "Comparar"}
-                    </button>
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => {
-                        void handleRestoreVersion(version);
-                      }}
-                      disabled={
-                        saveState.status === "saving" ||
-                        isCreatingVersion ||
-                        activeVersionRestoreId !== null
-                      }
-                      data-testid={`version-restore-button-${version.id}`}
-                    >
-                      {activeVersionRestoreId === version.id
-                        ? "Restaurando..."
-                        : "Restaurar"}
-                    </button>
-                  </div>
+                  Alterar no Wizard
+                </Link>
+                <span
+                  className={`badge ${isReapplyLayoutBlockedByPolicy ? "badge-warning" : ""}`}
+                  data-testid="layout-policy-badge"
+                >
+                  Politica de layout: {layoutPolicyLabel}
+                </span>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => handleTogglePanel("metadata")}
+                  aria-expanded={panelState.metadata}
+                  data-testid="editor-panel-metadata-toggle"
+                >
+                  {panelState.metadata
+                    ? "▾ Metadados"
+                    : `▸ Metadados (${nodes.length} nos)`}
+                </button>
+              </div>
+            </header>
+            {panelState.metadata ? (
+              <div className="panel-body">
+                <div className="row-actions editor-toolbar editor-toolbar-meta">
+                  <span className="badge">
+                    <span className="badge-dot" aria-hidden="true" />
+                    Snapshot de trabalho
+                  </span>
+                  <span className="muted">
+                    {pendingCommands.length} pendente(s) | {nodes.length} no(s) | {edges.length}{" "}
+                    arestas
+                  </span>
+                  {lastSavedAtLabel ? (
+                    <span className="muted">Ultimo salvamento: {lastSavedAtLabel}</span>
+                  ) : null}
+                  <span className="helper">{saveState.message}</span>
+                  {isRefreshingFromQuery ? (
+                    <span className="helper">Sincronizando com o backend...</span>
+                  ) : null}
+                  {querySyncMessage ? (
+                    <span className="helper">{querySyncMessage}</span>
+                  ) : null}
                 </div>
-              ))
-            )}
-          </div>
-        </section>
+
+                <div className="row-actions editor-toolbar editor-toolbar-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleRemoveSelected}
+                    disabled={
+                      saveState.status === "saving" || (!selectedNodeId && !selectedEdgeId)
+                    }
+                    data-testid="remove-selected-button"
+                  >
+                    Remover selecionado
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={handleManualSave}
+                    disabled={saveState.status === "saving" || isCreatingVersion}
+                    data-testid="save-button"
+                  >
+                    {saveState.status === "saving" ? "Salvando..." : "Salvar"}
+                  </button>
+                  <div className="field">
+                    <label className="sr-only" htmlFor="new-version-name-input">
+                      Nome da nova versao (local)
+                    </label>
+                    <input
+                      id="new-version-name-input"
+                      value={newVersionName}
+                      onChange={(event) => setNewVersionName(event.target.value)}
+                      placeholder="Ex.: checkpoint antes da revisao (nome local opcional)"
+                      aria-label="Nome da nova versao (local)"
+                    />
+                  </div>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleCreateVersion}
+                    disabled={saveState.status === "saving" || isCreatingVersion}
+                    data-testid="create-version-button"
+                  >
+                    {isCreatingVersion ? "Criando versao..." : "Criar versao"}
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleReapplyLayout}
+                    disabled={saveState.status === "saving" || !canReapplyLayout}
+                    title={
+                      isReapplyLayoutBlockedByPolicy
+                        ? "Layout bloqueado no Wizard. Ajuste a politica para permitir reaplicacao."
+                        : undefined
+                    }
+                    data-testid="reapply-layout-button"
+                  >
+                    Reaplicar layout
+                  </button>
+                  {hasDiagramRendererMismatch ? (
+                    <span
+                      className="warning-text"
+                      data-testid="diagram-renderer-mismatch-warning"
+                    >
+                      O renderer atual nao corresponde ao tipo de diagrama salvo.
+                      Use Reaplicar layout ou ajuste no Wizard.
+                    </span>
+                  ) : null}
+                  {isReapplyLayoutBlockedByPolicy ? (
+                    <>
+                      <span className="badge badge-warning">Layout bloqueado</span>
+                      <span className="helper">
+                        A reaplicacao foi bloqueada para preservar o desenho definido no Wizard.
+                      </span>
+                    </>
+                  ) : null}
+                  {versionCreateFeedback ? (
+                    <span
+                      className="helper"
+                      aria-live="polite"
+                      role={versionCreateFeedback.kind === "error" ? "alert" : "status"}
+                      data-testid="create-version-feedback"
+                      data-feedback-kind={versionCreateFeedback.kind}
+                    >
+                      {versionCreateFeedback.message}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {shouldShowPrismaPanel ? (
+          <section className="panel" aria-label="Importar schema Prisma">
+            <header className="panel-header">
+              <div>
+                <h3>Importar schema Prisma</h3>
+                <p>Cole o `.prisma` para atualizar o snapshot de trabalho.</p>
+              </div>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => handleTogglePanel("prismaImport")}
+                aria-expanded={panelState.prismaImport}
+                data-testid="editor-panel-prisma-toggle"
+              >
+                {panelState.prismaImport ? "▾ Import Prisma" : "▸ Import Prisma"}
+              </button>
+            </header>
+            {panelState.prismaImport ? (
+              <div className="panel-body stack-sm" data-testid="prisma-schema-import-panel">
+                <div className="row-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      void handleImportPrismaSchema();
+                    }}
+                    disabled={
+                      saveState.status === "saving" ||
+                      isImportingPrismaSchema ||
+                      !canImportPrismaSchema
+                    }
+                    data-testid="prisma-schema-import-button"
+                  >
+                    {isImportingPrismaSchema ? "Importando..." : "Importar"}
+                  </button>
+                  <span className="helper">
+                    A importacao sobrescreve o snapshot de trabalho.
+                  </span>
+                </div>
+
+                <textarea
+                  className="mono"
+                  rows={8}
+                  value={prismaSchemaImportText}
+                  onChange={(event) => setPrismaSchemaImportText(event.target.value)}
+                  placeholder={`model User {\n  id String @id\n  posts Post[]\n}\n\nmodel Post {\n  id String @id\n  author User?\n}`}
+                  data-testid="prisma-schema-import-textarea"
+                />
+
+                {prismaSchemaImportFeedback ? (
+                  <div
+                    className="helper"
+                    role={prismaSchemaImportFeedback.kind === "error" ? "alert" : "status"}
+                    data-testid="prisma-schema-import-feedback"
+                    data-feedback-kind={prismaSchemaImportFeedback.kind}
+                  >
+                    {prismaSchemaImportFeedback.message}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {shouldShowVersionsPanel ? (
+          <section className="panel" aria-label="Versoes do snapshot" id="versoes">
+            <header className="panel-header">
+              <div>
+                <h3>Versoes</h3>
+                <p>Compare e restaure checkpoints.</p>
+              </div>
+              <button
+                className="btn"
+                type="button"
+                onClick={() => handleTogglePanel("versions")}
+                aria-expanded={panelState.versions}
+                data-testid="editor-panel-versions-toggle"
+              >
+                {panelState.versions
+                  ? "▾ Versoes"
+                  : `▸ Versoes (${snapshotVersions.length})`}
+              </button>
+            </header>
+            {panelState.versions ? (
+              <div className="panel-body stack-sm">
+                <div className="row-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleRefreshVersionList}
+                    disabled={
+                      isRefreshingVersionList ||
+                      saveState.status === "saving" ||
+                      activeVersionRestoreId !== null
+                    }
+                    data-testid="version-list-refresh-button"
+                  >
+                    {isRefreshingVersionList ? "Atualizando..." : "Atualizar versoes"}
+                  </button>
+                  <span className="helper">
+                    O nome da versao nesta tela e local (salvo apenas neste navegador).
+                  </span>
+                </div>
+
+                {versionActionFeedback ? (
+                  <div
+                    className="helper"
+                    role={versionActionFeedback.kind === "error" ? "alert" : "status"}
+                    data-testid="version-action-feedback"
+                    data-feedback-kind={versionActionFeedback.kind}
+                  >
+                    {versionActionFeedback.message}
+                  </div>
+                ) : null}
+
+                {versionDiffFeedback ? (
+                  <div
+                    className="helper"
+                    role={versionDiffFeedback.kind === "error" ? "alert" : "status"}
+                    data-testid="version-diff-feedback"
+                    data-feedback-kind={versionDiffFeedback.kind}
+                  >
+                    {versionDiffFeedback.message}
+                  </div>
+                ) : null}
+
+                {versionDiffSummary ? (
+                  <section
+                    className="version-diff-executive"
+                    data-testid="version-diff-executive-summary"
+                  >
+                    <h4>Resumo de mudancas</h4>
+                    <div className="version-diff-cards">
+                      <article
+                        className="version-diff-card"
+                        data-testid="version-diff-card-nodes-added"
+                      >
+                        <span>Nos adicionados</span>
+                        <strong>{versionDiffSummary.cards.nodesAdded}</strong>
+                      </article>
+                      <article
+                        className="version-diff-card"
+                        data-testid="version-diff-card-nodes-removed"
+                      >
+                        <span>Nos removidos</span>
+                        <strong>{versionDiffSummary.cards.nodesRemoved}</strong>
+                      </article>
+                      <article
+                        className="version-diff-card"
+                        data-testid="version-diff-card-nodes-changed"
+                      >
+                        <span>Nos alterados</span>
+                        <strong>{versionDiffSummary.cards.nodesChanged}</strong>
+                      </article>
+                      <article
+                        className="version-diff-card"
+                        data-testid="version-diff-card-edges-changed"
+                      >
+                        <span>Arestas alteradas</span>
+                        <strong>{versionDiffSummary.cards.edgesChanged}</strong>
+                      </article>
+                    </div>
+                    <p className="helper">
+                      Alterados: {versionDiffSummary.changedBreakdown.renamed} renomeados,{" "}
+                      {versionDiffSummary.changedBreakdown.kindChanged} com tipo alterado e{" "}
+                      {versionDiffSummary.changedBreakdown.payloadChanged} com payload alterado.
+                    </p>
+                    <h5>Top mudancas</h5>
+                    <ul className="summary-list" data-testid="version-diff-top-changes">
+                      {versionDiffSummary.topChanges.map((entry, index) => (
+                        <li key={`${entry}-${index}`}>{entry}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
+
+                <div className="stack-sm" data-testid="version-list">
+                  {snapshotVersions.length === 0 ? (
+                    <div className="helper">
+                      Nenhuma versao encontrada para este projeto.
+                    </div>
+                  ) : (
+                    snapshotVersions.map((version) => (
+                      <div
+                        key={version.id}
+                        className="tile"
+                        data-testid={`version-item-${version.id}`}
+                      >
+                        <div className="row-actions row-actions-between">
+                          <span className="badge">{getVersionDisplayName(version)}</span>
+                          <span className="badge">
+                            Origem: {formatVersionOriginLabel(version.origin)}
+                          </span>
+                          <span className="muted">
+                            {formatVersionCreatedAtLabel(version.createdAt)}
+                          </span>
+                        </div>
+
+                        <div className="field">
+                          <label htmlFor={`version-name-input-${version.id}`}>
+                            Nome local da versao
+                          </label>
+                          <div className="row-actions">
+                            <input
+                              id={`version-name-input-${version.id}`}
+                              value={versionNameDrafts[version.id] ?? ""}
+                              onChange={(event) =>
+                                handleVersionNameDraftChange(version.id, event.target.value)
+                              }
+                              placeholder="Ex.: baseline onboarding (somente local)"
+                              data-testid={`version-name-input-${version.id}`}
+                            />
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => handleSaveVersionName(version.id)}
+                              disabled={saveState.status === "saving"}
+                              data-testid={`version-save-name-button-${version.id}`}
+                            >
+                              Salvar nome
+                            </button>
+                          </div>
+                          <span className="helper">
+                            Este nome e usado apenas para facilitar consulta neste navegador.
+                          </span>
+                        </div>
+
+                        <div className="row-actions">
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => {
+                              void handleCompareVersion(version.id);
+                            }}
+                            disabled={
+                              saveState.status === "saving" ||
+                              activeVersionRestoreId !== null ||
+                              activeVersionCompareId !== null
+                            }
+                            data-testid={`version-compare-button-${version.id}`}
+                          >
+                            {activeVersionCompareId === version.id
+                              ? "Comparando..."
+                              : "Comparar"}
+                          </button>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => {
+                              void handleRestoreVersion(version);
+                            }}
+                            disabled={
+                              saveState.status === "saving" ||
+                              isCreatingVersion ||
+                              activeVersionRestoreId !== null
+                            }
+                            data-testid={`version-restore-button-${version.id}`}
+                          >
+                            {activeVersionRestoreId === version.id
+                              ? "Restaurando..."
+                              : "Restaurar"}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {globalErrorMessage ? (
           <div
@@ -1608,15 +3050,154 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         ) : null}
 
         <div
-          className="canvas-frame"
+          ref={canvasRegionRef}
+          className={`${renderer.canvasClassName} ${
+            isCanvasFocusMode ? "canvas-frame-focus" : ""
+          }`}
           role="region"
           aria-label="Canvas do editor"
+          tabIndex={0}
           data-testid="editor-canvas"
+          data-diagram-renderer={
+            renderer.canvasDataAttributes["data-diagram-renderer"] ?? renderer.key
+          }
         >
+          <div
+            className={`canvas-top-bar ${isCanvasFocusMode ? "is-focus-mode" : ""}`}
+            role="region"
+            aria-label="Barra superior do canvas"
+            data-testid="canvas-top-bar"
+          >
+            <div className="canvas-top-bar-main">
+              <strong className="canvas-top-project-name" title={project.name}>
+                {project.name}
+              </strong>
+              <span
+                className={saveStatusClassName}
+                aria-live="polite"
+                data-testid="save-status-badge"
+                data-save-status={saveState.status}
+              >
+                {saveStatusLabel}
+              </span>
+            </div>
+            <div className="canvas-top-bar-actions">
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={handleAddNode}
+                disabled={saveState.status === "saving"}
+                data-testid="add-node-button"
+              >
+                Adicionar
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleOpenQuickFind}
+                data-testid="canvas-toolbar-quick-find"
+              >
+                Buscar (Ctrl+K)
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleFitView}
+                data-testid="center-diagram-button"
+              >
+                Ajustar
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleToggleInspectorVisibility}
+                data-testid="canvas-top-inspector-toggle"
+              >
+                {inspectorToggleLabel}
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleToggleCanvasFocusMode}
+                data-testid="editor-focus-toggle"
+              >
+                {isCanvasFocusMode ? "Sair do foco" : "Entrar em foco"}
+              </button>
+            </div>
+          </div>
+
+          <CanvasToolbar
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onCenterView={handleCenterView}
+            isInFocusMode={isCanvasFocusMode}
+          />
+
+          {selectedNode || selectedEdge ? (
+            <div className="canvas-selection-hud" data-testid="canvas-selection-hud">
+              <div className="canvas-selection-hud-main">
+                <strong>{selectedItemLabel}</strong>
+                {selectedNode ? (
+                  <span
+                    className={`badge canvas-selection-kind-chip tone-${selectionNodeKindPresentation?.tone ?? "slate"}`}
+                    data-testid="canvas-selection-kind-chip"
+                  >
+                    {getNodeKindLabel(selectedNode.data.kind, "operational")}
+                    {inspectorMode === "technical"
+                      ? ` (kind: ${selectedNode.data.kind})`
+                      : ""}
+                  </span>
+                ) : selectedEdge ? (
+                  <span className="badge canvas-selection-kind-chip" data-testid="canvas-selection-kind-chip">
+                    {getEdgeKindLabel(selectedEdge.data?.kind ?? "flows-to", "operational")}
+                    {inspectorMode === "technical"
+                      ? ` (kind: ${selectedEdge.data?.kind ?? "flows-to"})`
+                      : ""}
+                  </span>
+                ) : null}
+              </div>
+              <div className="row-actions canvas-selection-hud-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setIsFocusInspectorCollapsed(false)}
+                >
+                  Editar
+                </button>
+                <button className="btn" type="button" onClick={handleCenterView}>
+                  Centralizar
+                </button>
+                {selectedNode ? (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleDuplicateSelectedNode}
+                    data-testid="selection-hud-duplicate-button"
+                  >
+                    Duplicar
+                  </button>
+                ) : null}
+                {selectedNode ? (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleAddContextualNode}
+                    data-testid="selection-hud-contextual-add-button"
+                  >
+                    {quickAction.label}
+                  </button>
+                ) : null}
+                <button className="btn" type="button" onClick={handleRemoveSelected}>
+                  Remover
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <ReactFlow<RFNode, RFEdge>
             fitView
-            nodes={nodes}
-            edges={edges}
+            nodes={renderedNodes}
+            edges={renderedEdges}
             onInit={(instance) => {
               reactFlowInstanceRef.current = instance;
             }}
@@ -1637,110 +3218,564 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             colorMode="light"
             defaultViewport={initialFlowState.viewport}
             deleteKeyCode={null}
+            nodeTypes={renderer.nodeTypes}
+            edgeTypes={renderer.edgeTypes}
+            defaultEdgeOptions={renderer.defaultEdgeOptions}
+            connectionLineType={renderer.connectionLineType}
+            className={`editor-react-flow editor-react-flow-${renderer.key}`}
           >
-            <Background gap={18} color="rgba(17, 94, 89, 0.12)" />
+            <Background
+              gap={renderer.backgroundConfig.gap}
+              variant={renderer.backgroundConfig.variant}
+              color="var(--canvas-grid-color)"
+              className={`editor-canvas-background ${renderer.backgroundConfig.className}`}
+            />
             <MiniMap
               pannable
               zoomable
-              style={{ background: "rgba(255,255,255,0.9)", borderRadius: 10 }}
+              className={renderer.minimapClassName}
             />
-            <Controls />
           </ReactFlow>
         </div>
+
+        {isAddNodeDialogOpen ? (
+          <div
+            className="add-node-dialog-backdrop"
+            role="presentation"
+            onClick={handleCloseAddDialog}
+          >
+            <form
+              className="add-node-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Adicionar novo no"
+              data-testid="add-node-dialog"
+              onClick={(event) => event.stopPropagation()}
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSubmitAddDialog();
+              }}
+            >
+              <header className="add-node-dialog-header">
+                <h3>Adicionar</h3>
+                <p className="helper">
+                  Defina o tipo, titulo e contexto. Atalhos: Enter confirma, ESC cancela.
+                </p>
+              </header>
+
+              <div className="add-node-kind-grid">
+                {getNodeKindOptions("operational").map((kind) => {
+                  const presentation = getNodeKindPresentation(kind);
+                  const isSelected = addNodeDraft.kind === kind;
+
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      className={`add-node-kind-card ${isSelected ? "is-selected" : ""}`}
+                      onClick={() =>
+                        setAddNodeDraft((current) => ({
+                          ...current,
+                          kind,
+                        }))
+                      }
+                      data-testid={`add-node-kind-${kind}`}
+                    >
+                      <span className={`badge add-node-kind-chip tone-${presentation.tone}`}>
+                        <svg viewBox={presentation.icon.viewBox} aria-hidden="true" focusable="false">
+                          <path d={presentation.icon.path} fill="currentColor" />
+                        </svg>
+                        {getNodeKindLabel(kind, "operational")}
+                      </span>
+                      <span className="helper">{getNodeKindDescription(kind)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="field">
+                <label htmlFor="add-node-title-input">Titulo</label>
+                <input
+                  id="add-node-title-input"
+                  value={addNodeDraft.title}
+                  onChange={(event) =>
+                    setAddNodeDraft((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  placeholder={`Ex.: ${buildDefaultNodeTitle(addNodeDraft.kind, nodes.length + 1)}`}
+                  required
+                  autoFocus
+                  data-testid="add-node-title-input"
+                />
+              </div>
+
+              {inspectorMode === "operational" ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="add-node-description-input">Descricao (opcional)</label>
+                    <textarea
+                      id="add-node-description-input"
+                      rows={3}
+                      value={addNodeDraft.description}
+                      onChange={(event) =>
+                        setAddNodeDraft((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      data-testid="add-node-description-input"
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="add-node-tags-input">Tags (opcional)</label>
+                    <input
+                      id="add-node-tags-input"
+                      value={addNodeDraft.tagsText}
+                      onChange={(event) =>
+                        setAddNodeDraft((current) => ({
+                          ...current,
+                          tagsText: event.target.value,
+                        }))
+                      }
+                      placeholder="Ex.: onboarding, aprovacao"
+                      data-testid="add-node-tags-input"
+                    />
+                  </div>
+                </>
+              ) : null}
+
+              {addNodeErrorMessage ? (
+                <div className="error-box" role="alert" data-testid="add-node-error">
+                  {addNodeErrorMessage}
+                </div>
+              ) : null}
+
+              <div className="row-actions add-node-dialog-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleCloseAddDialog}
+                  data-testid="add-node-cancel-button"
+                >
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" type="submit" data-testid="add-node-confirm-button">
+                  Adicionar
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
+
+        <CommandPalette
+          isOpen={isQuickFindOpen}
+          query={quickFindQuery}
+          options={quickFindOptions}
+          activeIndex={quickFindActiveIndex}
+          mode={inspectorMode}
+          onQueryChange={(value) => {
+            setQuickFindQuery(value);
+            setQuickFindActiveIndex(0);
+          }}
+          onMoveActiveIndex={handleMoveQuickFindActiveIndex}
+          onSelectByIndex={handleSelectQuickFindByIndex}
+          onClose={handleCloseQuickFind}
+        />
+
       </div>
 
-      <aside
-        className="inspector"
-        aria-label="Inspector"
-        data-testid="inspector-panel"
-      >
-        <div className="inspector-header">
-          <h3>Inspector</h3>
-          <p className="helper inspector-subtitle">
-            Edite o item selecionado e aplique as alteracoes quando estiver pronto.
-          </p>
-        </div>
-
-        {selectedNode && nodeInspectorDraft ? (
-          <div className="stack-sm">
+      {isInspectorVisible ? (
+        <aside
+          className="inspector"
+          aria-label="Inspetor"
+          data-testid="inspector-panel"
+        >
+          <div className="inspector-header">
             <div className="row-actions inspector-selection-row">
-              <span className="badge">No selecionado</span>
-              {nodeInspectorDirty ? (
+              <span className="badge">{inspectorSelectionBadge}</span>
+              {hasInspectorDirtyDraft ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
                   Rascunho nao aplicado
                 </span>
               ) : null}
             </div>
+            <h3 className="inspector-selection-title" title={selectedItemLabel}>
+              {selectedItemLabel}
+            </h3>
+            <p className="helper inspector-subtitle">
+              Ajuste o item selecionado e aplique as alteracoes quando concluir.
+            </p>
+          </div>
 
-            <div className="field">
-              <label htmlFor="node-label-input">Rotulo</label>
-              <input
-                id="node-label-input"
-                data-testid="inspector-node-label"
-                value={nodeInspectorDraft.label}
-                onChange={(event) =>
-                  setNodeInspectorDraft((current) =>
-                    current ? { ...current, label: event.target.value } : current,
-                  )
-                }
-              />
+          <div
+            className="row-actions inspector-mode-toggle"
+            role="group"
+            aria-label="Modo do inspetor"
+            data-testid="inspector-mode-toggle"
+          >
+            <button
+              className={`btn ${inspectorMode === "operational" ? "btn-primary" : ""}`}
+              type="button"
+              aria-pressed={inspectorMode === "operational"}
+              onClick={() => setInspectorMode("operational")}
+              data-testid="inspector-operational"
+            >
+              Operacional
+            </button>
+            <button
+              className={`btn ${inspectorMode === "technical" ? "btn-primary" : ""}`}
+              type="button"
+              aria-pressed={inspectorMode === "technical"}
+              onClick={() => setInspectorMode("technical")}
+              data-testid="inspector-technical"
+            >
+              Tecnico
+            </button>
+          </div>
+
+          {selectedNode && inspectorMode === "operational" && operationalNodeDraft ? (
+            <div className="stack-sm">
+              <div className="row-actions inspector-selection-row">
+                <span className="badge">No selecionado</span>
+                {nodeInspectorDirty ? (
+                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                    Rascunho nao aplicado
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="row-actions inspector-section-tabs">
+                <button
+                  className="btn inspector-section-toggle"
+                  type="button"
+                  onClick={() => handleToggleInspectorSection("general")}
+                  aria-expanded={inspectorSections.general}
+                  data-testid="inspector-section-general-toggle"
+                >
+                  Geral {inspectorSections.general ? "▾" : "▸"}
+                </button>
+                <button
+                  className="btn inspector-section-toggle"
+                  type="button"
+                  onClick={() => handleToggleInspectorSection("details")}
+                  aria-expanded={inspectorSections.details}
+                  data-testid="inspector-section-details-toggle"
+                >
+                  Detalhes {inspectorSections.details ? "▾" : "▸"}
+                </button>
+                <button
+                  className="btn inspector-section-toggle"
+                  type="button"
+                  onClick={() => handleToggleInspectorSection("relations")}
+                  aria-expanded={inspectorSections.relations}
+                  data-testid="inspector-section-relations-toggle"
+                >
+                  Relacoes {inspectorSections.relations ? "▾" : "▸"}
+                </button>
+              </div>
+
+              {inspectorSections.general ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="node-title-input">Titulo</label>
+                    <input
+                      id="node-title-input"
+                      data-testid="inspector-node-label"
+                      value={operationalNodeDraft.label}
+                      onChange={(event) =>
+                        setOperationalNodeDraft((current) =>
+                          current ? { ...current, label: event.target.value } : current,
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="node-kind-operational-input">Tipo</label>
+                    <select
+                      id="node-kind-operational-input"
+                      data-testid="inspector-node-kind"
+                      value={operationalNodeDraft.kind}
+                      onChange={(event) =>
+                        setOperationalNodeDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                kind: event.target.value as OperationalNodeDraft["kind"],
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      {nodeKindOptions.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {getFriendlyNodeKindLabel(kind)}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="helper">
+                      {getFriendlyNodeKindDescription(operationalNodeDraft.kind)}
+                    </span>
+                  </div>
+                </>
+              ) : null}
+
+              {inspectorSections.details ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="node-description-operational-input">Descricao</label>
+                    <textarea
+                      id="node-description-operational-input"
+                      rows={3}
+                      value={operationalNodeDraft.description}
+                      onChange={(event) =>
+                        setOperationalNodeDraft((current) =>
+                          current
+                            ? { ...current, description: event.target.value }
+                            : current,
+                        )
+                      }
+                      placeholder="Opcional. Salvo em payload.description."
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="node-tags-operational-input">Tags</label>
+                    <input
+                      id="node-tags-operational-input"
+                      value={operationalNodeDraft.tagsText}
+                      onChange={(event) =>
+                        setOperationalNodeDraft((current) =>
+                          current ? { ...current, tagsText: event.target.value } : current,
+                        )
+                      }
+                      placeholder="Ex.: onboarding, urgencia, aprovacao"
+                    />
+                    <span className="helper">
+                      Separadas por virgula. Salvas em payload.tags como lista.
+                    </span>
+                  </div>
+
+                  {operationalTagPreview.length > 0 ? (
+                    <div className="row-actions">
+                      {operationalTagPreview.map((tag) => (
+                        <span key={tag} className="badge">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
               {nodeInspectorErrors.label ? (
                 <span className="helper field-error" role="alert">
                   {nodeInspectorErrors.label}
                 </span>
               ) : null}
-            </div>
-
-            <div className="field">
-              <label htmlFor="node-kind-input">Tipo</label>
-              <select
-                id="node-kind-input"
-                data-testid="inspector-node-kind"
-                value={nodeInspectorDraft.kind}
-                onChange={(event) =>
-                  setNodeInspectorDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          kind: event.target.value as NodeInspectorDraft["kind"],
-                        }
-                      : current,
-                  )
-                }
-              >
-                {nodeKindOptions.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kind}
-                  </option>
-                ))}
-              </select>
               {nodeInspectorErrors.kind ? (
                 <span className="helper field-error" role="alert">
                   {nodeInspectorErrors.kind}
                 </span>
               ) : null}
+
+              {inspectorSections.relations ? (
+                <div className="tile">
+                  <h4>Relacoes</h4>
+                  <p className="helper">
+                    Entrada: {selectedNodeRelations.incomingCount} | Saida:{" "}
+                    {selectedNodeRelations.outgoingCount}
+                  </p>
+                  {selectedNodeRelations.preview.length > 0 ? (
+                    <ul className="summary-list">
+                      {selectedNodeRelations.preview.map((relation) => (
+                        <li key={relation.id}>
+                          <button
+                            className="btn btn-link"
+                            type="button"
+                            onClick={() =>
+                              handleFocusRelation(relation.id, relation.otherNodeId)
+                            }
+                          >
+                            {relation.direction === "incoming" ? "Entrada" : "Saida"}:{" "}
+                            {relation.relation} - {relation.otherLabel}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="helper">Sem relacoes conectadas.</p>
+                  )}
+                </div>
+              ) : null}
+
+              {nodeInspectorMessage ? (
+                <div
+                  className={`inspector-feedback ${nodeInspectorHasErrors ? "is-error" : ""}`}
+                  aria-live="polite"
+                  data-testid="inspector-node-feedback"
+                >
+                  {nodeInspectorMessage}
+                </div>
+              ) : null}
+
+              <div className="row-actions inspector-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={handleApplyNodeInspector}
+                  disabled={saveState.status === "saving"}
+                  data-testid="inspector-apply-node"
+                >
+                  Aplicar alteracoes
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleNodeInspectorReset}
+                  data-testid="inspector-reset-node"
+                >
+                  Reverter
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {selectedNode && inspectorMode === "technical" && nodeInspectorDraft ? (
+          <div className="stack-sm">
+            <div className="row-actions inspector-selection-row">
+              <span className="badge">Nó selecionado</span>
+              {nodeInspectorDirty ? (
+                <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                  Rascunho nao aplicado
+                </span>
+                ) : null}
+            </div>
+            <span className="sr-only" data-testid="inspector-node-id">
+              {selectedNode.id}
+            </span>
+
+            <div className="row-actions inspector-section-tabs">
+              <button
+                className="btn inspector-section-toggle"
+                type="button"
+                onClick={() => handleToggleInspectorSection("general")}
+                aria-expanded={inspectorSections.general}
+                data-testid="inspector-section-general-toggle"
+              >
+                Geral {inspectorSections.general ? "▾" : "▸"}
+              </button>
+              <button
+                className="btn inspector-section-toggle"
+                type="button"
+                onClick={() => handleToggleInspectorSection("details")}
+                aria-expanded={inspectorSections.details}
+                data-testid="inspector-section-details-toggle"
+              >
+                Detalhes {inspectorSections.details ? "▾" : "▸"}
+              </button>
+              <button
+                className="btn inspector-section-toggle"
+                type="button"
+                onClick={() => handleToggleInspectorSection("advanced")}
+                aria-expanded={inspectorSections.advanced}
+                data-testid="inspector-section-advanced-toggle"
+              >
+                Avancado {inspectorSections.advanced ? "▾" : "▸"}
+              </button>
             </div>
 
-            <div className="field">
-              <label htmlFor="node-data-json-input">Dados (JSON)</label>
-              <textarea
-                id="node-data-json-input"
-                rows={8}
-                className="mono"
-                data-testid="inspector-node-data-json"
-                value={nodeInspectorDraft.dataJson}
-                onChange={(event) =>
-                  setNodeInspectorDraft((current) =>
-                    current ? { ...current, dataJson: event.target.value } : current,
-                  )
-                }
-              />
-              {nodeInspectorErrors.dataJson ? (
-                <span className="helper field-error" role="alert">
-                  {nodeInspectorErrors.dataJson}
-                </span>
-              ) : null}
-            </div>
+            {inspectorSections.general ? (
+              <>
+                <div className="field">
+                  <label htmlFor="node-label-input">Rotulo</label>
+                  <input
+                    id="node-label-input"
+                    data-testid="inspector-node-label"
+                    value={nodeInspectorDraft.label}
+                    onChange={(event) =>
+                      setNodeInspectorDraft((current) =>
+                        current ? { ...current, label: event.target.value } : current,
+                      )
+                    }
+                  />
+                  {nodeInspectorErrors.label ? (
+                    <span className="helper field-error" role="alert">
+                      {nodeInspectorErrors.label}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="field">
+                  <label htmlFor="node-kind-input">Kind (raw)</label>
+                  <select
+                    id="node-kind-input"
+                    data-testid="inspector-node-kind"
+                    value={nodeInspectorDraft.kind}
+                    onChange={(event) =>
+                      setNodeInspectorDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              kind: event.target.value as NodeInspectorDraft["kind"],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    {nodeKindOptions.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind}
+                      </option>
+                    ))}
+                  </select>
+                  <span
+                    className="helper"
+                    title={getFriendlyNodeKindDescription(nodeInspectorDraft.kind)}
+                  >
+                    Label amigavel: {getFriendlyNodeKindLabel(nodeInspectorDraft.kind)}
+                  </span>
+                  {nodeInspectorErrors.kind ? (
+                    <span className="helper field-error" role="alert">
+                      {nodeInspectorErrors.kind}
+                    </span>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+            {inspectorSections.details ? (
+              <div className="field">
+                <label htmlFor="node-data-json-input">Dados (JSON)</label>
+                <div className="row-actions">
+                  <button className="btn" type="button" onClick={handleFormatNodeJson}>
+                    Formatar JSON
+                  </button>
+                  <button className="btn" type="button" onClick={handleCopyNodeJson}>
+                    Copiar JSON
+                  </button>
+                </div>
+                <textarea
+                  id="node-data-json-input"
+                  rows={8}
+                  className="mono"
+                  data-testid="inspector-node-data-json"
+                  value={nodeInspectorDraft.dataJson}
+                  onChange={(event) =>
+                    setNodeInspectorDraft((current) =>
+                      current ? { ...current, dataJson: event.target.value } : current,
+                    )
+                  }
+                />
+                {nodeInspectorErrors.dataJson ? (
+                  <span className="helper field-error" role="alert">
+                    {nodeInspectorErrors.dataJson}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
 
             {nodeInspectorMessage ? (
               <div
@@ -1772,99 +3807,291 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               </button>
             </div>
 
-            <dl className="inspector-meta-list">
-              <div>
-                <dt>ID</dt>
-                <dd data-testid="inspector-node-id">{selectedNode.id}</dd>
-              </div>
-              <div>
-                <dt>Posicao</dt>
-                <dd data-testid="inspector-node-position">
-                  {Math.round(selectedNode.position.x)},{" "}
-                  {Math.round(selectedNode.position.y)}
-                </dd>
-              </div>
-            </dl>
+            {inspectorSections.advanced ? (
+              <>
+                <div className="row-actions">
+                  <span className="badge mono" data-testid="inspector-node-id">
+                    {selectedNode.id}
+                  </span>
+                  <button className="btn" type="button" onClick={handleCopyNodeId}>
+                    Copiar ID
+                  </button>
+                </div>
+                <dl className="inspector-meta-list">
+                  <div>
+                    <dt>Posicao</dt>
+                    <dd data-testid="inspector-node-position">
+                      {Math.round(selectedNode.position.x)},{" "}
+                      {Math.round(selectedNode.position.y)}
+                    </dd>
+                  </div>
+                </dl>
+              </>
+            ) : null}
           </div>
         ) : null}
 
-        {selectedEdge && edgeInspectorDraft ? (
+          {selectedEdge && inspectorMode === "operational" && operationalEdgeDraft ? (
+            <div className="stack-sm">
+              <div className="row-actions inspector-selection-row">
+                <span className="badge">Aresta selecionada</span>
+                {edgeInspectorDirty ? (
+                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                    Rascunho nao aplicado
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="row-actions inspector-section-tabs">
+                <button
+                  className="btn inspector-section-toggle"
+                  type="button"
+                  onClick={() => handleToggleInspectorSection("general")}
+                  aria-expanded={inspectorSections.general}
+                  data-testid="inspector-section-general-toggle"
+                >
+                  Geral {inspectorSections.general ? "▾" : "▸"}
+                </button>
+                <button
+                  className="btn inspector-section-toggle"
+                  type="button"
+                  onClick={() => handleToggleInspectorSection("relations")}
+                  aria-expanded={inspectorSections.relations}
+                  data-testid="inspector-section-relations-toggle"
+                >
+                  Relacoes {inspectorSections.relations ? "▾" : "▸"}
+                </button>
+              </div>
+
+              {inspectorSections.general ? (
+                <>
+                  <div className="field">
+                    <label htmlFor="edge-label-operational-input">Rotulo</label>
+                    <input
+                      id="edge-label-operational-input"
+                      value={operationalEdgeDraft.label}
+                      onChange={(event) =>
+                        setOperationalEdgeDraft((current) =>
+                          current ? { ...current, label: event.target.value } : current,
+                        )
+                      }
+                    />
+                  </div>
+
+                  <div className="field">
+                    <label htmlFor="edge-kind-operational-input">Relacao</label>
+                    <select
+                      id="edge-kind-operational-input"
+                      value={operationalEdgeDraft.kind}
+                      onChange={(event) =>
+                        setOperationalEdgeDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                kind: event.target.value as OperationalEdgeDraft["kind"],
+                              }
+                            : current,
+                        )
+                      }
+                    >
+                      {edgeKindOptions.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {getFriendlyEdgeKindLabel(kind)}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="helper">
+                      {getFriendlyEdgeKindDescription(operationalEdgeDraft.kind)}
+                    </span>
+                  </div>
+                </>
+              ) : null}
+
+              {inspectorSections.relations ? (
+                <dl className="inspector-meta-list">
+                  <div>
+                    <dt>Origem</dt>
+                    <dd>{selectedEdgeSourceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Destino</dt>
+                    <dd>{selectedEdgeTargetLabel}</dd>
+                  </div>
+                </dl>
+              ) : null}
+
+              {edgeInspectorErrors.label ? (
+                <span className="helper field-error" role="alert">
+                  {edgeInspectorErrors.label}
+                </span>
+              ) : null}
+              {edgeInspectorErrors.kind ? (
+                <span className="helper field-error" role="alert">
+                  {edgeInspectorErrors.kind}
+                </span>
+              ) : null}
+
+              {edgeInspectorMessage ? (
+                <div
+                  className={`inspector-feedback ${edgeInspectorHasErrors ? "is-error" : ""}`}
+                  aria-live="polite"
+                  data-testid="inspector-edge-feedback"
+                >
+                  {edgeInspectorMessage}
+                </div>
+              ) : null}
+
+              <div className="row-actions inspector-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={handleApplyEdgeInspector}
+                  disabled={saveState.status === "saving"}
+                >
+                  Aplicar alteracoes
+                </button>
+                <button className="btn" type="button" onClick={handleEdgeInspectorReset}>
+                  Reverter
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleRemoveSelected}
+                  disabled={saveState.status === "saving"}
+                >
+                  Remover aresta
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {selectedEdge && inspectorMode === "technical" && edgeInspectorDraft ? (
           <div className="stack-sm">
             <div className="row-actions inspector-selection-row">
               <span className="badge">Aresta selecionada</span>
               {edgeInspectorDirty ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
                   Rascunho nao aplicado
-                </span>
-              ) : null}
+                  </span>
+                ) : null}
             </div>
 
-            <div className="field">
-              <label htmlFor="edge-label-input">Rotulo</label>
-              <input
-                id="edge-label-input"
-                value={edgeInspectorDraft.label}
-                onChange={(event) =>
-                  setEdgeInspectorDraft((current) =>
-                    current ? { ...current, label: event.target.value } : current,
-                  )
-                }
-              />
-              {edgeInspectorErrors.label ? (
-                <span className="helper field-error" role="alert">
-                  {edgeInspectorErrors.label}
-                </span>
-              ) : null}
-            </div>
-
-            <div className="field">
-              <label htmlFor="edge-kind-input">Tipo</label>
-              <select
-                id="edge-kind-input"
-                value={edgeInspectorDraft.kind}
-                onChange={(event) =>
-                  setEdgeInspectorDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          kind: event.target.value as EdgeInspectorDraft["kind"],
-                        }
-                      : current,
-                  )
-                }
+            <div className="row-actions inspector-section-tabs">
+              <button
+                className="btn inspector-section-toggle"
+                type="button"
+                onClick={() => handleToggleInspectorSection("general")}
+                aria-expanded={inspectorSections.general}
+                data-testid="inspector-section-general-toggle"
               >
-                {edgeKindOptions.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kind}
-                  </option>
-                ))}
-              </select>
-              {edgeInspectorErrors.kind ? (
-                <span className="helper field-error" role="alert">
-                  {edgeInspectorErrors.kind}
-                </span>
-              ) : null}
+                Geral {inspectorSections.general ? "▾" : "▸"}
+              </button>
+              <button
+                className="btn inspector-section-toggle"
+                type="button"
+                onClick={() => handleToggleInspectorSection("details")}
+                aria-expanded={inspectorSections.details}
+                data-testid="inspector-section-details-toggle"
+              >
+                Detalhes {inspectorSections.details ? "▾" : "▸"}
+              </button>
+              <button
+                className="btn inspector-section-toggle"
+                type="button"
+                onClick={() => handleToggleInspectorSection("advanced")}
+                aria-expanded={inspectorSections.advanced}
+                data-testid="inspector-section-advanced-toggle"
+              >
+                Avancado {inspectorSections.advanced ? "▾" : "▸"}
+              </button>
             </div>
 
-            <div className="field">
-              <label htmlFor="edge-data-json-input">Dados (JSON)</label>
-              <textarea
-                id="edge-data-json-input"
-                rows={8}
-                className="mono"
-                value={edgeInspectorDraft.dataJson}
-                onChange={(event) =>
-                  setEdgeInspectorDraft((current) =>
-                    current ? { ...current, dataJson: event.target.value } : current,
-                  )
-                }
-              />
-              {edgeInspectorErrors.dataJson ? (
-                <span className="helper field-error" role="alert">
-                  {edgeInspectorErrors.dataJson}
-                </span>
-              ) : null}
-            </div>
+            {inspectorSections.general ? (
+              <>
+                <div className="field">
+                  <label htmlFor="edge-label-input">Rotulo</label>
+                  <input
+                    id="edge-label-input"
+                    value={edgeInspectorDraft.label}
+                    onChange={(event) =>
+                      setEdgeInspectorDraft((current) =>
+                        current ? { ...current, label: event.target.value } : current,
+                      )
+                    }
+                  />
+                  {edgeInspectorErrors.label ? (
+                    <span className="helper field-error" role="alert">
+                      {edgeInspectorErrors.label}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="field">
+                  <label htmlFor="edge-kind-input">Kind (raw)</label>
+                  <select
+                    id="edge-kind-input"
+                    value={edgeInspectorDraft.kind}
+                    onChange={(event) =>
+                      setEdgeInspectorDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              kind: event.target.value as EdgeInspectorDraft["kind"],
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    {edgeKindOptions.map((kind) => (
+                      <option key={kind} value={kind}>
+                        {kind}
+                      </option>
+                    ))}
+                  </select>
+                  <span
+                    className="helper"
+                    title={getFriendlyEdgeKindDescription(edgeInspectorDraft.kind)}
+                  >
+                    Label amigavel: {getFriendlyEdgeKindLabel(edgeInspectorDraft.kind)}
+                  </span>
+                  {edgeInspectorErrors.kind ? (
+                    <span className="helper field-error" role="alert">
+                      {edgeInspectorErrors.kind}
+                    </span>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+
+            {inspectorSections.details ? (
+              <div className="field">
+                <label htmlFor="edge-data-json-input">Dados (JSON)</label>
+                <div className="row-actions">
+                  <button className="btn" type="button" onClick={handleFormatEdgeJson}>
+                    Formatar JSON
+                  </button>
+                  <button className="btn" type="button" onClick={handleCopyEdgeJson}>
+                    Copiar JSON
+                  </button>
+                </div>
+                <textarea
+                  id="edge-data-json-input"
+                  rows={8}
+                  className="mono"
+                  value={edgeInspectorDraft.dataJson}
+                  onChange={(event) =>
+                    setEdgeInspectorDraft((current) =>
+                      current ? { ...current, dataJson: event.target.value } : current,
+                    )
+                  }
+                />
+                {edgeInspectorErrors.dataJson ? (
+                  <span className="helper field-error" role="alert">
+                    {edgeInspectorErrors.dataJson}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
 
             {edgeInspectorMessage ? (
               <div
@@ -1894,22 +4121,28 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                 onClick={handleRemoveSelected}
                 disabled={saveState.status === "saving"}
               >
-                Remover edge
+                Remover aresta
               </button>
             </div>
 
-            <dl className="inspector-meta-list">
-              <div>
-                <dt>ID</dt>
-                <dd>{selectedEdge.id}</dd>
-              </div>
-              <div>
-                <dt>Ligacao</dt>
-                <dd>
-                  {selectedEdge.source} -&gt; {selectedEdge.target}
-                </dd>
-              </div>
-            </dl>
+            {inspectorSections.advanced ? (
+              <>
+                <div className="row-actions">
+                  <span className="badge mono">{selectedEdge.id}</span>
+                  <button className="btn" type="button" onClick={handleCopyEdgeId}>
+                    Copiar ID
+                  </button>
+                </div>
+                <dl className="inspector-meta-list">
+                  <div>
+                    <dt>Ligacao</dt>
+                    <dd>
+                      {selectedEdge.source} -&gt; {selectedEdge.target}
+                    </dd>
+                  </div>
+                </dl>
+              </>
+            ) : null}
           </div>
         ) : null}
 
@@ -1917,11 +4150,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           <div className="inspector-empty-state" data-testid="inspector-empty-state">
             <p className="helper">Nenhum item selecionado no canvas.</p>
             <p className="helper">
-              Selecione um no ou aresta para editar rotulo, tipo e dados em JSON.
+              Selecione um no ou aresta para revisar titulos, relacoes e detalhes.
+            </p>
+            <p className="helper">
+              Para iniciar ajustes: selecione um elemento no diagrama ou adicione
+              um novo nó na barra superior.
             </p>
             <dl className="inspector-meta-list">
               <div>
-                <dt>Nos</dt>
+                <dt>Nós</dt>
                 <dd>{nodes.length}</dd>
               </div>
               <div>
@@ -1938,7 +4175,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             </dl>
           </div>
         ) : null}
-      </aside>
+        </aside>
+      ) : null}
     </div>
   );
 }
