@@ -102,6 +102,90 @@ function resolveDisplayLabel(nodeData: EditorNodeData) {
   return fallback || "Sem titulo";
 }
 
+function resolveTreeRole(nodeData: EditorNodeData) {
+  if (nodeData.diagramRole === "tree-root" || nodeData.kind === "project") {
+    return "tree-root";
+  }
+
+  return "tree-node";
+}
+
+function resolveFlowRole(nodeData: EditorNodeData) {
+  if (nodeData.diagramRole === "flow-start" || nodeData.kind === "project") {
+    return "flow-start";
+  }
+
+  if (nodeData.diagramRole === "flow-end") {
+    return "flow-end";
+  }
+
+  if (nodeData.diagramRole === "flow-note" || nodeData.kind === "note") {
+    return "flow-note";
+  }
+
+  if (nodeData.diagramRole === "flow-decision") {
+    return "flow-decision";
+  }
+
+  return "flow-step";
+}
+
+function resolveFlowBadgeLabel(nodeData: EditorNodeData) {
+  const flowRole = resolveFlowRole(nodeData);
+
+  if (flowRole === "flow-start") {
+    return "Inicio";
+  }
+
+  if (flowRole === "flow-end") {
+    return "Fim";
+  }
+
+  if (flowRole === "flow-note") {
+    return "Nota";
+  }
+
+  if (flowRole === "flow-decision") {
+    return "Decisao";
+  }
+
+  return "Etapa";
+}
+
+function resolveMindmapRole(nodeData: EditorNodeData) {
+  if (nodeData.diagramRole === "mindmap-reference") {
+    return "mindmap-reference";
+  }
+
+  if (nodeData.diagramRole === "mindmap-root" || nodeData.rendererIsRoot) {
+    return "mindmap-root";
+  }
+
+  return "mindmap-branch";
+}
+
+function resolveMindmapLabel(nodeData: EditorNodeData) {
+  const role = resolveMindmapRole(nodeData);
+
+  if (role === "mindmap-root") {
+    return "Tema central";
+  }
+
+  if (role === "mindmap-reference") {
+    return "Referencia";
+  }
+
+  return "Ramificacao";
+}
+
+function resolveErdRole(nodeData: EditorNodeData) {
+  if (nodeData.diagramRole === "erd-comment" || nodeData.kind === "note") {
+    return "erd-comment";
+  }
+
+  return "erd-entity";
+}
+
 function NodeTypeChip({ nodeData }: { nodeData: EditorNodeData }) {
   const kindPresentation = getNodeKindPresentation(nodeData.kind);
 
@@ -158,7 +242,10 @@ export function TreeNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
   const positions = resolveTreeHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
-  const canToggleTreeSubtree = typeof nodeData.onToggleTreeCollapse === "function";
+  const treeRole = resolveTreeRole(nodeData);
+  const canToggleTreeSubtree =
+    nodeData.rendererCanToggleTreeCollapse === true &&
+    typeof nodeData.onToggleTreeCollapse === "function";
 
   return (
     <div
@@ -166,6 +253,7 @@ export function TreeNodeRenderer({ data }: NodeProps) {
       data-testid="tree-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={treeRole}
     >
       <Handle
         type="target"
@@ -174,7 +262,9 @@ export function TreeNodeRenderer({ data }: NodeProps) {
       />
       <div className="diagram-node-tree__content">
         <div className="diagram-node-tree__toolbar">
-          <span className="diagram-node-tree__level-badge">Hierarquia</span>
+          <span className="diagram-node-tree__level-badge">
+            {treeRole === "tree-root" ? "Raiz" : "Hierarquia"}
+          </span>
           {canToggleTreeSubtree ? (
             <button
               className="diagram-node-tree__toggle"
@@ -206,6 +296,11 @@ export function TreeNodeRenderer({ data }: NodeProps) {
 export function FlowNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
   const visual = useNodeVisualTokens(nodeData);
+  const flowRole = resolveFlowRole(nodeData);
+  const showTargetHandle =
+    flowRole === "flow-end" || flowRole === "flow-step" || flowRole === "flow-note" || flowRole === "flow-decision";
+  const showSourceHandle =
+    flowRole === "flow-start" || flowRole === "flow-step" || flowRole === "flow-note" || flowRole === "flow-decision";
 
   return (
     <div
@@ -213,11 +308,14 @@ export function FlowNodeRenderer({ data }: NodeProps) {
       data-testid="flow-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={flowRole}
     >
-      <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
+      {showTargetHandle ? (
+        <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
+      ) : null}
       <div className="diagram-node-flow__body">
         <div className="diagram-node-flow__header">
-          <span className="diagram-node-flow__badge">Etapa</span>
+          <span className="diagram-node-flow__badge">{resolveFlowBadgeLabel(nodeData)}</span>
         </div>
         <NodeContent nodeData={nodeData} />
         <div className="diagram-node-flow__ports-hint" aria-hidden="true">
@@ -225,7 +323,9 @@ export function FlowNodeRenderer({ data }: NodeProps) {
           <span>Saida</span>
         </div>
       </div>
-      <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
+      {showSourceHandle ? (
+        <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
+      ) : null}
     </div>
   );
 }
@@ -233,17 +333,19 @@ export function FlowNodeRenderer({ data }: NodeProps) {
 export function MindmapNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
   const visual = useNodeVisualTokens(nodeData);
+  const mindmapRole = resolveMindmapRole(nodeData);
 
   return (
     <div
-      className={`diagram-node diagram-node-mindmap ${nodeData.rendererIsRoot ? "is-root" : ""} ${visual.className}`}
+      className={`diagram-node diagram-node-mindmap ${mindmapRole === "mindmap-root" ? "is-root" : ""} ${visual.className}`}
       data-testid="mindmap-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={mindmapRole}
     >
       <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
       <div className="diagram-node-mindmap__role">
-        {nodeData.rendererIsRoot ? "Tema central" : "Ramificacao"}
+        {resolveMindmapLabel(nodeData)}
       </div>
       <NodeContent nodeData={nodeData} />
       <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
@@ -255,6 +357,30 @@ export function ErdNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
   const fields = readEntityFields(nodeData.payload);
   const visual = useNodeVisualTokens(nodeData);
+  const erdRole = resolveErdRole(nodeData);
+
+  if (erdRole === "erd-comment") {
+    return (
+      <div
+        className={`diagram-node diagram-node-erd diagram-node-erd-comment ${visual.className}`}
+        data-testid="erd-node-renderer"
+        data-node-kind={nodeData.kind}
+        data-node-tone={visual.kindPresentation.tone}
+        data-diagram-role={erdRole}
+      >
+        <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
+        <div className="diagram-node-erd__title">
+          <div className="diagram-node__header-row">
+            <NodeTypeChip nodeData={nodeData} />
+          </div>
+          <strong className="diagram-node__title">{resolveDisplayLabel(nodeData)}</strong>
+          <span className="helper">Comentario ERD</span>
+          <NodeTechnicalMeta nodeData={nodeData} />
+        </div>
+        <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -262,6 +388,7 @@ export function ErdNodeRenderer({ data }: NodeProps) {
       data-testid="erd-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={erdRole}
     >
       <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
       <div className="diagram-node-erd__title">

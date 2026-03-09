@@ -1343,6 +1343,26 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     const visibleNodes = nodes.filter(
       (node) => !hiddenCanvasNodeIdSet.has(node.id) && node.hidden !== true,
     );
+    const diagramVisibleNodeIdSet = new Set(
+      nodes
+        .filter((node) => !hiddenDiagramNodeIdSet.has(node.id) && node.hidden !== true)
+        .map((node) => node.id),
+    );
+    const treeNodesWithContainsChildren = new Set<string>();
+    if (renderer.key === "tree") {
+      for (const edge of edges) {
+        if ((edge.data?.kind ?? "flows-to") !== "contains") {
+          continue;
+        }
+
+        if (
+          diagramVisibleNodeIdSet.has(edge.source) &&
+          diagramVisibleNodeIdSet.has(edge.target)
+        ) {
+          treeNodesWithContainsChildren.add(edge.source);
+        }
+      }
+    }
     const mindmapRootNodeId =
       renderer.key === "mindmap"
         ? computedMindmapRootNodeId &&
@@ -1402,6 +1422,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return {
         ...node,
         type: renderer.nodeType,
+        hidden: hiddenCanvasNodeIdSet.has(node.id) || node.hidden === true,
         className: [
           node.className,
           `editor-node-renderer-${renderer.key}`,
@@ -1428,8 +1449,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           rendererIsRoot: node.id === mindmapRootNodeId,
           rendererTreeCollapsed:
             renderer.key === "tree" && collapsedTreeNodeIdSet.has(node.id),
+          rendererCanToggleTreeCollapse:
+            renderer.key === "tree" &&
+            treeNodesWithContainsChildren.has(node.id),
           onToggleTreeCollapse:
-            renderer.key === "tree"
+            renderer.key === "tree" && treeNodesWithContainsChildren.has(node.id)
               ? (targetNodeId: string) => {
                   setCollapsedTreeNodeIds((current) =>
                     current.includes(targetNodeId)
@@ -1452,11 +1476,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   }, [
     activeConnectionSourceNodeId,
     computedMindmapRootNodeId,
+    edges,
     inspectorMode,
     isValidationPanelOpen,
     layoutMetadata.rootNodeName,
     nodes,
     hiddenCanvasNodeIdSet,
+    hiddenDiagramNodeIdSet,
     collapsedTreeNodeIdSet,
     renderer,
     selectedNodeId,

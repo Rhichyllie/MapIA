@@ -21,6 +21,7 @@ export type EditorNodeData = {
   rendererDirection?: "top-down" | "left-right";
   rendererIsRoot?: boolean;
   rendererTreeCollapsed?: boolean;
+  rendererCanToggleTreeCollapse?: boolean;
   onToggleTreeCollapse?: (nodeId: string) => void;
   presentationMode?: "operational" | "technical";
   displayLabel?: string;
