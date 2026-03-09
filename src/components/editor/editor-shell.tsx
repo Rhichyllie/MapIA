@@ -16,6 +16,11 @@ import type {
   ReactFlowInstance,
 } from "@xyflow/react";
 import { EdgeKindSchema, type EdgeKind, type NodeKind } from "@/src/domain";
+import {
+  resolveDiagramRole,
+  writeDiagramRoleToPayload,
+  type DiagramRole,
+} from "@/src/modules/diagrams/domain";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import {
   getDiagramTypeLabel,
@@ -86,10 +91,12 @@ import {
   getEdgeKindPresentation,
   getNodeKindDescription,
   getNodeKindLabel,
-  getNodeKindOptions,
   getNodeKindPresentation,
   getOperationalDisplayLabel,
 } from "./presentation/kinds";
+import {
+  getAllowedKindsForDiagram,
+} from "./presentation/diagram-scoped-options";
 import {
   fromCanonicalSnapshotToFlowState,
   toCanonicalSnapshotFromFlowState,
@@ -184,6 +191,7 @@ type OperationalEdgeDraft = {
 
 type AddNodeDraft = {
   kind: NodeKind;
+  diagramRole?: DiagramRole;
   title: string;
   description: string;
   tagsText: string;
@@ -195,6 +203,13 @@ type SelectionHudQuickAction = {
   edgeKind: EdgeKind;
   nodeKind: NodeKind;
   edgeLabel?: string;
+};
+
+type QuickAddRoleOption = {
+  role: DiagramRole;
+  label: string;
+  description: string;
+  baseKind: NodeKind;
 };
 
 type ContextualInsertMode =
@@ -429,6 +444,121 @@ function toSemanticEngineOptionsFromPolicy(
 function buildDefaultNodeTitle(kind: NodeKind, nextIndex: number) {
   const nodeKindLabel = getNodeKindLabel(kind, "operational");
   return `${nodeKindLabel} ${nextIndex}`;
+}
+
+function mapRoleToSemanticNodeKind(
+  role: DiagramRole,
+  fallbackKind: NodeKind,
+): NodeKind {
+  if (role === "tree-root" || role === "tree-node") {
+    return "page";
+  }
+
+  if (
+    role === "flow-start" ||
+    role === "flow-step" ||
+    role === "flow-end" ||
+    role === "flow-decision"
+  ) {
+    return "flow-step";
+  }
+
+  if (role === "flow-note") {
+    return "note";
+  }
+
+  if (
+    role === "mindmap-root" ||
+    role === "mindmap-branch" ||
+    role === "mindmap-reference"
+  ) {
+    return "note";
+  }
+
+  if (role === "erd-entity") {
+    return "entity";
+  }
+
+  if (role === "erd-comment") {
+    return "note";
+  }
+
+  return fallbackKind;
+}
+
+function toRoleAwareSemanticNodeRef(input: {
+  diagramType: DiagramType | "erd" | undefined;
+  node: RFNode;
+  rootNodeName?: string;
+}) {
+  const role = resolveDiagramRole({
+    diagramType: input.diagramType,
+    nodeKind: input.node.data.kind,
+    nodePayload: input.node.data.payload,
+    nodeLabel: input.node.data.label,
+    layoutMetadata: { rootNodeName: input.rootNodeName ?? null },
+  });
+
+  return {
+    id: input.node.id,
+    kind: mapRoleToSemanticNodeKind(role, input.node.data.kind),
+    label: input.node.data.label,
+    payload: input.node.data.payload,
+  } as const;
+}
+
+function resolveQuickAddRoleOptions(
+  diagramType: DiagramType | "erd" | undefined,
+): QuickAddRoleOption[] {
+  if (diagramType !== "flow") {
+    return [];
+  }
+
+  return [
+    {
+      role: "flow-start",
+      label: "Inicio",
+      description: "No inicial do fluxo.",
+      baseKind: "flow-step",
+    },
+    {
+      role: "flow-step",
+      label: "Etapa",
+      description: "Passo padrao do processo.",
+      baseKind: "flow-step",
+    },
+    {
+      role: "flow-note",
+      label: "Nota",
+      description: "Anotacao auxiliar do fluxo.",
+      baseKind: "note",
+    },
+    {
+      role: "flow-end",
+      label: "Fim",
+      description: "Encerramento do fluxo.",
+      baseKind: "flow-step",
+    },
+  ];
+}
+
+function resolveDefaultRoleForKind(input: {
+  diagramType: DiagramType | "erd" | undefined;
+  kind: NodeKind;
+}) {
+  if (input.diagramType !== "flow") {
+    return undefined;
+  }
+
+  if (input.kind === "note") {
+    return "flow-note" as const;
+  }
+
+  if (input.kind === "flow-step") {
+    return "flow-step" as const;
+  }
+
+  return undefined;
 }
 
 function buildContextualActionsFromDiagramType(
@@ -928,6 +1058,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     useState<string | null>(null);
   const [addNodeDraft, setAddNodeDraft] = useState<AddNodeDraft>({
     kind: "note",
+    diagramRole: undefined,
     title: "",
     description: "",
     tagsText: "",
@@ -1376,12 +1507,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       : null;
 
     if (activeSourceNode) {
-      const sourceNodeRef = {
-        id: activeSourceNode.id,
-        kind: activeSourceNode.data.kind,
-        label: activeSourceNode.data.label,
-        payload: activeSourceNode.data.payload,
-      };
+      const sourceNodeRef = toRoleAwareSemanticNodeRef({
+        diagramType: semanticDiagramType,
+        node: activeSourceNode,
+        rootNodeName: layoutMetadata.rootNodeName,
+      });
 
       for (const candidate of visibleNodes) {
         if (candidate.id === activeSourceNode.id) {
@@ -1392,12 +1522,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           {
             diagramType: semanticDiagramType,
             sourceNode: sourceNodeRef,
-            targetNode: {
-              id: candidate.id,
-              kind: candidate.data.kind,
-              label: candidate.data.label,
-              payload: candidate.data.payload,
-            },
+            targetNode: toRoleAwareSemanticNodeRef({
+              diagramType: semanticDiagramType,
+              node: candidate,
+              rootNodeName: layoutMetadata.rootNodeName,
+            }),
             mode: inspectorMode,
           },
           semanticEngineOptions,
@@ -2405,17 +2534,44 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const operationalTagPreview = operationalNodeDraft
     ? normalizeTagsInput(operationalNodeDraft.tagsText)
     : [];
+  const currentSupportedDiagramType =
+    semanticDiagramType ??
+    (isSupportedDiagramType(layoutMetadata.diagramType)
+      ? layoutMetadata.diagramType
+      : resolveDiagramTypeForQuickActions(renderer.key));
 
   const nodeKindOptions = useMemo(() => {
-    const options = [...getNodeKindOptions(inspectorMode)];
+    const scopedOptions = getAllowedKindsForDiagram(
+      currentSupportedDiagramType,
+      inspectorMode,
+      semanticPolicy,
+    );
+    const options = [...scopedOptions];
     const selectedKind = selectedNode?.data.kind;
 
-    if (selectedKind && !options.includes(selectedKind)) {
-      options.push(selectedKind);
+    if (selectedKind && !options.some((option) => option.kind === selectedKind)) {
+      options.push({
+        kind: selectedKind,
+        outOfProfile: true,
+        group: "fora-do-perfil",
+      });
     }
 
     return options;
-  }, [inspectorMode, selectedNode?.data.kind]);
+  }, [currentSupportedDiagramType, inspectorMode, selectedNode?.data.kind, semanticPolicy]);
+  const quickAddKindOptions = useMemo(
+    () =>
+      getAllowedKindsForDiagram(
+        currentSupportedDiagramType,
+        "operational",
+        semanticPolicy,
+      ),
+    [currentSupportedDiagramType, semanticPolicy],
+  );
+  const quickAddRoleOptions = useMemo(
+    () => resolveQuickAddRoleOptions(currentSupportedDiagramType),
+    [currentSupportedDiagramType],
+  );
   const edgeKindOptions = EdgeKindSchema.options;
   const nodeLabelById = useMemo(
     () =>
@@ -2498,11 +2654,6 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const shouldShowMetadataPanel = !isCanvasFocusMode;
   const shouldShowPrismaPanel = !isCanvasFocusMode;
   const shouldShowVersionsPanel = !isCanvasFocusMode;
-  const currentSupportedDiagramType =
-    semanticDiagramType ??
-    (isSupportedDiagramType(layoutMetadata.diagramType)
-      ? layoutMetadata.diagramType
-      : resolveDiagramTypeForQuickActions(renderer.key));
   const contextualActionDefinitions = useMemo(
     () => getContextualActionsForDiagram(currentSupportedDiagramType),
     [currentSupportedDiagramType],
@@ -2624,9 +2775,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
+    const defaultKind = getDefaultNodeKindForDiagram(currentSupportedDiagramType);
+
     setAddNodeDraft((current) => ({
       ...current,
-      kind: getDefaultNodeKindForDiagram(currentSupportedDiagramType),
+      kind: defaultKind,
+      diagramRole: resolveDefaultRoleForKind({
+        diagramType: currentSupportedDiagramType,
+        kind: defaultKind,
+      }),
     }));
   }, [currentSupportedDiagramType, isAddNodeDialogOpen]);
 
@@ -2979,18 +3136,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     const validation = validateEdgeCreation({
       diagramType: semanticDiagramType,
-      sourceNode: {
-        id: sourceNode.id,
-        kind: sourceNode.data.kind,
-        label: sourceNode.data.label,
-        payload: sourceNode.data.payload,
-      },
-      targetNode: {
-        id: targetNode.id,
-        kind: targetNode.data.kind,
-        label: targetNode.data.label,
-        payload: targetNode.data.payload,
-      },
+      sourceNode: toRoleAwareSemanticNodeRef({
+        diagramType: semanticDiagramType,
+        node: sourceNode,
+        rootNodeName: layoutMetadata.rootNodeName,
+      }),
+      targetNode: toRoleAwareSemanticNodeRef({
+        diagramType: semanticDiagramType,
+        node: targetNode,
+        rootNodeName: layoutMetadata.rootNodeName,
+      }),
       edgeKind: input.edgeKind,
       mode: inspectorMode,
     }, semanticEngineOptions);
@@ -3350,7 +3505,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       nextPayload.tags = normalizedTags;
     }
 
-    return nextPayload;
+    return draft.diagramRole
+      ? writeDiagramRoleToPayload(nextPayload, draft.diagramRole)
+      : nextPayload;
   }
 
   function insertNodeFromDraft(input: {
@@ -3366,10 +3523,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     const nextNodeId = crypto.randomUUID();
     const nextNodeIndex = nodesRef.current.length + 1;
     const title = input.draft.title.trim() || buildDefaultNodeTitle(input.draft.kind, nextNodeIndex);
-    const payload =
+    const basePayload =
       inspectorMode === "operational"
         ? buildAddNodePayloadFromDraft(input.draft)
         : {};
+    const payload =
+      inspectorMode === "technical" && input.draft.diagramRole
+        ? writeDiagramRoleToPayload(basePayload, input.draft.diagramRole)
+        : basePayload;
 
     const nodeApplied = applyLocalCommandAndQueue({
       type: "addNode",
@@ -3412,16 +3573,24 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     const defaultKind = selectedNodeId
       ? quickAction.nodeKind
       : getDefaultNodeKindForDiagram(currentSupportedDiagramType);
+    const defaultRole =
+      currentSupportedDiagramType === "flow" && selectedNodeId && quickAction.id === "flow-add-branch"
+        ? "flow-decision"
+        : resolveDefaultRoleForKind({
+            diagramType: currentSupportedDiagramType,
+            kind: defaultKind,
+          });
 
     setAddNodeErrorMessage(null);
     setAddNodeDraft({
       kind: defaultKind,
+      diagramRole: defaultRole,
       title: "",
       description: "",
       tagsText: "",
     });
     setIsAddNodeDialogOpen(true);
-  }, [currentSupportedDiagramType, quickAction.nodeKind, selectedNodeId]);
+  }, [currentSupportedDiagramType, quickAction.id, quickAction.nodeKind, selectedNodeId]);
 
   function handleStartInlineRename(node: RFNode) {
     setInlineRenameNodeId(node.id);
@@ -3706,9 +3875,17 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     const nextNodeIndex = nodesRef.current.length + 1;
+    const contextualRole =
+      currentSupportedDiagramType === "flow" && action.id === "flow-add-branch"
+        ? "flow-decision"
+        : resolveDefaultRoleForKind({
+            diagramType: currentSupportedDiagramType,
+            kind: action.nodeKind,
+          });
     insertNodeFromDraft({
       draft: {
         kind: action.nodeKind,
+        diagramRole: contextualRole,
         title: buildDefaultNodeTitle(action.nodeKind, nextNodeIndex),
         description: "",
         tagsText: "",
@@ -5592,34 +5769,68 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               </header>
 
               <div className="add-node-kind-grid">
-                {getNodeKindOptions("operational").map((kind) => {
-                  const presentation = getNodeKindPresentation(kind);
-                  const isSelected = addNodeDraft.kind === kind;
+                {quickAddKindOptions.map((option) => {
+                  const presentation = getNodeKindPresentation(option.kind);
+                  const isSelected = addNodeDraft.kind === option.kind;
 
                   return (
                     <button
-                      key={kind}
+                      key={option.kind}
                       type="button"
                       className={`add-node-kind-card ${isSelected ? "is-selected" : ""}`}
                       onClick={() =>
                         setAddNodeDraft((current) => ({
                           ...current,
-                          kind,
+                          kind: option.kind,
+                          diagramRole: resolveDefaultRoleForKind({
+                            diagramType: currentSupportedDiagramType,
+                            kind: option.kind,
+                          }),
                         }))
                       }
-                      data-testid={`add-node-kind-${kind}`}
+                      data-testid={`add-node-kind-${option.kind}`}
                     >
                       <span className={`badge add-node-kind-chip tone-${presentation.tone}`}>
                         <svg viewBox={presentation.icon.viewBox} aria-hidden="true" focusable="false">
                           <path d={presentation.icon.path} fill="currentColor" />
                         </svg>
-                        {getNodeKindLabel(kind, "operational")}
+                        {getNodeKindLabel(option.kind, "operational")}
                       </span>
-                      <span className="helper">{getNodeKindDescription(kind)}</span>
+                      <span className="helper">{getNodeKindDescription(option.kind)}</span>
                     </button>
                   );
                 })}
               </div>
+
+              {quickAddRoleOptions.length > 0 ? (
+                <div className="field">
+                  <label>Papel do no</label>
+                  <div className="add-node-kind-grid">
+                    {quickAddRoleOptions.map((roleOption) => {
+                      const isSelected = addNodeDraft.diagramRole === roleOption.role;
+
+                      return (
+                        <button
+                          key={roleOption.role}
+                          type="button"
+                          className={`add-node-kind-card ${isSelected ? "is-selected" : ""}`}
+                          onClick={() =>
+                            setAddNodeDraft((current) => ({
+                              ...current,
+                              kind: roleOption.baseKind,
+                              diagramRole: roleOption.role,
+                            }))
+                          }
+                          data-testid={`quick-add-role-${roleOption.role}`}
+                        >
+                          <span className="badge">{roleOption.label}</span>
+                          <span className="helper">{roleOption.description}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="field">
                 <label htmlFor="add-node-title-input">Titulo</label>
@@ -5993,9 +6204,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                         )
                       }
                     >
-                      {nodeKindOptions.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {getFriendlyNodeKindLabel(kind)}
+                      {nodeKindOptions.map((option) => (
+                        <option key={option.kind} value={option.kind}>
+                          {getFriendlyNodeKindLabel(option.kind)}
+                          {option.outOfProfile ? " (fora do perfil)" : ""}
                         </option>
                       ))}
                     </select>
@@ -6209,9 +6421,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                       )
                     }
                   >
-                    {nodeKindOptions.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
+                    {nodeKindOptions.map((option) => (
+                      <option key={option.kind} value={option.kind}>
+                        {option.kind}
+                        {option.outOfProfile ? " (fora do perfil)" : ""}
                       </option>
                     ))}
                   </select>
