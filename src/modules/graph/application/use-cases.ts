@@ -35,6 +35,7 @@ export class SaveWorkingSnapshotUseCase {
       snapshot: parsed.snapshot,
       actorIdentity: parsed.actorIdentity,
       label: parsed.label,
+      expectedRevision: parsed.expectedRevision,
     });
   }
 }

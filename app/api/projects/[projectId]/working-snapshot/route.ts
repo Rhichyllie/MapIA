@@ -6,13 +6,13 @@ import {
 } from "@/src/server/app/api-response";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
-import { SaveWorkingSnapshotInputSchema } from "@/src/modules/graph/application";
+import { SaveEditorFullSnapshotInputSchema } from "@/src/modules/editor/application";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
 });
 
-const SaveWorkingSnapshotRequestSchema = SaveWorkingSnapshotInputSchema.omit({
+const SaveWorkingSnapshotRequestSchema = SaveEditorFullSnapshotInputSchema.omit({
   projectId: true,
   actorIdentity: true,
 });
@@ -29,14 +29,14 @@ export async function GET(
     }
 
     const params = ParamsSchema.parse(await context.params);
-    const { projects, graph } = createServerUseCases();
+    const { projects, editor } = createServerUseCases();
 
     await projects.getOwnedProject.execute({
       ownerIdentity: auth.identity,
       projectId: params.projectId,
     });
 
-    const workingSnapshot = await graph.loadWorkingSnapshot.execute({
+    const workingSnapshot = await editor.getWorkingSnapshotForEditor.execute({
       projectId: params.projectId,
     });
 
@@ -59,21 +59,32 @@ export async function PUT(
 
     const params = ParamsSchema.parse(await context.params);
     const body = SaveWorkingSnapshotRequestSchema.parse(await request.json());
-    const { projects, graph } = createServerUseCases();
+    const { projects, editor } = createServerUseCases();
 
     await projects.getOwnedProject.execute({
       ownerIdentity: auth.identity,
       projectId: params.projectId,
     });
 
-    const workingSnapshot = await graph.saveWorkingSnapshot.execute({
+    const workingSnapshot = await editor.saveFullSnapshot.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       label: body.label,
+      ...(body.expectedRevision !== undefined
+        ? { expectedRevision: body.expectedRevision }
+        : {}),
+      ...(body.semanticMode ? { semanticMode: body.semanticMode } : {}),
+      ...(body.allowSemanticOverride !== undefined
+        ? { allowSemanticOverride: body.allowSemanticOverride }
+        : {}),
+      ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
       snapshot: body.snapshot,
     });
 
-    return apiSuccessResponse({ workingSnapshot });
+    return apiSuccessResponse({
+      workingSnapshot,
+      newRevision: workingSnapshot.revision,
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }

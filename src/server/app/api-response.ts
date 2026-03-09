@@ -26,7 +26,9 @@ export function apiErrorResponse(error: unknown) {
     return NextResponse.json(
       {
         error: error.code,
+        code: error.code,
         message: error.message,
+        ...(error.details ?? {}),
       },
       { status: error.status },
     );

@@ -8,6 +8,7 @@ export const GraphVersionSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
   versionNumber: z.number().int().positive(),
+  revision: z.number().int().positive(),
   label: z.string().max(200).optional(),
   snapshot: GraphSnapshotSchema,
   viewport: ViewportSchema,

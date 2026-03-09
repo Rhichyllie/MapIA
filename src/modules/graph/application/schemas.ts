@@ -9,6 +9,7 @@ export const SaveWorkingSnapshotInputSchema = z.object({
   projectId: z.string().uuid(),
   actorIdentity: z.string().email().optional(),
   label: z.string().max(200).optional(),
+  expectedRevision: z.number().int().nonnegative().optional(),
   snapshot: GraphSnapshotSchema,
 });
 

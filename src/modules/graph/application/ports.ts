@@ -4,6 +4,7 @@ export type WorkingSnapshotRecord = {
   id: string;
   projectId: string;
   versionNumber: number;
+  revision: number;
   label?: string;
   snapshot: GraphSnapshot;
   createdByIdentity?: string;
@@ -15,6 +16,7 @@ export type SaveWorkingSnapshotRecordInput = {
   snapshot: GraphSnapshot;
   actorIdentity?: string;
   label?: string;
+  expectedRevision?: number;
 };
 
 export interface WorkingSnapshotRepository {

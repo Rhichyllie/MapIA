@@ -17,9 +17,13 @@ describe("GraphSnapshotSchema", () => {
       ],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1.25 },
+      rootNodeName: "Arquitetura Geral",
+      allowReapplyLayout: false,
     });
 
     expect(snapshot.nodes).toHaveLength(1);
     expect(snapshot.viewport.zoom).toBe(1.25);
+    expect(snapshot.rootNodeName).toBe("Arquitetura Geral");
+    expect(snapshot.allowReapplyLayout).toBe(false);
   });
 });

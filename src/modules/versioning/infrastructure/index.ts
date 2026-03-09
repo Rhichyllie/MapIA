@@ -1,3 +1,1 @@
-export type VersioningInfrastructureModule = {
-  name: "versioning-infrastructure";
-};
+export * from "./prisma-snapshot-version-repository";
