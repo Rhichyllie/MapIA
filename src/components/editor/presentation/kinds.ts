@@ -223,6 +223,28 @@ export function getDefaultNodeKindForDiagram(
   return "note";
 }
 
+export function getDefaultEdgeKindForDiagram(
+  diagramType: ContextualDiagramType,
+): EdgeKind {
+  if (diagramType === "tree") {
+    return "contains";
+  }
+
+  if (diagramType === "flow") {
+    return "flows-to";
+  }
+
+  if (diagramType === "mindmap") {
+    return "relates-to";
+  }
+
+  if (diagramType === "erd") {
+    return "references";
+  }
+
+  return "relates-to";
+}
+
 export function getContextualActionsForDiagram(
   diagramType: ContextualDiagramType,
 ): DiagramContextualAction[] {
@@ -334,8 +356,8 @@ export function getContextualAddActionForDiagram(
 
   return {
     label: "Adicionar relacionado",
-    nodeKind: "note",
-    edgeKind: "relates-to",
+    nodeKind: getDefaultNodeKindForDiagram(diagramType),
+    edgeKind: getDefaultEdgeKindForDiagram(diagramType),
   };
 }
 

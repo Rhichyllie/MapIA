@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getContextualAddActionForDiagram,
   getContextualActionsForDiagram,
+  getDefaultEdgeKindForDiagram,
   getDefaultNodeKindForDiagram,
   getEdgeKindPresentation,
   getNodeKindLabel,
@@ -42,24 +43,54 @@ describe("editor kinds presentation", () => {
     });
   });
 
-  it("resolves contextual add action and default kind by diagram", () => {
+  it("normalizes defaults for tree", () => {
     expect(getDefaultNodeKindForDiagram("tree")).toBe("page");
-    expect(getDefaultNodeKindForDiagram("erd")).toBe("entity");
+    expect(getDefaultEdgeKindForDiagram("tree")).toBe("contains");
     expect(getContextualAddActionForDiagram("tree")).toEqual({
       label: "Adicionar filho",
       nodeKind: "page",
       edgeKind: "contains",
     });
+  });
+
+  it("normalizes defaults for flow", () => {
+    expect(getDefaultNodeKindForDiagram("flow")).toBe("flow-step");
+    expect(getDefaultEdgeKindForDiagram("flow")).toBe("flows-to");
     expect(getContextualAddActionForDiagram("flow")).toEqual({
       label: "Adicionar proxima etapa",
       nodeKind: "flow-step",
       edgeKind: "flows-to",
     });
+    expect(getContextualActionsForDiagram("flow")).toContainEqual(
+      expect.objectContaining({
+        id: "flow-add-branch",
+        type: "add-connected-node",
+        edgeKind: "depends-on",
+        edgeLabel: "Decisao",
+      }),
+    );
+  });
+
+  it("normalizes defaults for mindmap", () => {
+    expect(getDefaultNodeKindForDiagram("mindmap")).toBe("note");
+    expect(getDefaultEdgeKindForDiagram("mindmap")).toBe("relates-to");
     expect(getContextualAddActionForDiagram("mindmap")).toEqual({
       label: "Adicionar ramificacao",
       nodeKind: "note",
       edgeKind: "relates-to",
     });
+    expect(getContextualActionsForDiagram("mindmap")).toContainEqual(
+      expect.objectContaining({
+        id: "mindmap-add-reference",
+        type: "add-connected-node",
+        edgeKind: "references",
+      }),
+    );
+  });
+
+  it("normalizes defaults for erd", () => {
+    expect(getDefaultNodeKindForDiagram("erd")).toBe("entity");
+    expect(getDefaultEdgeKindForDiagram("erd")).toBe("references");
     expect(getContextualAddActionForDiagram("erd")).toEqual({
       label: "Adicionar relacao",
       nodeKind: "entity",
