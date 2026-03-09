@@ -1380,6 +1380,30 @@ select {
   justify-content: flex-end;
 }
 
+.inline-rename-popover {
+  position: absolute;
+  z-index: 95;
+  min-width: 240px;
+  max-width: 280px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 34%, var(--color-border));
+  border-radius: 0.78rem;
+  background: var(--surface-elevation-2);
+  box-shadow: var(--shadow);
+  padding: 0.54rem;
+  display: grid;
+  gap: 0.42rem;
+}
+
+.inline-rename-popover label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.inline-rename-actions {
+  justify-content: flex-end;
+}
+
 .semantic-dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -1962,6 +1986,32 @@ select {
 
 .react-flow__node.editor-node-issue-warning .diagram-node {
   border-color: color-mix(in srgb, var(--color-warning) 62%, transparent);
+}
+
+.react-flow__node.editor-node-connection-source .diagram-node {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-primary) 42%, transparent),
+    var(--diagram-node-shadow);
+}
+
+.react-flow__node.editor-node-connection-allowed .diagram-node {
+  border-color: color-mix(in srgb, #16a34a 58%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #16a34a 30%, transparent),
+    var(--diagram-node-shadow);
+}
+
+.react-flow__node.editor-node-connection-blocked .diagram-node {
+  border-color: color-mix(in srgb, var(--color-danger) 62%, transparent);
+  opacity: 0.78;
+}
+
+.react-flow__node.editor-node-connection-allowed .diagram-port-target {
+  background: color-mix(in srgb, #16a34a 72%, var(--color-primary));
+}
+
+.react-flow__node.editor-node-connection-blocked .diagram-port-target {
+  background: color-mix(in srgb, var(--color-danger) 72%, var(--color-primary));
 }
 
 .diagram-node__title {

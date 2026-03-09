@@ -10,7 +10,11 @@ import {
   useEdgesState,
   useNodesState,
 } from "@xyflow/react";
-import type { Connection, ReactFlowInstance } from "@xyflow/react";
+import type {
+  Connection,
+  OnConnectStartParams,
+  ReactFlowInstance,
+} from "@xyflow/react";
 import { EdgeKindSchema, type EdgeKind, type NodeKind } from "@/src/domain";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import {
@@ -910,6 +914,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const [quickFindActiveIndex, setQuickFindActiveIndex] = useState(0);
   const [isAddNodeDialogOpen, setIsAddNodeDialogOpen] = useState(false);
   const [addNodeErrorMessage, setAddNodeErrorMessage] = useState<string | null>(null);
+  const [inlineRenameNodeId, setInlineRenameNodeId] = useState<string | null>(null);
+  const [inlineRenameDraft, setInlineRenameDraft] = useState("");
+  const [inlineRenameErrorMessage, setInlineRenameErrorMessage] =
+    useState<string | null>(null);
+  const [activeConnectionSourceNodeId, setActiveConnectionSourceNodeId] =
+    useState<string | null>(null);
   const [addNodeDraft, setAddNodeDraft] = useState<AddNodeDraft>({
     kind: "note",
     title: "",
@@ -968,6 +978,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       current.filter((nodeId) => nodes.some((node) => node.id === nodeId)),
     );
   }, [nodes]);
+
+  useEffect(() => {
+    if (!inlineRenameNodeId) {
+      return;
+    }
+
+    const renameNodeStillExists = nodes.some((node) => node.id === inlineRenameNodeId);
+    if (renameNodeStillExists) {
+      return;
+    }
+
+    setInlineRenameNodeId(null);
+    setInlineRenameDraft("");
+    setInlineRenameErrorMessage(null);
+  }, [inlineRenameNodeId, nodes]);
 
   useEffect(() => {
     edgesRef.current = edges;
@@ -1298,6 +1323,43 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       renderer.key === "mindmap"
         ? getMindmapRootNodeId(visibleNodes, layoutMetadata.rootNodeName)
         : null;
+    const connectionTargetStateByNodeId = new Map<string, "allowed" | "blocked">();
+    const activeSourceNode = activeConnectionSourceNodeId
+      ? nodes.find((node) => node.id === activeConnectionSourceNodeId) ?? null
+      : null;
+
+    if (activeSourceNode) {
+      const sourceNodeRef = {
+        id: activeSourceNode.id,
+        kind: activeSourceNode.data.kind,
+        label: activeSourceNode.data.label,
+      };
+
+      for (const candidate of nodes) {
+        if (candidate.id === activeSourceNode.id) {
+          continue;
+        }
+
+        const validation = validateEdgeCreation(
+          {
+            diagramType: semanticDiagramType,
+            sourceNode: sourceNodeRef,
+            targetNode: {
+              id: candidate.id,
+              kind: candidate.data.kind,
+              label: candidate.data.label,
+            },
+            mode: inspectorMode,
+          },
+          semanticEngineOptions,
+        );
+
+        connectionTargetStateByNodeId.set(
+          candidate.id,
+          validation.allowedEdgeKinds.length > 0 ? "allowed" : "blocked",
+        );
+      }
+    }
 
     return visibleNodes.map((node) => {
       const nodeIssues = semanticIssuesByNodeId.get(node.id) ?? [];
@@ -1316,6 +1378,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           `editor-node-renderer-${renderer.key}`,
           renderer.key === "tree" && collapsedTreeNodeIdSet.has(node.id)
             ? "editor-node-tree-collapsed"
+            : null,
+          activeConnectionSourceNodeId === node.id
+            ? "editor-node-connection-source"
+            : null,
+          activeConnectionSourceNodeId &&
+          node.id !== activeConnectionSourceNodeId
+            ? connectionTargetStateByNodeId.get(node.id) === "allowed"
+              ? "editor-node-connection-allowed"
+              : "editor-node-connection-blocked"
             : null,
           highlightedIssueClass,
         ]
@@ -1350,6 +1421,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       };
     });
   }, [
+    activeConnectionSourceNodeId,
     inspectorMode,
     isValidationPanelOpen,
     layoutMetadata.rootNodeName,
@@ -1358,6 +1430,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     collapsedTreeNodeIdSet,
     renderer,
     selectedNodeId,
+    semanticDiagramType,
+    semanticEngineOptions,
     semanticIssuesByNodeId,
   ]);
   const renderedEdges = useMemo(() => {
@@ -2394,6 +2468,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     return buildQuickActionFromDiagramType(currentSupportedDiagramType);
   }, [contextualActions, currentSupportedDiagramType]);
+  const quickAddDefaultRelationLabel = selectedNode
+    ? getEdgeKindLabel(quickAction.edgeKind, "operational")
+    : null;
+  const inlineRenameNode = useMemo(
+    () =>
+      inlineRenameNodeId
+        ? nodes.find((node) => node.id === inlineRenameNodeId) ?? null
+        : null,
+    [inlineRenameNodeId, nodes],
+  );
   const secondarySelectionActions = useMemo(
     () => contextualActions.slice(1),
     [contextualActions],
@@ -2420,6 +2504,23 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const hasDiagramRendererMismatch =
     isSupportedDiagramType(layoutMetadata.diagramType) &&
     renderer.key !== layoutMetadata.diagramType;
+  const inlineRenamePopoverStyle = useMemo(() => {
+    if (!inlineRenameNode) {
+      return undefined;
+    }
+
+    const canvasRect = canvasRegionRef.current?.getBoundingClientRect();
+    const fallbackWidth = canvasRect?.width ?? 960;
+    const fallbackHeight = canvasRect?.height ?? 620;
+    const topBarOffset = 72;
+    const left = inlineRenameNode.position.x * viewport.zoom + viewport.x + 24;
+    const top = inlineRenameNode.position.y * viewport.zoom + viewport.y + topBarOffset;
+
+    return {
+      left: `${Math.max(16, Math.min(left, fallbackWidth - 280))}px`,
+      top: `${Math.max(topBarOffset, Math.min(top, fallbackHeight - 128))}px`,
+    };
+  }, [inlineRenameNode, viewport]);
 
   useEffect(() => {
     if (quickFindOptions.length === 0) {
@@ -3262,6 +3363,46 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setIsAddNodeDialogOpen(true);
   }, [currentSupportedDiagramType, quickAction.nodeKind, selectedNodeId]);
 
+  function handleStartInlineRename(node: RFNode) {
+    setInlineRenameNodeId(node.id);
+    setInlineRenameDraft(node.data.label);
+    setInlineRenameErrorMessage(null);
+    selectItem({ nodeId: node.id, edgeId: null });
+  }
+
+  function handleCancelInlineRename() {
+    setInlineRenameNodeId(null);
+    setInlineRenameDraft("");
+    setInlineRenameErrorMessage(null);
+  }
+
+  function handleConfirmInlineRename() {
+    if (!inlineRenameNodeId) {
+      return;
+    }
+
+    const nextLabel = inlineRenameDraft.trim();
+    if (!nextLabel) {
+      setInlineRenameErrorMessage("Titulo obrigatorio.");
+      return;
+    }
+
+    const applied = applyLocalCommandAndQueue({
+      type: "updateNode",
+      nodeId: inlineRenameNodeId,
+      patch: {
+        label: nextLabel,
+      },
+    });
+    if (!applied) {
+      setInlineRenameErrorMessage("Nao foi possivel renomear o no.");
+      return;
+    }
+
+    setQuerySyncMessage("Titulo atualizado.");
+    handleCancelInlineRename();
+  }
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && pendingConnectionAssistant) {
@@ -3282,7 +3423,17 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         return;
       }
 
-      if (pendingConnectionAssistant || pendingNodeRepair || pendingSemanticOverride) {
+      if (event.key === "Escape" && inlineRenameNodeId) {
+        event.preventDefault();
+        handleCancelInlineRename();
+        return;
+      }
+
+      if (
+        pendingConnectionAssistant ||
+        pendingNodeRepair ||
+        pendingSemanticOverride
+      ) {
         return;
       }
 
@@ -3432,6 +3583,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     };
   }, [
     handleCancelSemanticOverride,
+    handleCancelInlineRename,
     handleCopySelectionToClipboard,
     handleCutSelectionToClipboard,
     handleDuplicateSelection,
@@ -3444,6 +3596,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     pendingConnectionAssistant,
     pendingNodeRepair,
     pendingSemanticOverride,
+    inlineRenameNodeId,
     panelState,
     selectedEdgeId,
     selectedNodeId,
@@ -4204,6 +4357,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     void (async () => {
+      setActiveConnectionSourceNodeId(null);
       setPendingConnectionAssistant(null);
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
@@ -5253,16 +5407,32 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={handleConnect}
+            onConnectStart={(_, params: OnConnectStartParams) => {
+              if (params.handleType === "source" && params.nodeId) {
+                setActiveConnectionSourceNodeId(params.nodeId);
+                return;
+              }
+
+              setActiveConnectionSourceNodeId(null);
+            }}
+            onConnectEnd={() => {
+              setActiveConnectionSourceNodeId(null);
+            }}
             onMoveEnd={(_, nextViewport) => setViewport(nextViewport)}
             onNodeDragStop={(_, node) => handleNodeDragStop(node)}
             onNodeClick={(_, node) => {
               selectItem({ nodeId: node.id, edgeId: null });
+            }}
+            onNodeDoubleClick={(_, node) => {
+              handleStartInlineRename(node);
             }}
             onEdgeClick={(_, edge) => {
               selectItem({ nodeId: null, edgeId: edge.id });
             }}
             onPaneClick={() => {
               selectItem({ nodeId: null, edgeId: null });
+              setActiveConnectionSourceNodeId(null);
+              handleCancelInlineRename();
             }}
             colorMode="light"
             defaultViewport={initialFlowState.viewport}
@@ -5285,6 +5455,48 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               className={renderer.minimapClassName}
             />
           </ReactFlow>
+
+          {inlineRenameNode && inlineRenamePopoverStyle ? (
+            <form
+              className="inline-rename-popover"
+              style={inlineRenamePopoverStyle}
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleConfirmInlineRename();
+              }}
+              data-testid="inline-rename-popover"
+            >
+              <label htmlFor="inline-rename-input">Renomear no</label>
+              <input
+                id="inline-rename-input"
+                value={inlineRenameDraft}
+                onChange={(event) => {
+                  setInlineRenameDraft(event.target.value);
+                  setInlineRenameErrorMessage(null);
+                }}
+                autoFocus
+                data-testid="inline-rename-input"
+              />
+              {inlineRenameErrorMessage ? (
+                <span className="helper field-error" role="alert">
+                  {inlineRenameErrorMessage}
+                </span>
+              ) : null}
+              <div className="row-actions inline-rename-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleCancelInlineRename}
+                  data-testid="inline-rename-cancel"
+                >
+                  Cancelar
+                </button>
+                <button className="btn btn-primary" type="submit" data-testid="inline-rename-confirm">
+                  Salvar
+                </button>
+              </div>
+            </form>
+          ) : null}
         </div>
 
         {isAddNodeDialogOpen ? (
@@ -5297,8 +5509,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               className="add-node-dialog"
               role="dialog"
               aria-modal="true"
-              aria-label="Adicionar novo no"
+              aria-label="QuickAdd"
               data-testid="add-node-dialog"
+              data-quick-add="true"
               onClick={(event) => event.stopPropagation()}
               onSubmit={(event) => {
                 event.preventDefault();
@@ -5306,10 +5519,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               }}
             >
               <header className="add-node-dialog-header">
-                <h3>Adicionar</h3>
+                <h3>QuickAdd</h3>
                 <p className="helper">
-                  Defina o tipo, titulo e contexto. Atalhos: Enter confirma, ESC cancela.
+                  Tipo + titulo rapido. Enter cria, Esc cancela.
                 </p>
+                {selectedNode && quickAddDefaultRelationLabel ? (
+                  <p className="helper" data-testid="quick-add-default-connection">
+                    Conexao padrao: {selectedNode.data.label} -[{quickAddDefaultRelationLabel}]- novo no.
+                  </p>
+                ) : null}
               </header>
 
               <div className="add-node-kind-grid">
