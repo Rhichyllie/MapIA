@@ -5,6 +5,7 @@ import {
   NodeKindSchema,
   ViewportStateSchema,
 } from "@/src/domain";
+import { MIN_SEMANTIC_OVERRIDE_REASON_LENGTH } from "@/src/modules/semantics/domain";
 
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 const FiniteNumberSchema = z.number().finite();
@@ -125,7 +126,12 @@ export const ApplyEditorCommandsInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative().optional(),
   semanticMode: SemanticModeSchema.optional(),
   allowSemanticOverride: z.boolean().optional(),
-  overrideReason: z.string().trim().min(3).max(500).optional(),
+  overrideReason: z
+    .string()
+    .trim()
+    .min(MIN_SEMANTIC_OVERRIDE_REASON_LENGTH)
+    .max(500)
+    .optional(),
   commands: z.array(EditorCommandSchema).min(1),
 });
 
@@ -136,7 +142,12 @@ export const ApplyEditorCommandInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative().optional(),
   semanticMode: SemanticModeSchema.optional(),
   allowSemanticOverride: z.boolean().optional(),
-  overrideReason: z.string().trim().min(3).max(500).optional(),
+  overrideReason: z
+    .string()
+    .trim()
+    .min(MIN_SEMANTIC_OVERRIDE_REASON_LENGTH)
+    .max(500)
+    .optional(),
   command: EditorCommandSchema,
 });
 
@@ -147,7 +158,12 @@ export const SaveEditorFullSnapshotInputSchema = z.object({
   expectedRevision: z.number().int().nonnegative().optional(),
   semanticMode: SemanticModeSchema.optional(),
   allowSemanticOverride: z.boolean().optional(),
-  overrideReason: z.string().trim().min(3).max(500).optional(),
+  overrideReason: z
+    .string()
+    .trim()
+    .min(MIN_SEMANTIC_OVERRIDE_REASON_LENGTH)
+    .max(500)
+    .optional(),
   snapshot: GraphSnapshotSchema,
 });
 

@@ -1,5 +1,6 @@
 import { AppError } from "@/src/lib/app-error";
 import {
+  hasMinimumSemanticOverrideReason,
   runGraphAudit,
   type SemanticEngineOptions,
   type SemanticMode,
@@ -145,7 +146,7 @@ function canUseTechnicalOverride(input: {
     return true;
   }
 
-  return Boolean(input.overrideReason?.trim());
+  return hasMinimumSemanticOverrideReason(input.overrideReason);
 }
 
 async function appendSemanticEvent(

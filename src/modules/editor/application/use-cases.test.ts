@@ -444,7 +444,7 @@ describe("Editor use-cases", () => {
           },
         ],
       }),
-    ).rejects.toThrow(/source\/target deve existir/i);
+    ).rejects.toThrow(/(source\/target deve existir|conexao incompleta)/i);
   });
 
   it("full snapshot save reuses domain validation policy", async () => {

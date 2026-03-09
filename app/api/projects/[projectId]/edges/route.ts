@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EdgeKindSchema } from "@/src/domain";
+import { MIN_SEMANTIC_OVERRIDE_REASON_LENGTH } from "@/src/modules/semantics/domain";
 import {
   apiErrorResponse,
   apiSuccessResponse,
@@ -24,7 +25,12 @@ const CreateEdgeRequestSchema = z.object({
   expectedRevision: z.number().int().nonnegative().optional(),
   semanticMode: z.enum(["operational", "technical"]).optional(),
   allowSemanticOverride: z.boolean().optional(),
-  overrideReason: z.string().trim().min(3).max(500).optional(),
+  overrideReason: z
+    .string()
+    .trim()
+    .min(MIN_SEMANTIC_OVERRIDE_REASON_LENGTH)
+    .max(500)
+    .optional(),
 });
 
 export async function POST(

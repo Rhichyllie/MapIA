@@ -1,6 +1,7 @@
 import { AppError } from "@/src/lib/app-error";
 import { validateGraphSnapshotInvariants } from "@/src/modules/graph/domain";
 import {
+  hasMinimumSemanticOverrideReason,
   runGraphAudit,
   validateEdgeCreation,
   validateEdgeKindChange,
@@ -227,7 +228,7 @@ function canUseTechnicalOverride(input: {
     return true;
   }
 
-  return Boolean(input.overrideReason?.trim());
+  return hasMinimumSemanticOverrideReason(input.overrideReason);
 }
 
 async function appendSemanticEvent(
