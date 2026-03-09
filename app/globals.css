@@ -1277,6 +1277,7 @@ select {
 }
 
 .canvas-selection-hud-actions {
+  flex-wrap: wrap;
   gap: 0.45rem;
 }
 
@@ -1885,6 +1886,21 @@ select {
   stroke-width: 1.9px;
 }
 
+.react-flow__edge-path.editor-edge-erd-cardinality-1-1 {
+  stroke-dasharray: none;
+  stroke-width: 2px;
+}
+
+.react-flow__edge-path.editor-edge-erd-cardinality-1-n {
+  stroke-dasharray: 7 4;
+  stroke-width: 2.1px;
+}
+
+.react-flow__edge-path.editor-edge-erd-cardinality-n-n {
+  stroke-dasharray: 2 5;
+  stroke-width: 2.15px;
+}
+
 .react-flow__edge-path.editor-edge-sitemap {
   stroke-dasharray: 7 5;
 }
@@ -1916,6 +1932,11 @@ select {
   color: var(--color-text);
   box-shadow: var(--diagram-node-shadow);
   padding: 0.54rem 0.64rem;
+}
+
+.editor-node-tree-collapsed .diagram-node {
+  filter: saturate(0.75);
+  opacity: 0.9;
 }
 
 .react-flow__node.editor-node-has-issue .diagram-node {

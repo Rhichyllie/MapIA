@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getContextualAddActionForDiagram,
+  getContextualActionsForDiagram,
   getDefaultNodeKindForDiagram,
   getEdgeKindPresentation,
   getNodeKindLabel,
@@ -43,6 +44,7 @@ describe("editor kinds presentation", () => {
 
   it("resolves contextual add action and default kind by diagram", () => {
     expect(getDefaultNodeKindForDiagram("tree")).toBe("page");
+    expect(getDefaultNodeKindForDiagram("erd")).toBe("entity");
     expect(getContextualAddActionForDiagram("tree")).toEqual({
       label: "Adicionar filho",
       nodeKind: "page",
@@ -58,6 +60,23 @@ describe("editor kinds presentation", () => {
       nodeKind: "note",
       edgeKind: "relates-to",
     });
+    expect(getContextualAddActionForDiagram("erd")).toEqual({
+      label: "Adicionar relacao",
+      nodeKind: "entity",
+      edgeKind: "references",
+    });
+    expect(getContextualActionsForDiagram("erd")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "erd-add-relation",
+          type: "add-connected-node",
+        }),
+        expect.objectContaining({
+          id: "erd-add-field",
+          type: "add-field",
+        }),
+      ]),
+    );
   });
 
   it("normalizes legacy manual source label for operational mode", () => {

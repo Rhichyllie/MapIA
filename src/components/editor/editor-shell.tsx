@@ -27,6 +27,7 @@ import {
 } from "./diagram-renderers";
 import {
   applyEditorCommandLocally,
+  applyEditorCommandsLocally,
   applyEditorCommandRemotely,
   EditorRemoteError,
 } from "./editor-command-service";
@@ -69,6 +70,8 @@ import { CommandPalette } from "./command-palette";
 import { filterNodeQuickFindOptions } from "./editor-quick-find";
 import {
   getContextualAddActionForDiagram,
+  getContextualActionsForDiagram,
+  type DiagramContextualAction,
   getDefaultNodeKindForDiagram,
   getEdgeKindLabel,
   getEdgeKindPresentation,
@@ -96,6 +99,7 @@ import {
   loadSnapshotVersionDiffForEditor,
   loadWorkingSnapshotForEditor,
   runSemanticAuditForEditor,
+  validateSemanticDraftForEditor,
   restoreSnapshotVersionForEditor,
   saveWorkingSnapshotForEditor,
   updateEdgeForEditor,
@@ -114,6 +118,8 @@ import {
 import { ConnectionAssistant } from "./semantics/connection-assistant";
 import { RepairDialog } from "./semantics/repair-dialog";
 import {
+  hasMinimumSemanticOverrideReason,
+  MIN_SEMANTIC_OVERRIDE_REASON_LENGTH,
   runGraphAudit,
   validateEdgeCreation,
   type RepairAction,
@@ -175,9 +181,31 @@ type AddNodeDraft = {
 };
 
 type SelectionHudQuickAction = {
+  id: DiagramContextualAction["id"];
   label: string;
   edgeKind: EdgeKind;
   nodeKind: NodeKind;
+  edgeLabel?: string;
+};
+
+type ContextualInsertMode =
+  | "default"
+  | "tree-child"
+  | "tree-sibling"
+  | "flow-next-step"
+  | "flow-branch"
+  | "mindmap-branch"
+  | "mindmap-reference"
+  | "erd-relation";
+
+type ClipboardAddNodeCommand = Extract<EditorCommand, { type: "addNode" }>;
+type ClipboardAddEdgeCommand = Extract<EditorCommand, { type: "addEdge" }>;
+
+type ClipboardCommandsDraft = {
+  nodeCommands: ClipboardAddNodeCommand[];
+  edgeCommands: ClipboardAddEdgeCommand[];
+  skippedEdges: number;
+  firstInsertedNodeId?: string;
 };
 
 type PendingConnectionAssistantState = {
@@ -385,15 +413,108 @@ function buildDefaultNodeTitle(kind: NodeKind, nextIndex: number) {
   return `${nodeKindLabel} ${nextIndex}`;
 }
 
+function buildContextualActionsFromDiagramType(
+  diagramType: DiagramType | "erd" | undefined,
+): SelectionHudQuickAction[] {
+  return getContextualActionsForDiagram(diagramType)
+    .filter((action): action is DiagramContextualAction & {
+      type: "add-connected-node";
+      nodeKind: NodeKind;
+      edgeKind: EdgeKind;
+    } => action.type === "add-connected-node" && Boolean(action.nodeKind && action.edgeKind))
+    .map((action) => ({
+      id: action.id,
+      label: action.label,
+      nodeKind: action.nodeKind,
+      edgeKind: action.edgeKind,
+      ...(action.edgeLabel ? { edgeLabel: action.edgeLabel } : {}),
+    }));
+}
+
 function buildQuickActionFromDiagramType(
-  diagramType: DiagramType | undefined,
+  diagramType: DiagramType | "erd" | undefined,
 ): SelectionHudQuickAction {
   const action = getContextualAddActionForDiagram(diagramType);
   return {
+    id: getContextualActionsForDiagram(diagramType)[0]?.id ?? "mindmap-add-branch",
     label: action.label,
     nodeKind: action.nodeKind,
     edgeKind: action.edgeKind,
+    ...(action.edgeLabel ? { edgeLabel: action.edgeLabel } : {}),
   };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function readBoolean(value: unknown) {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function isClipboardPartialEdgePasteEnabled(
+  policy: SemanticPolicyPayload | null | undefined,
+) {
+  const customRules = readRecord(policy?.customRulesJson);
+  const clipboardRules = readRecord(customRules?.clipboard);
+
+  return (
+    readBoolean(clipboardRules?.allowPasteWithoutInvalidEdges) === true ||
+    readBoolean(clipboardRules?.allowPartialEdgePaste) === true
+  );
+}
+
+function resolveErdCardinalityFromPayload(
+  payload: Record<string, unknown> | undefined,
+): "1:1" | "1:N" | "N:N" | undefined {
+  if (!payload) {
+    return undefined;
+  }
+
+  const cardinality = payload.cardinality;
+  if (cardinality === "1:1" || cardinality === "1:N" || cardinality === "N:N") {
+    return cardinality;
+  }
+
+  return undefined;
+}
+
+function resolveErdEdgeLabel(input: {
+  baseLabel: string | undefined;
+  edgeKind: EdgeKind;
+  payload: Record<string, unknown> | undefined;
+  rendererKey: DiagramRendererKey;
+}) {
+  if (input.rendererKey !== "erd" || input.edgeKind !== "references") {
+    return input.baseLabel;
+  }
+
+  const cardinality = resolveErdCardinalityFromPayload(input.payload);
+  if (!cardinality) {
+    return input.baseLabel;
+  }
+
+  const normalizedBaseLabel = input.baseLabel?.trim();
+  if (normalizedBaseLabel) {
+    return `${normalizedBaseLabel} (${cardinality})`;
+  }
+
+  return cardinality;
+}
+
+function resolveErdEdgeClassSuffix(
+  payload: Record<string, unknown> | undefined,
+) {
+  const cardinality = resolveErdCardinalityFromPayload(payload);
+  if (!cardinality) {
+    return undefined;
+  }
+
+  return cardinality.replace(":", "-").toLowerCase();
 }
 
 function resolveEdgeMarker(edgeKind: EdgeKind) {
@@ -416,7 +537,25 @@ function resolveEdgeMarker(edgeKind: EdgeKind) {
   } as const;
 }
 
-function resolveEdgeDashArray(edgeKind: EdgeKind) {
+function resolveEdgeDashArray(
+  edgeKind: EdgeKind,
+  input?: { rendererKey?: DiagramRendererKey; payload?: Record<string, unknown> },
+) {
+  if (input?.rendererKey === "erd" && edgeKind === "references") {
+    const cardinality = resolveErdCardinalityFromPayload(input.payload);
+    if (cardinality === "1:1") {
+      return undefined;
+    }
+
+    if (cardinality === "1:N") {
+      return "7 4";
+    }
+
+    if (cardinality === "N:N") {
+      return "2 5";
+    }
+  }
+
   const presentation = getEdgeKindPresentation(edgeKind);
 
   if (presentation.lineStyle === "dashed") {
@@ -763,6 +902,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     description: "",
     tagsText: "",
   });
+  const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<string[]>([]);
   const [pendingConnectionAssistant, setPendingConnectionAssistant] =
     useState<PendingConnectionAssistantState | null>(null);
   const [pendingNodeRepair, setPendingNodeRepair] =
@@ -807,6 +947,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
   useEffect(() => {
     nodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    setCollapsedTreeNodeIds((current) =>
+      current.filter((nodeId) => nodes.some((node) => node.id === nodeId)),
+    );
   }, [nodes]);
 
   useEffect(() => {
@@ -1061,13 +1207,85 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       ? "Semantica: atencao"
       : "Semantica: aviso"
     : "Semantica: OK";
+  const collapsedTreeNodeIdSet = useMemo(
+    () => new Set(collapsedTreeNodeIds),
+    [collapsedTreeNodeIds],
+  );
+  const hiddenTreeNodeIdSet = useMemo(() => {
+    if (renderer.key !== "tree" || collapsedTreeNodeIdSet.size === 0) {
+      return new Set<string>();
+    }
+
+    const containsAdjacency = new Map<string, string[]>();
+    for (const edge of edges) {
+      if ((edge.data?.kind ?? "flows-to") !== "contains") {
+        continue;
+      }
+
+      const current = containsAdjacency.get(edge.source) ?? [];
+      current.push(edge.target);
+      containsAdjacency.set(edge.source, current);
+    }
+
+    const hidden = new Set<string>();
+    for (const rootId of collapsedTreeNodeIdSet) {
+      const queue = [...(containsAdjacency.get(rootId) ?? [])];
+
+      while (queue.length > 0) {
+        const currentId = queue.shift();
+        if (!currentId || hidden.has(currentId)) {
+          continue;
+        }
+
+        hidden.add(currentId);
+        const next = containsAdjacency.get(currentId);
+        if (next?.length) {
+          queue.push(...next);
+        }
+      }
+    }
+
+    return hidden;
+  }, [collapsedTreeNodeIdSet, edges, renderer.key]);
+
+  useEffect(() => {
+    if (!selectedNodeId) {
+      return;
+    }
+
+    if (hiddenTreeNodeIdSet.has(selectedNodeId)) {
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+    }
+  }, [hiddenTreeNodeIdSet, selectedNodeId]);
+
+  useEffect(() => {
+    if (!selectedEdgeId) {
+      return;
+    }
+
+    const selected = edges.find((edge) => edge.id === selectedEdgeId);
+    if (!selected) {
+      return;
+    }
+
+    if (
+      hiddenTreeNodeIdSet.has(selected.source) ||
+      hiddenTreeNodeIdSet.has(selected.target)
+    ) {
+      setSelectedEdgeId(null);
+      setSelectedNodeId(null);
+    }
+  }, [edges, hiddenTreeNodeIdSet, selectedEdgeId]);
+
   const renderedNodes = useMemo(() => {
+    const visibleNodes = nodes.filter((node) => !hiddenTreeNodeIdSet.has(node.id));
     const mindmapRootNodeId =
       renderer.key === "mindmap"
-        ? getMindmapRootNodeId(nodes, layoutMetadata.rootNodeName)
+        ? getMindmapRootNodeId(visibleNodes, layoutMetadata.rootNodeName)
         : null;
 
-    return nodes.map((node) => {
+    return visibleNodes.map((node) => {
       const nodeIssues = semanticIssuesByNodeId.get(node.id) ?? [];
       const highlightedIssueClass =
         nodeIssues.length > 0 && (isValidationPanelOpen || selectedNodeId === node.id)
@@ -1082,6 +1300,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         className: [
           node.className,
           `editor-node-renderer-${renderer.key}`,
+          renderer.key === "tree" && collapsedTreeNodeIdSet.has(node.id)
+            ? "editor-node-tree-collapsed"
+            : null,
           highlightedIssueClass,
         ]
           .filter(Boolean)
@@ -1106,13 +1327,28 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     isValidationPanelOpen,
     layoutMetadata.rootNodeName,
     nodes,
+    hiddenTreeNodeIdSet,
+    collapsedTreeNodeIdSet,
     renderer,
     selectedNodeId,
     semanticIssuesByNodeId,
   ]);
   const renderedEdges = useMemo(() => {
-    const baseEdges = edges.map((edge) => {
+    const visibleEdges = edges.filter(
+      (edge) =>
+        !hiddenTreeNodeIdSet.has(edge.source) &&
+        !hiddenTreeNodeIdSet.has(edge.target),
+    );
+    const baseEdges = visibleEdges.map((edge) => {
       const edgeKind = edge.data?.kind ?? "flows-to";
+      const payload = edge.data?.payload ?? {};
+      const erdCardinalityClassSuffix = resolveErdEdgeClassSuffix(payload);
+      const renderedLabel = resolveErdEdgeLabel({
+        baseLabel: edge.label ? String(edge.label) : undefined,
+        edgeKind,
+        payload,
+        rendererKey: renderer.key,
+      });
       const edgeIssues = semanticIssuesByEdgeId.get(edge.id) ?? [];
       const highlightedIssueClass =
         edgeIssues.length > 0 && (isValidationPanelOpen || selectedEdgeId === edge.id)
@@ -1125,11 +1361,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         ...edge,
         data: {
           kind: edgeKind,
-          payload: edge.data?.payload ?? {},
+          payload,
           externalRefs: edge.data?.externalRefs ?? [],
           parallelIndex: edge.data?.parallelIndex,
           parallelTotal: edge.data?.parallelTotal,
         },
+        label: renderedLabel,
         type: edge.type ?? renderer.defaultEdgeOptions.type,
         markerEnd:
           resolveEdgeMarker(edgeKind) ??
@@ -1138,7 +1375,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         animated: edge.animated ?? renderer.defaultEdgeOptions.animated,
         style: {
           ...(edge.style ?? {}),
-          strokeDasharray: resolveEdgeDashArray(edgeKind),
+          strokeDasharray: resolveEdgeDashArray(edgeKind, {
+            rendererKey: renderer.key,
+            payload,
+          }),
         },
         className: [
           edge.className,
@@ -1146,6 +1386,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           `editor-edge-kind-${edgeKind}`,
           `editor-edge-tone-${getEdgeKindPresentation(edgeKind).tone}`,
           `editor-edge-renderer-${renderer.key}`,
+          renderer.key === "erd" && erdCardinalityClassSuffix
+            ? `editor-edge-erd-cardinality-${erdCardinalityClassSuffix}`
+            : null,
           highlightedIssueClass,
         ]
           .filter(Boolean)
@@ -1160,6 +1403,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return computeParallelEdgeMeta(baseEdges);
   }, [
     edges,
+    hiddenTreeNodeIdSet,
     isValidationPanelOpen,
     renderer,
     selectedEdgeId,
@@ -2103,16 +2347,43 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const shouldShowMetadataPanel = !isCanvasFocusMode;
   const shouldShowPrismaPanel = !isCanvasFocusMode;
   const shouldShowVersionsPanel = !isCanvasFocusMode;
-  const currentSupportedDiagramType = isSupportedDiagramType(layoutMetadata.diagramType)
-    ? layoutMetadata.diagramType
-    : resolveDiagramTypeForQuickActions(renderer.key);
-  const quickAction = useMemo(
-    () => buildQuickActionFromDiagramType(currentSupportedDiagramType),
+  const currentSupportedDiagramType =
+    semanticDiagramType ??
+    (isSupportedDiagramType(layoutMetadata.diagramType)
+      ? layoutMetadata.diagramType
+      : resolveDiagramTypeForQuickActions(renderer.key));
+  const contextualActionDefinitions = useMemo(
+    () => getContextualActionsForDiagram(currentSupportedDiagramType),
     [currentSupportedDiagramType],
+  );
+  const contextualActions = useMemo(
+    () => buildContextualActionsFromDiagramType(currentSupportedDiagramType),
+    [currentSupportedDiagramType],
+  );
+  const quickAction = useMemo(() => {
+    if (contextualActions[0]) {
+      return contextualActions[0];
+    }
+
+    return buildQuickActionFromDiagramType(currentSupportedDiagramType);
+  }, [contextualActions, currentSupportedDiagramType]);
+  const secondarySelectionActions = useMemo(
+    () => contextualActions.slice(1),
+    [contextualActions],
+  );
+  const hasErdAddFieldAction = useMemo(
+    () =>
+      contextualActionDefinitions.some(
+        (action) => action.id === "erd-add-field" && action.type === "add-field",
+      ),
+    [contextualActionDefinitions],
   );
   const selectionNodeKindPresentation = selectedNode
     ? getNodeKindPresentation(selectedNode.data.kind)
     : null;
+  const isSelectedTreeSubtreeCollapsed = selectedNode
+    ? collapsedTreeNodeIdSet.has(selectedNode.id)
+    : false;
   const inspectorToggleLabel = isInspectorVisible
     ? "Ocultar inspetor"
     : "Mostrar inspetor";
@@ -2516,6 +2787,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     sourceNodeId: string;
     targetNodeId: string;
     edgeKind: EdgeKind;
+    edgeLabel?: string;
     explicitKind: boolean;
     openAssistantOnInvalid: boolean;
   }) {
@@ -2593,7 +2865,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         sourceNodeId: sourceNode.id,
         targetNodeId: targetNode.id,
         kind: nextEdgeKind,
-        label: getEdgeKindLabel(nextEdgeKind, "operational"),
+        label: input.edgeLabel ?? getEdgeKindLabel(nextEdgeKind, "operational"),
         data: {},
       },
     });
@@ -2681,8 +2953,83 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
   }
 
-  function resolveNodeInsertPosition(referenceNode: RFNode | null) {
+  function resolveNodeInsertPosition(input: {
+    referenceNode: RFNode | null;
+    insertMode: ContextualInsertMode;
+  }) {
+    const { referenceNode, insertMode } = input;
+
     if (referenceNode) {
+      if (insertMode === "flow-next-step") {
+        return {
+          x: referenceNode.position.x + 280,
+          y: referenceNode.position.y,
+        };
+      }
+
+      if (insertMode === "flow-branch") {
+        return {
+          x: referenceNode.position.x + 220,
+          y: referenceNode.position.y + 170,
+        };
+      }
+
+      if (insertMode === "tree-child") {
+        return renderer.treeDirection === "left-right"
+          ? {
+              x: referenceNode.position.x + 260,
+              y: referenceNode.position.y + 120,
+            }
+          : {
+              x: referenceNode.position.x + 170,
+              y: referenceNode.position.y + 220,
+            };
+      }
+
+      if (insertMode === "tree-sibling") {
+        return renderer.treeDirection === "left-right"
+          ? {
+              x: referenceNode.position.x,
+              y: referenceNode.position.y + 170,
+            }
+          : {
+              x: referenceNode.position.x + 220,
+              y: referenceNode.position.y,
+            };
+      }
+
+      if (insertMode === "erd-relation") {
+        return {
+          x: referenceNode.position.x + 350,
+          y: referenceNode.position.y,
+        };
+      }
+
+      if (
+        insertMode === "mindmap-branch" ||
+        insertMode === "mindmap-reference"
+      ) {
+        const rootNodeId = getMindmapRootNodeId(
+          nodesRef.current,
+          layoutMetadataRef.current.rootNodeName,
+        );
+        const anchorNode =
+          (rootNodeId
+            ? nodesRef.current.find((node) => node.id === rootNodeId)
+            : undefined) ?? referenceNode;
+        const relatedEdgeCount = edgesRef.current.filter(
+          (edge) => edge.source === anchorNode.id || edge.target === anchorNode.id,
+        ).length;
+        const angleDenominator = Math.max(nodesRef.current.length + 2, 8);
+        const angle = (2 * Math.PI * (relatedEdgeCount + 1)) / angleDenominator;
+        const radialDistance = insertMode === "mindmap-reference" ? 210 : 260;
+
+        return {
+          x: Number((anchorNode.position.x + Math.cos(angle) * radialDistance).toFixed(2)),
+          y: Number((anchorNode.position.y + Math.sin(angle) * radialDistance).toFixed(2)),
+        };
+      }
+
       return {
         x: referenceNode.position.x + DEFAULT_ADD_NODE_OFFSET.x,
         y: referenceNode.position.y + DEFAULT_ADD_NODE_OFFSET.y,
@@ -2706,6 +3053,98 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     };
   }
 
+  function resolveInsertModeFromActionId(
+    actionId: SelectionHudQuickAction["id"] | undefined,
+  ): ContextualInsertMode {
+    if (actionId === "tree-add-child") {
+      return "tree-child";
+    }
+
+    if (actionId === "tree-add-sibling") {
+      return "tree-sibling";
+    }
+
+    if (actionId === "flow-add-next-step") {
+      return "flow-next-step";
+    }
+
+    if (actionId === "flow-add-branch") {
+      return "flow-branch";
+    }
+
+    if (actionId === "mindmap-add-reference") {
+      return "mindmap-reference";
+    }
+
+    if (actionId === "mindmap-add-branch") {
+      return "mindmap-branch";
+    }
+
+    if (actionId === "erd-add-relation") {
+      return "erd-relation";
+    }
+
+    return "default";
+  }
+
+  function resolveSourceNodeIdForContextAction(action: SelectionHudQuickAction) {
+    if (!selectedNode) {
+      return undefined;
+    }
+
+    if (action.id === "tree-add-sibling") {
+      const parentEdge = edgesRef.current.find(
+        (edge) =>
+          (edge.data?.kind ?? "flows-to") === "contains" &&
+          edge.target === selectedNode.id,
+      );
+
+      return parentEdge?.source ?? selectedNode.id;
+    }
+
+    return selectedNode.id;
+  }
+
+  function queueTreeReflowIfNeeded(insertMode: ContextualInsertMode) {
+    if (renderer.key !== "tree") {
+      return;
+    }
+
+    if (insertMode !== "tree-child" && insertMode !== "tree-sibling") {
+      return;
+    }
+
+    const currentSnapshot = getCurrentSnapshot();
+    const reflowedSnapshot = reapplyLayoutForSnapshot(currentSnapshot);
+    const currentNodeById = new Map(
+      currentSnapshot.nodes.map((node) => [node.id, node] as const),
+    );
+
+    for (const node of reflowedSnapshot.nodes) {
+      const currentNode = currentNodeById.get(node.id);
+      if (!currentNode) {
+        continue;
+      }
+
+      const hasPositionChanged =
+        Math.abs(currentNode.position.x - node.position.x) > 0.5 ||
+        Math.abs(currentNode.position.y - node.position.y) > 0.5;
+
+      if (!hasPositionChanged) {
+        continue;
+      }
+
+      applyLocalCommandAndQueue({
+        type: "moveNode",
+        nodeId: node.id,
+        position: {
+          x: node.position.x,
+          y: node.position.y,
+        },
+      });
+    }
+  }
+
   function buildAddNodePayloadFromDraft(draft: AddNodeDraft) {
     const nextPayload: Record<string, unknown> = {};
     const normalizedDescription = draft.description.trim();
@@ -2726,6 +3165,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     draft: AddNodeDraft;
     sourceNodeId?: string;
     relationKind?: EdgeKind;
+    relationLabel?: string;
+    insertMode?: ContextualInsertMode;
   }) {
     const referenceNode = input.sourceNodeId
       ? nodesRef.current.find((node) => node.id === input.sourceNodeId) ?? null
@@ -2744,7 +3185,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         id: nextNodeId,
         kind: input.draft.kind,
         label: title,
-        position: resolveNodeInsertPosition(referenceNode),
+        position: resolveNodeInsertPosition({
+          referenceNode,
+          insertMode: input.insertMode ?? "default",
+        }),
         data: payload,
       },
     });
@@ -2758,9 +3202,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         sourceNodeId: input.sourceNodeId,
         targetNodeId: nextNodeId,
         edgeKind: input.relationKind,
+        edgeLabel: input.relationLabel,
         explicitKind: false,
         openAssistantOnInvalid: false,
       });
+    }
+
+    if (input.insertMode) {
+      queueTreeReflowIfNeeded(input.insertMode);
     }
 
     selectItem({ nodeId: nextNodeId, edgeId: null });
@@ -2986,8 +3435,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         ...addNodeDraft,
         title: normalizedTitle,
       },
-      sourceNodeId: selectedNode?.id,
+      sourceNodeId: selectedNode ? resolveSourceNodeIdForContextAction(quickAction) : undefined,
       relationKind: selectedNode ? quickAction.edgeKind : undefined,
+      relationLabel: selectedNode ? quickAction.edgeLabel : undefined,
+      insertMode: selectedNode
+        ? resolveInsertModeFromActionId(quickAction.id)
+        : "default",
     });
 
     if (!appliedNodeId) {
@@ -3002,7 +3455,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     handleOpenAddDialog();
   }
 
-  function handleAddContextualNode() {
+  function handleAddContextualNode(action: SelectionHudQuickAction = quickAction) {
     if (!selectedNode) {
       handleOpenAddDialog();
       return;
@@ -3011,14 +3464,73 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     const nextNodeIndex = nodesRef.current.length + 1;
     insertNodeFromDraft({
       draft: {
-        kind: quickAction.nodeKind,
-        title: buildDefaultNodeTitle(quickAction.nodeKind, nextNodeIndex),
+        kind: action.nodeKind,
+        title: buildDefaultNodeTitle(action.nodeKind, nextNodeIndex),
         description: "",
         tagsText: "",
       },
-      sourceNodeId: selectedNode.id,
-      relationKind: quickAction.edgeKind,
+      sourceNodeId: resolveSourceNodeIdForContextAction(action),
+      relationKind: action.edgeKind,
+      relationLabel: action.edgeLabel,
+      insertMode: resolveInsertModeFromActionId(action.id),
     });
+  }
+
+  function handleAddErdField() {
+    if (!selectedNode || selectedNode.data.kind !== "entity") {
+      setGlobalErrorMessage("Selecione uma entidade ERD para adicionar campo.");
+      return;
+    }
+
+    const payload = clonePayload(selectedNode.data.payload);
+    const currentFields = Array.isArray(payload.fields)
+      ? payload.fields
+          .filter(
+            (field): field is Record<string, unknown> =>
+              Boolean(field && typeof field === "object" && !Array.isArray(field)),
+          )
+          .map((field) => ({ ...field }))
+      : [];
+
+    const nextFieldIndex = currentFields.length + 1;
+    const nextField = {
+      name: `campo_${nextFieldIndex}`,
+      type: "String",
+      isId: false,
+      isUnique: false,
+      isOptional: true,
+    };
+
+    const applied = applyLocalCommandAndQueue({
+      type: "updateNode",
+      nodeId: selectedNode.id,
+      patch: {
+        data: {
+          ...payload,
+          fields: [...currentFields, nextField],
+        },
+      },
+    });
+
+    if (applied) {
+      setQuerySyncMessage(
+        `Campo '${nextField.name}' adicionado em ${selectedNode.data.label}.`,
+      );
+      setGlobalErrorMessage(null);
+    }
+  }
+
+  function handleToggleTreeSubtreeVisibility() {
+    if (!selectedNode || renderer.key !== "tree") {
+      return;
+    }
+
+    const nodeId = selectedNode.id;
+    setCollapsedTreeNodeIds((current) =>
+      current.includes(nodeId)
+        ? current.filter((item) => item !== nodeId)
+        : [...current, nodeId],
+    );
   }
 
   function handleCancelConnectionAssistant() {
@@ -3110,8 +3622,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     const reason = semanticOverrideReason.trim();
-    if (pending.requireReason && reason.length < 3) {
-      setGlobalErrorMessage("Justificativa obrigatoria para override tecnico.");
+    if (pending.requireReason && !hasMinimumSemanticOverrideReason(reason)) {
+      setGlobalErrorMessage(
+        `Justificativa obrigatoria com no minimo ${MIN_SEMANTIC_OVERRIDE_REASON_LENGTH} caracteres.`,
+      );
       return;
     }
 
@@ -3259,17 +3773,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return true;
   }
 
-  function applyClipboardFragment(fragment: MapiaClipboardFragment) {
+  function buildClipboardCommandsDraft(
+    fragment: MapiaClipboardFragment,
+    options?: {
+      edgeFilter?: (edgeCommand: ClipboardAddEdgeCommand) => boolean;
+    },
+  ): ClipboardCommandsDraft {
     const idMap = new Map<string, string>();
-    let appliedNodes = 0;
-    let appliedEdges = 0;
     let skippedEdges = 0;
-    const enforceSemanticOnPaste = semanticPolicy?.strictEnabled !== false;
+    const nodeCommands: ClipboardAddNodeCommand[] = [];
+    const edgeCommands: ClipboardAddEdgeCommand[] = [];
 
     for (const node of fragment.nodes) {
       const nextId = crypto.randomUUID();
       idMap.set(node.id, nextId);
-      const applied = applyLocalCommandAndQueue({
+      nodeCommands.push({
         type: "addNode",
         node: {
           id: nextId,
@@ -3282,9 +3800,6 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           data: clonePayload(node.data),
         },
       });
-      if (applied) {
-        appliedNodes += 1;
-      }
     }
 
     for (const edge of fragment.edges) {
@@ -3295,28 +3810,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         continue;
       }
 
-      const sourceNode = nodesRef.current.find((node) => node.id === sourceNodeId);
-      const targetNode = nodesRef.current.find((node) => node.id === targetNodeId);
-      if (enforceSemanticOnPaste) {
-        const semanticCheck = validateEdgeCreation({
-          diagramType: semanticDiagramType,
-          sourceNode: sourceNode
-            ? { id: sourceNode.id, kind: sourceNode.data.kind, label: sourceNode.data.label }
-            : undefined,
-          targetNode: targetNode
-            ? { id: targetNode.id, kind: targetNode.data.kind, label: targetNode.data.label }
-            : undefined,
-          edgeKind: edge.kind,
-          mode: inspectorMode,
-        }, semanticEngineOptions);
-
-        if (!semanticCheck.ok) {
-          skippedEdges += 1;
-          continue;
-        }
-      }
-
-      const applied = applyLocalCommandAndQueue({
+      const edgeCommand: ClipboardAddEdgeCommand = {
         type: "addEdge",
         edge: {
           id: crypto.randomUUID(),
@@ -3326,14 +3820,42 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           label: edge.label,
           data: clonePayload(edge.data),
         },
-      });
+      };
+      if (options?.edgeFilter && !options.edgeFilter(edgeCommand)) {
+        skippedEdges += 1;
+        continue;
+      }
 
-      if (applied) {
+      edgeCommands.push(edgeCommand);
+    }
+
+    const firstNodeId = nodeCommands[0]?.node.id;
+
+    return {
+      nodeCommands,
+      edgeCommands,
+      skippedEdges,
+      firstInsertedNodeId: firstNodeId,
+    };
+  }
+
+  function applyClipboardCommandsLocally(draft: ClipboardCommandsDraft) {
+    let appliedNodes = 0;
+    let appliedEdges = 0;
+
+    for (const command of draft.nodeCommands) {
+      if (applyLocalCommandAndQueue(command)) {
+        appliedNodes += 1;
+      }
+    }
+
+    for (const command of draft.edgeCommands) {
+      if (applyLocalCommandAndQueue(command)) {
         appliedEdges += 1;
       }
     }
 
-    const firstNodeId = idMap.values().next().value as string | undefined;
+    const firstNodeId = draft.firstInsertedNodeId;
     if (firstNodeId) {
       selectItem({ nodeId: firstNodeId, edgeId: null });
     }
@@ -3341,8 +3863,149 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return {
       appliedNodes,
       appliedEdges,
-      skippedEdges,
+      skippedEdges: draft.skippedEdges,
     };
+  }
+
+  async function validateClipboardDraftOnServer(draft: ClipboardCommandsDraft) {
+    const commands = [...draft.nodeCommands, ...draft.edgeCommands];
+    const projectedSnapshot = applyEditorCommandsLocally(
+      getCurrentSnapshot(),
+      project.id,
+      commands,
+    );
+
+    const validation = await validateSemanticDraftForEditor({
+      projectId: project.id,
+      snapshot: projectedSnapshot,
+      mode: inspectorMode,
+    });
+    setSemanticPolicy(validation.policy);
+
+    const shouldBlock =
+      validation.policy.enforceOnServer &&
+      validation.policy.strictEnabled &&
+      validation.bySeverity.error > 0;
+
+    return {
+      validation,
+      shouldBlock,
+    };
+  }
+
+  function filterClipboardEdgesBySemanticRules(
+    draft: ClipboardCommandsDraft,
+  ): ClipboardCommandsDraft {
+    const nodeMap = new Map(
+      draft.nodeCommands.map((command) => [
+        command.node.id,
+        {
+          id: command.node.id,
+          kind: command.node.kind,
+          label: command.node.label,
+        },
+      ] as const),
+    );
+
+    const filteredEdgeCommands = draft.edgeCommands.filter((command) => {
+      const sourceNode = nodeMap.get(command.edge.sourceNodeId);
+      const targetNode = nodeMap.get(command.edge.targetNodeId);
+      const semanticCheck = validateEdgeCreation(
+        {
+          diagramType: semanticDiagramType,
+          sourceNode,
+          targetNode,
+          edgeKind: command.edge.kind,
+          mode: inspectorMode,
+        },
+        semanticEngineOptions,
+      );
+
+      return semanticCheck.ok;
+    });
+
+    return {
+      ...draft,
+      edgeCommands: filteredEdgeCommands,
+      skippedEdges:
+        draft.skippedEdges + (draft.edgeCommands.length - filteredEdgeCommands.length),
+    };
+  }
+
+  async function applyClipboardFragment(fragment: MapiaClipboardFragment) {
+    const fullDraft = buildClipboardCommandsDraft(fragment);
+    const hasCommands = fullDraft.nodeCommands.length + fullDraft.edgeCommands.length > 0;
+    if (!hasCommands) {
+      return {
+        appliedNodes: 0,
+        appliedEdges: 0,
+        skippedEdges: fullDraft.skippedEdges,
+      };
+    }
+
+    try {
+      const initialValidation = await validateClipboardDraftOnServer(fullDraft);
+      let draftToApply = fullDraft;
+
+      if (initialValidation.shouldBlock) {
+        const allowPartialPaste = isClipboardPartialEdgePasteEnabled(
+          initialValidation.validation.policy ?? semanticPolicy,
+        );
+
+        if (!allowPartialPaste) {
+          const firstError =
+            initialValidation.validation.issues.find(
+              (issue) => issue.severity === "error",
+            ) ?? initialValidation.validation.issues[0];
+          setGlobalErrorMessage(
+            firstError?.message ??
+              "Colagem bloqueada pela politica semantica do projeto.",
+          );
+          return {
+            appliedNodes: 0,
+            appliedEdges: 0,
+            skippedEdges: fullDraft.skippedEdges,
+          };
+        }
+
+        const filteredDraft = filterClipboardEdgesBySemanticRules(fullDraft);
+        const filteredValidation = await validateClipboardDraftOnServer(filteredDraft);
+
+        if (filteredValidation.shouldBlock) {
+          const firstError =
+            filteredValidation.validation.issues.find(
+              (issue) => issue.severity === "error",
+            ) ?? filteredValidation.validation.issues[0];
+          setGlobalErrorMessage(
+            firstError?.message ??
+              "Colagem bloqueada pela politica semantica do projeto.",
+          );
+          return {
+            appliedNodes: 0,
+            appliedEdges: 0,
+            skippedEdges: filteredDraft.skippedEdges,
+          };
+        }
+
+        draftToApply = filteredDraft;
+      }
+
+      const applied = applyClipboardCommandsLocally(draftToApply);
+      setGlobalErrorMessage(null);
+      return applied;
+    } catch (error) {
+      setGlobalErrorMessage(
+        formatErrorMessage(
+          error,
+          "Nao foi possivel validar a colagem com o backend.",
+        ),
+      );
+      return {
+        appliedNodes: 0,
+        appliedEdges: 0,
+        skippedEdges: fullDraft.skippedEdges,
+      };
+    }
   }
 
   async function handleCutSelectionToClipboard() {
@@ -3362,7 +4025,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return false;
     }
 
-    const result = applyClipboardFragment(fragment);
+    const result = await applyClipboardFragment(fragment);
     if (result.appliedNodes === 0 && result.appliedEdges === 0) {
       setGlobalErrorMessage("Nao foi possivel duplicar a selecao atual.");
       return false;
@@ -3381,7 +4044,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return false;
     }
 
-    const result = applyClipboardFragment(fragment);
+    const result = await applyClipboardFragment(fragment);
+    if (result.appliedNodes === 0 && result.appliedEdges === 0) {
+      return false;
+    }
     setQuerySyncMessage(
       `Colagem concluida: ${result.appliedNodes} no(s), ${result.appliedEdges} relacao(oes), ${result.skippedEdges} relacao(oes) ignorada(s).`,
     );
@@ -4427,10 +5093,47 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   <button
                     className="btn"
                     type="button"
-                    onClick={handleAddContextualNode}
+                    onClick={() => handleAddContextualNode()}
                     data-testid="selection-hud-contextual-add-button"
                   >
                     {quickAction.label}
+                  </button>
+                ) : null}
+                {selectedNode
+                  ? secondarySelectionActions.map((action) => (
+                      <button
+                        key={action.id}
+                        className="btn"
+                        type="button"
+                        onClick={() => handleAddContextualNode(action)}
+                        data-testid={`selection-hud-contextual-secondary-${action.id}`}
+                      >
+                        {action.label}
+                      </button>
+                    ))
+                  : null}
+                {selectedNode &&
+                hasErdAddFieldAction &&
+                selectedNode.data.kind === "entity" ? (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleAddErdField}
+                    data-testid="selection-hud-erd-add-field-button"
+                  >
+                    Adicionar campo
+                  </button>
+                ) : null}
+                {selectedNode && renderer.key === "tree" ? (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleToggleTreeSubtreeVisibility}
+                    data-testid="selection-hud-toggle-subtree-button"
+                  >
+                    {isSelectedTreeSubtreeCollapsed
+                      ? "Expandir subarvore"
+                      : "Colapsar subarvore"}
                   </button>
                 ) : null}
                 <button className="btn" type="button" onClick={handleRemoveSelected}>
@@ -4685,7 +5388,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               <div className="field">
                 <label htmlFor="semantic-override-reason-input">
                   Justificativa
-                  {pendingSemanticOverride.requireReason ? " obrigatoria" : " (opcional)"}
+                  {pendingSemanticOverride.requireReason
+                    ? ` obrigatoria (minimo ${MIN_SEMANTIC_OVERRIDE_REASON_LENGTH} caracteres)`
+                    : " (opcional)"}
                 </label>
                 <textarea
                   id="semantic-override-reason-input"

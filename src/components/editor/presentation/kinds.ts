@@ -2,6 +2,7 @@ import type { EdgeKind, NodeKind } from "@/src/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
 
 export type PresentationMode = "operational" | "technical";
+export type ContextualDiagramType = DiagramType | "erd" | undefined;
 
 export type KindIconDefinition = {
   viewBox: string;
@@ -29,6 +30,24 @@ export type DiagramContextualAddAction = {
   label: string;
   nodeKind: NodeKind;
   edgeKind: EdgeKind;
+  edgeLabel?: string;
+};
+
+export type DiagramContextualAction = {
+  id:
+    | "tree-add-child"
+    | "tree-add-sibling"
+    | "flow-add-next-step"
+    | "flow-add-branch"
+    | "mindmap-add-branch"
+    | "mindmap-add-reference"
+    | "erd-add-relation"
+    | "erd-add-field";
+  type: "add-connected-node" | "add-field";
+  label: string;
+  nodeKind?: NodeKind;
+  edgeKind?: EdgeKind;
+  edgeLabel?: string;
 };
 
 const NODE_KIND_PRESENTATION: Record<NodeKind, NodeKindPresentation> = {
@@ -183,7 +202,7 @@ export function getNodeKindOptions(mode: PresentationMode) {
 }
 
 export function getDefaultNodeKindForDiagram(
-  diagramType: DiagramType | undefined,
+  diagramType: ContextualDiagramType,
 ): NodeKind {
   if (diagramType === "tree") {
     return "page";
@@ -197,33 +216,119 @@ export function getDefaultNodeKindForDiagram(
     return "note";
   }
 
+  if (diagramType === "erd") {
+    return "entity";
+  }
+
   return "note";
 }
 
-export function getContextualAddActionForDiagram(
-  diagramType: DiagramType | undefined,
-): DiagramContextualAddAction {
+export function getContextualActionsForDiagram(
+  diagramType: ContextualDiagramType,
+): DiagramContextualAction[] {
   if (diagramType === "tree") {
-    return {
-      label: "Adicionar filho",
-      nodeKind: "page",
-      edgeKind: "contains",
-    };
+    return [
+      {
+        id: "tree-add-child",
+        type: "add-connected-node",
+        label: "Adicionar filho",
+        nodeKind: "page",
+        edgeKind: "contains",
+      },
+      {
+        id: "tree-add-sibling",
+        type: "add-connected-node",
+        label: "Adicionar irmao",
+        nodeKind: "page",
+        edgeKind: "contains",
+      },
+    ];
   }
 
   if (diagramType === "flow") {
-    return {
-      label: "Adicionar proxima etapa",
-      nodeKind: "flow-step",
-      edgeKind: "flows-to",
-    };
+    return [
+      {
+        id: "flow-add-next-step",
+        type: "add-connected-node",
+        label: "Adicionar proxima etapa",
+        nodeKind: "flow-step",
+        edgeKind: "flows-to",
+      },
+      {
+        id: "flow-add-branch",
+        type: "add-connected-node",
+        label: "Adicionar ramificacao",
+        nodeKind: "flow-step",
+        edgeKind: "depends-on",
+        edgeLabel: "Decisao",
+      },
+    ];
   }
 
   if (diagramType === "mindmap") {
-    return {
-      label: "Adicionar ramificacao",
+    return [
+      {
+        id: "mindmap-add-branch",
+        type: "add-connected-node",
+        label: "Adicionar ramificacao",
+        nodeKind: "note",
+        edgeKind: "relates-to",
+      },
+      {
+        id: "mindmap-add-reference",
+        type: "add-connected-node",
+        label: "Adicionar referencia",
+        nodeKind: "note",
+        edgeKind: "references",
+      },
+    ];
+  }
+
+  if (diagramType === "erd") {
+    return [
+      {
+        id: "erd-add-relation",
+        type: "add-connected-node",
+        label: "Adicionar relacao",
+        nodeKind: "entity",
+        edgeKind: "references",
+      },
+      {
+        id: "erd-add-field",
+        type: "add-field",
+        label: "Adicionar campo",
+      },
+    ];
+  }
+
+  return [
+    {
+      id: "mindmap-add-branch",
+      type: "add-connected-node",
+      label: "Adicionar relacionado",
       nodeKind: "note",
       edgeKind: "relates-to",
+    },
+  ];
+}
+
+export function getContextualAddActionForDiagram(
+  diagramType: ContextualDiagramType,
+): DiagramContextualAddAction {
+  const firstAddAction = getContextualActionsForDiagram(diagramType).find(
+    (action): action is DiagramContextualAction & {
+      type: "add-connected-node";
+      nodeKind: NodeKind;
+      edgeKind: EdgeKind;
+    } => action.type === "add-connected-node" && Boolean(action.nodeKind && action.edgeKind),
+  );
+
+  if (firstAddAction) {
+    return {
+      label: firstAddAction.label,
+      nodeKind: firstAddAction.nodeKind,
+      edgeKind: firstAddAction.edgeKind,
+      ...(firstAddAction.edgeLabel ? { edgeLabel: firstAddAction.edgeLabel } : {}),
     };
   }
 
