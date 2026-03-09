@@ -1248,6 +1248,239 @@ model Post {
     await expect(page.getByTestId("semantic-audit-empty")).toBeVisible();
   });
 
+  test("Fase 5.8 Flow: adicionar proxima etapa posiciona a direita e conecta flows-to", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Flow Diferenca", {
+      diagramType: "flow",
+    });
+
+    await setInspectorMode(page, "technical");
+    const snapshotBefore = await loadEditorSnapshot(page, project.id);
+    const sourceNode =
+      snapshotBefore.nodes.find((node) => node.kind === "flow-step") ??
+      snapshotBefore.nodes[0];
+    if (!sourceNode) {
+      throw new Error("Flow snapshot inicial sem no para validar adicao contextual.");
+    }
+
+    const sourceLocator = page.getByTestId(`editor-node-${sourceNode.id}`);
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const flowEdgeLocator = page.locator(
+      '[data-testid^="editor-edge-"].editor-edge-kind-flows-to',
+    );
+    const beforeNodeCount = await nodeLocator.count();
+    const beforeFlowEdgeCount = await flowEdgeLocator.count();
+    const sourceBox = await sourceLocator.boundingBox();
+    if (!sourceBox) {
+      throw new Error("Flow source node bounding box ausente.");
+    }
+
+    await sourceLocator.click();
+    await expect(page.getByTestId("selection-hud-contextual-add-button")).toContainText(
+      "Adicionar proxima etapa",
+    );
+
+    await page.getByTestId("selection-hud-contextual-add-button").click();
+    await expect
+      .poll(async () => nodeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBe(beforeNodeCount + 1);
+
+    const insertedNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "inserted flow node id",
+    );
+    const insertedBox = await page.getByTestId(`editor-node-${insertedNodeId}`).boundingBox();
+    if (!insertedBox) {
+      throw new Error("Flow inserted node bounding box ausente.");
+    }
+
+    expect(insertedBox.x).toBeGreaterThan(sourceBox.x);
+    await expect
+      .poll(async () => flowEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBeGreaterThan(beforeFlowEdgeCount);
+  });
+
+  test("Fase 5.8 Tree: adicionar filho posiciona abaixo e conecta contains", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Tree Diferenca", {
+      diagramType: "tree",
+    });
+
+    await setInspectorMode(page, "technical");
+    const snapshotBefore = await loadEditorSnapshot(page, project.id);
+    const parentNode = snapshotBefore.nodes[0];
+    if (!parentNode) {
+      throw new Error("Tree snapshot inicial sem no para validar adicao de filho.");
+    }
+
+    const parentLocator = page.getByTestId(`editor-node-${parentNode.id}`);
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const containsEdgeLocator = page.locator(
+      '[data-testid^="editor-edge-"].editor-edge-kind-contains',
+    );
+    const beforeNodeCount = await nodeLocator.count();
+    const beforeContainsEdgeCount = await containsEdgeLocator.count();
+    await parentLocator.click();
+    await expect(page.getByTestId("selection-hud-contextual-add-button")).toContainText(
+      "Adicionar filho",
+    );
+
+    await page.getByTestId("selection-hud-contextual-add-button").click();
+    await expect
+      .poll(async () => nodeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBe(beforeNodeCount + 1);
+
+    const childNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "inserted tree child node id",
+    );
+    const childBox = await page.getByTestId(`editor-node-${childNodeId}`).boundingBox();
+    const parentAfterBox = await parentLocator.boundingBox();
+    if (!childBox || !parentAfterBox) {
+      throw new Error("Tree parent/child node bounding box ausente.");
+    }
+
+    expect(childBox.y).toBeGreaterThan(parentAfterBox.y);
+    await expect
+      .poll(async () => containsEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBeGreaterThan(beforeContainsEdgeCount);
+  });
+
+  test("Fase 5.8 Mindmap: adicionar ramificacao posiciona radial e preserva root", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Mindmap Diferenca", {
+      diagramType: "mindmap",
+    });
+
+    await setInspectorMode(page, "technical");
+    const snapshotBefore = await loadEditorSnapshot(page, project.id);
+    const rootNode =
+      [...snapshotBefore.nodes].sort(
+        (nodeA, nodeB) =>
+          Math.hypot(nodeA.position.x, nodeA.position.y) -
+          Math.hypot(nodeB.position.x, nodeB.position.y),
+      )[0] ?? null;
+    if (!rootNode) {
+      throw new Error("Mindmap snapshot inicial sem root para validar ramificacao.");
+    }
+
+    const rootLocator = page.getByTestId(`editor-node-${rootNode.id}`);
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const relatesEdgeLocator = page.locator(
+      '[data-testid^="editor-edge-"].editor-edge-kind-relates-to',
+    );
+    const beforeNodeCount = await nodeLocator.count();
+    const beforeRelatesCount = await relatesEdgeLocator.count();
+    const rootBox = await rootLocator.boundingBox();
+    if (!rootBox) {
+      throw new Error("Mindmap root node bounding box ausente.");
+    }
+
+    await rootLocator.click();
+    await expect(page.getByTestId("selection-hud-contextual-add-button")).toContainText(
+      "Adicionar ramificacao",
+    );
+
+    await page.getByTestId("selection-hud-contextual-add-button").click();
+    await expect
+      .poll(async () => nodeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBe(beforeNodeCount + 1);
+
+    const branchNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "inserted mindmap branch node id",
+    );
+    const branchBox = await page.getByTestId(`editor-node-${branchNodeId}`).boundingBox();
+    if (!branchBox) {
+      throw new Error("Mindmap branch node bounding box ausente.");
+    }
+
+    const rootCenterX = rootBox.x + rootBox.width / 2;
+    const rootCenterY = rootBox.y + rootBox.height / 2;
+    const branchCenterX = branchBox.x + branchBox.width / 2;
+    const branchCenterY = branchBox.y + branchBox.height / 2;
+    const distanceFromRoot = Math.hypot(
+      branchCenterX - rootCenterX,
+      branchCenterY - rootCenterY,
+    );
+    expect(distanceFromRoot).toBeGreaterThan(100);
+    await expect(rootLocator).toBeVisible();
+    await expect
+      .poll(async () => relatesEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBeGreaterThan(beforeRelatesCount);
+  });
+
+  test("Fase 5.8 ERD: import Prisma mostra fields em tabela e references com cardinalidade", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E ERD Fields");
+
+    const policyResponse = await page.request.put(
+      `/api/projects/${project.id}/semantic/policy`,
+      {
+        data: {
+          diagramType: "erd",
+          strictEnabled: true,
+          enforceOnServer: true,
+        },
+      },
+    );
+    await assertApiResponseOk(policyResponse, "set semantic policy diagramType=erd for ERD fields scenario");
+
+    const schema = `
+model User {
+  id    String @id @default(cuid())
+  email String @unique
+  posts Post[]
+}
+
+model Post {
+  id       String @id @default(cuid())
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+}
+`;
+
+    const importResponse = await page.request.post(
+      `/api/projects/${project.id}/imports/prisma-schema`,
+      {
+        data: {
+          schema,
+        },
+      },
+    );
+    await assertApiResponseOk(importResponse, "import prisma schema for ERD fields scenario");
+
+    await page.reload();
+    await waitForEditorReady(page);
+    await assertCanvasRenderer(page, "erd");
+
+    const snapshot = await loadEditorSnapshot(page, project.id);
+    const firstEntity = snapshot.nodes.find((node) => node.kind === "entity");
+    if (!firstEntity) {
+      throw new Error("ERD snapshot apos import nao retornou entidade.");
+    }
+
+    await page.getByTestId(`editor-node-${firstEntity.id}`).click();
+    await expect(page.getByTestId("erd-node-fields-table").first()).toBeVisible();
+    await expect(page.getByTestId("erd-node-fields-table").first()).toContainText(
+      "Campo",
+    );
+    await expect(page.getByTestId("erd-node-fields-table").first()).toContainText("id");
+    await expect(
+      page.locator('[data-testid^="editor-edge-"].editor-edge-kind-references').first(),
+    ).toBeVisible();
+    await expect
+      .poll(async () => {
+        const allLabels = await page.locator(".react-flow__edge-text").allTextContents();
+        return allLabels.join(" ");
+      })
+      .toMatch(/1:1|1:N|N:N/);
+  });
+
   test("fluxo principal Dashboard -> Wizard -> Editor com persistencia", async ({
     authenticatedPage: page,
   }) => {
