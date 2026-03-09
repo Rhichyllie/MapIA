@@ -28,6 +28,7 @@ import {
 import {
   applyEditorCommandLocally,
   applyEditorCommandRemotely,
+  EditorRemoteError,
 } from "./editor-command-service";
 import {
   createDebouncedTask,
@@ -85,14 +86,22 @@ import {
   type RFNode,
 } from "./editor-graph-mappers";
 import {
+  createEdgeForEditor,
   createSnapshotVersionForEditor,
+  EditorQueryError,
   importPrismaSchemaForEditor,
   listSnapshotVersionsForEditor,
+  loadSemanticPolicyForEditor,
   loadSnapshotVersionDetailForEditor,
   loadSnapshotVersionDiffForEditor,
   loadWorkingSnapshotForEditor,
+  runSemanticAuditForEditor,
   restoreSnapshotVersionForEditor,
   saveWorkingSnapshotForEditor,
+  updateEdgeForEditor,
+  updateNodeForEditor,
+  type SemanticAuditPayload,
+  type SemanticPolicyPayload,
   type EditorPrismaSchemaImportSummary,
   type EditorSnapshotVersionDiff,
   type EditorSnapshotVersionSummary,
@@ -107,9 +116,8 @@ import { RepairDialog } from "./semantics/repair-dialog";
 import {
   runGraphAudit,
   validateEdgeCreation,
-  validateEdgeKindChange,
-  validateNodeKindChange,
   type RepairAction,
+  type SemanticEngineOptions,
   type RepairPlan,
   type SemanticIssue,
   type SemanticViolation,
@@ -122,6 +130,7 @@ const EDITOR_PANELS_STORAGE_KEY_PREFIX = "mapia-editor-panels";
 const EDITOR_FOCUS_STORAGE_KEY_PREFIX = "mapia-editor-focus";
 const INSPECTOR_MODE_STORAGE_KEY = "mapia-inspector-mode";
 const INSPECTOR_SECTIONS_STORAGE_KEY_PREFIX = "mapia-inspector-sections";
+const MAPIA_CLIPBOARD_MIME = "application/x-mapia-fragment+json";
 
 type EditorProjectViewModel = {
   id: string;
@@ -187,6 +196,33 @@ type PendingNodeRepairState = {
   command: Extract<EditorCommand, { type: "updateNode" }>;
   repairPlan: RepairPlan;
   violations: SemanticViolation[];
+};
+
+type PendingSemanticOverrideState = {
+  title: string;
+  message: string;
+  requireReason: boolean;
+  onConfirm: (reason: string) => Promise<void>;
+};
+
+type MapiaClipboardFragment = {
+  version: 1;
+  sourceProjectId: string;
+  nodes: Array<{
+    id: string;
+    kind: NodeKind;
+    label: string;
+    position: { x: number; y: number };
+    data: Record<string, unknown>;
+  }>;
+  edges: Array<{
+    id: string;
+    sourceNodeId: string;
+    targetNodeId: string;
+    kind: EdgeKind;
+    label?: string;
+    data: Record<string, unknown>;
+  }>;
 };
 
 type EditorPanelState = {
@@ -322,6 +358,26 @@ function resolveSemanticDiagramType(
   }
 
   return undefined;
+}
+
+function toSemanticEngineOptionsFromPolicy(
+  policy: SemanticPolicyPayload | null,
+): SemanticEngineOptions | undefined {
+  if (!policy) {
+    return undefined;
+  }
+
+  const customRulesJson =
+    policy.customRulesJson &&
+    typeof policy.customRulesJson === "object" &&
+    !Array.isArray(policy.customRulesJson)
+      ? policy.customRulesJson
+      : undefined;
+
+  return {
+    strictEnabled: policy.strictEnabled,
+    ...(customRulesJson ? { customRulesJson } : {}),
+  };
 }
 
 function buildDefaultNodeTitle(kind: NodeKind, nextIndex: number) {
@@ -711,7 +767,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     useState<PendingConnectionAssistantState | null>(null);
   const [pendingNodeRepair, setPendingNodeRepair] =
     useState<PendingNodeRepairState | null>(null);
+  const [pendingSemanticOverride, setPendingSemanticOverride] =
+    useState<PendingSemanticOverrideState | null>(null);
+  const [semanticOverrideReason, setSemanticOverrideReason] = useState("");
   const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
+  const [serverSemanticAudit, setServerSemanticAudit] =
+    useState<SemanticAuditPayload | null>(null);
+  const [semanticPolicy, setSemanticPolicy] = useState<SemanticPolicyPayload | null>(null);
+  const [currentRevision, setCurrentRevision] = useState<number>(1);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -738,6 +801,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     null,
   );
   const quickFindReturnFocusRef = useRef<HTMLElement | null>(null);
+  const currentRevisionRef = useRef(currentRevision);
 
   usePendingChangesGuard(hasPendingChangesGuard);
 
@@ -752,6 +816,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   useEffect(() => {
     viewportRef.current = viewport;
   }, [viewport]);
+
+  useEffect(() => {
+    currentRevisionRef.current = currentRevision;
+  }, [currentRevision]);
 
   useEffect(() => {
     layoutMetadataRef.current = layoutMetadata;
@@ -905,6 +973,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     layoutMetadata.diagramType,
     renderer.key,
   );
+  const semanticEngineOptions = useMemo(
+    () => toSemanticEngineOptionsFromPolicy(semanticPolicy),
+    [semanticPolicy],
+  );
   const semanticRootNodeId =
     renderer.key === "mindmap"
       ? getMindmapRootNodeId(nodes, layoutMetadata.rootNodeName)
@@ -929,12 +1001,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         },
         semanticDiagramType,
         inspectorMode,
+        semanticEngineOptions,
       ),
-    [edges, inspectorMode, nodes, semanticDiagramType, semanticRootNodeId],
+    [
+      edges,
+      inspectorMode,
+      nodes,
+      semanticDiagramType,
+      semanticEngineOptions,
+      semanticRootNodeId,
+    ],
   );
+  const displayedSemanticAudit = serverSemanticAudit ?? semanticAudit;
   const semanticIssuesByNodeId = useMemo(() => {
     const map = new Map<string, SemanticIssue[]>();
-    for (const issue of semanticAudit.issues) {
+    for (const issue of displayedSemanticAudit.issues) {
       if (issue.targetType !== "node" || !issue.targetId) {
         continue;
       }
@@ -944,10 +1025,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       map.set(issue.targetId, current);
     }
     return map;
-  }, [semanticAudit.issues]);
+  }, [displayedSemanticAudit.issues]);
   const semanticIssuesByEdgeId = useMemo(() => {
     const map = new Map<string, SemanticIssue[]>();
-    for (const issue of semanticAudit.issues) {
+    for (const issue of displayedSemanticAudit.issues) {
       if (issue.targetType !== "edge" || !issue.targetId) {
         continue;
       }
@@ -957,7 +1038,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       map.set(issue.targetId, current);
     }
     return map;
-  }, [semanticAudit.issues]);
+  }, [displayedSemanticAudit.issues]);
   const selectedSemanticIssues = useMemo(() => {
     if (selectedNode) {
       return semanticIssuesByNodeId.get(selectedNode.id) ?? [];
@@ -1320,7 +1401,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     try {
       for (const entry of queue) {
-        await applyEditorCommandRemotely(project.id, entry.command);
+        const remoteResult = await applyEditorCommandRemotely(
+          project.id,
+          entry.command,
+          {
+            expectedRevision: currentRevisionRef.current,
+            semanticMode: inspectorMode,
+          },
+        );
+        setCurrentRevision(remoteResult.newRevision);
 
         if (requestTrackerRef.current.isStaleResponse(requestId)) {
           return;
@@ -1343,6 +1432,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     } catch (error) {
       if (requestTrackerRef.current.isStaleResponse(requestId)) {
         return;
+      }
+
+      if (error instanceof EditorRemoteError) {
+        if (error.code === "CONFLICT") {
+          const current = error.payload?.currentRevision;
+          if (typeof current === "number") {
+            setCurrentRevision(current);
+          }
+        }
       }
 
       const message = formatErrorMessage(
@@ -1382,11 +1480,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setGlobalErrorMessage(null);
 
     try {
-      await saveWorkingSnapshotForEditor({
+      const saveResult = await saveWorkingSnapshotForEditor({
         projectId: project.id,
         snapshot: snapshotToSave,
         label: DEFAULT_SNAPSHOT_LABEL,
+        expectedRevision: currentRevisionRef.current,
+        semanticMode: inspectorMode,
       });
+      setCurrentRevision(saveResult.newRevision);
 
       if (requestTrackerRef.current.isStaleResponse(requestId)) {
         return false;
@@ -1618,6 +1719,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       });
 
       syncFromSnapshot(result.workingSnapshot.snapshot);
+      setCurrentRevision(result.newRevision);
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setPendingCommandsState([]);
@@ -1681,9 +1783,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       const result = await importPrismaSchemaForEditor({
         projectId: project.id,
         schema: schemaText,
+        expectedRevision: currentRevisionRef.current,
+        semanticMode: inspectorMode,
       });
 
       syncFromSnapshot(result.workingSnapshot.snapshot);
+      setCurrentRevision(result.newRevision);
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
       setPendingCommandsState([]);
@@ -1720,8 +1825,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       setQuerySyncMessage(null);
 
       try {
-        const result = await loadWorkingSnapshotForEditor(project.id);
+        const [result, policy] = await Promise.all([
+          loadWorkingSnapshotForEditor(project.id),
+          loadSemanticPolicyForEditor(project.id),
+        ]);
         if (!active) return;
+
+        setSemanticPolicy(policy);
 
         if (result?.snapshot) {
           if (
@@ -1745,6 +1855,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           setLayoutMetadata(next.layoutMetadata);
           setPendingCommandsState([]);
           localMutationVersionRef.current = 0;
+          setCurrentRevision(result.revision);
           setSaveState(createInitialEditorAutosaveState());
           setQuerySyncMessage("Snapshot sincronizado com o backend.");
           setGlobalErrorMessage(null);
@@ -2032,15 +2143,22 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       __mapiaE2eConnectNodes?: (
         sourceNodeId: string,
         targetNodeId: string,
-      ) => boolean;
+      ) => Promise<boolean>;
     };
 
-    globalWindow.__mapiaE2eConnectNodes = (sourceNodeId: string, targetNodeId: string) => {
-      return tryCreateEdgeWithSemanticRules({
+    globalWindow.__mapiaE2eConnectNodes = async (
+      sourceNodeId: string,
+      targetNodeId: string,
+    ) => {
+      const ready = await ensureQueueFlushedBeforeDirectWrite();
+      if (!ready) {
+        return false;
+      }
+
+      return createEdgeOnServer({
         sourceNodeId,
         targetNodeId,
         edgeKind: quickAction.edgeKind,
-        explicitKind: false,
         openAssistantOnInvalid: true,
       });
     };
@@ -2048,7 +2166,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return () => {
       delete globalWindow.__mapiaE2eConnectNodes;
     };
-  // E2E hook only depends on the quick-action default kind; semantic checks read current refs/state.
+  // E2E hook only depends on the quick-action default kind; runtime refs handle fresh graph state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickAction.edgeKind]);
 
@@ -2224,7 +2342,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     handleFitView();
   }
 
-  function applySemanticRepairAction(action: RepairAction) {
+  function applySemanticRepairAction(
+    action: RepairAction,
+    markAsRepairApplied: boolean,
+  ) {
+    const commandMeta = markAsRepairApplied
+      ? { meta: { repairApplied: true } }
+      : {};
+
     if (action.type === "updateEdgeKind") {
       return applyLocalCommandAndQueue({
         type: "updateEdge",
@@ -2233,6 +2358,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           kind: action.nextKind,
           label: getEdgeKindLabel(action.nextKind, "operational"),
         },
+        ...commandMeta,
       });
     }
 
@@ -2240,6 +2366,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return applyLocalCommandAndQueue({
         type: "removeEdge",
         edgeId: action.edgeId,
+        ...commandMeta,
       });
     }
 
@@ -2249,7 +2376,140 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       patch: {
         kind: action.nextKind,
       },
+      ...commandMeta,
     });
+  }
+
+  async function ensureQueueFlushedBeforeDirectWrite() {
+    if (pendingCommandsRef.current.length === 0 && !saveState.isDirty) {
+      return true;
+    }
+
+    await flushPendingCommands("manual");
+    return pendingCommandsRef.current.length === 0 && !isSaveInFlightRef.current;
+  }
+
+  function openTechnicalOverrideDialog(input: {
+    title: string;
+    message: string;
+    requireReason: boolean;
+    onConfirm: (reason: string) => Promise<void>;
+  }) {
+    setSemanticOverrideReason("");
+    setPendingSemanticOverride({
+      title: input.title,
+      message: input.message,
+      requireReason: input.requireReason,
+      onConfirm: input.onConfirm,
+    });
+  }
+
+  async function createEdgeOnServer(input: {
+    sourceNodeId: string;
+    targetNodeId: string;
+    edgeKind: EdgeKind;
+    openAssistantOnInvalid: boolean;
+    allowSemanticOverride?: boolean;
+    overrideReason?: string;
+  }) {
+    const sourceNode = nodesRef.current.find((node) => node.id === input.sourceNodeId);
+    const targetNode = nodesRef.current.find((node) => node.id === input.targetNodeId);
+
+    if (!sourceNode || !targetNode) {
+      setGlobalErrorMessage("Nao foi possivel conectar: no de origem/destino nao encontrado.");
+      return false;
+    }
+
+    try {
+      const result = await createEdgeForEditor({
+        projectId: project.id,
+        edge: {
+          id: crypto.randomUUID(),
+          sourceNodeId: input.sourceNodeId,
+          targetNodeId: input.targetNodeId,
+          kind: input.edgeKind,
+          label: getEdgeKindLabel(input.edgeKind, "operational"),
+          data: {},
+        },
+        expectedRevision: currentRevisionRef.current,
+        semanticMode: inspectorMode,
+        allowSemanticOverride: input.allowSemanticOverride,
+        overrideReason: input.overrideReason,
+      });
+
+      syncFromSnapshot(result.workingSnapshot.snapshot);
+      setCurrentRevision(result.newRevision);
+      setPendingConnectionAssistant(null);
+      setGlobalErrorMessage(null);
+      return true;
+    } catch (error) {
+      if (error instanceof EditorQueryError) {
+        if (error.code === "SEMANTIC_VIOLATION" && input.openAssistantOnInvalid) {
+          const allowedKinds = Array.isArray(error.payload?.allowedEdgeKinds)
+            ? error.payload.allowedEdgeKinds.filter((kind): kind is EdgeKind =>
+                EdgeKindSchema.safeParse(kind).success,
+              )
+            : [];
+          const recommendedEdgeKindResult = EdgeKindSchema.safeParse(
+            error.payload?.recommendedEdgeKind,
+          );
+
+          setPendingConnectionAssistant({
+            sourceNodeId: input.sourceNodeId,
+            targetNodeId: input.targetNodeId,
+            sourceLabel:
+              nodeLabelById.get(input.sourceNodeId) ?? sourceNode.data.label ?? sourceNode.id,
+            targetLabel:
+              nodeLabelById.get(input.targetNodeId) ?? targetNode.data.label ?? targetNode.id,
+            attemptedEdgeKind: input.edgeKind,
+            allowedEdgeKinds: allowedKinds,
+            recommendedEdgeKind: recommendedEdgeKindResult.success
+              ? recommendedEdgeKindResult.data
+              : undefined,
+            message: error.message,
+            details:
+              typeof error.payload?.details === "string"
+                ? error.payload.details
+                : undefined,
+          });
+          return false;
+        }
+
+        if (
+          error.code === "SEMANTIC_VIOLATION" &&
+          inspectorMode === "technical" &&
+          error.payload?.overrideAllowed
+        ) {
+          openTechnicalOverrideDialog({
+            title: "Override tecnico",
+            message: error.message,
+            requireReason: error.payload.requireOverrideReason ?? true,
+            onConfirm: async (reason) => {
+              await createEdgeOnServer({
+                sourceNodeId: input.sourceNodeId,
+                targetNodeId: input.targetNodeId,
+                edgeKind: input.edgeKind,
+                openAssistantOnInvalid: input.openAssistantOnInvalid,
+                allowSemanticOverride: true,
+                overrideReason: reason,
+              });
+            },
+          });
+          return false;
+        }
+
+        if (error.code === "CONFLICT") {
+          if (typeof error.payload?.currentRevision === "number") {
+            setCurrentRevision(error.payload.currentRevision);
+          }
+          setGlobalErrorMessage(error.message);
+          return false;
+        }
+      }
+
+      setGlobalErrorMessage(formatErrorMessage(error, "Falha ao criar relacao no servidor."));
+      return false;
+    }
   }
 
   function tryCreateEdgeWithSemanticRules(input: {
@@ -2281,7 +2541,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       },
       edgeKind: input.edgeKind,
       mode: inspectorMode,
-    });
+    }, semanticEngineOptions);
 
     let nextEdgeKind = input.edgeKind;
 
@@ -2382,14 +2642,39 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setIsFocusInspectorCollapsed((current) => !current);
   }
 
-  function handleToggleValidationPanel() {
-    setIsValidationPanelOpen((current) => {
-      const next = !current;
-      if (next) {
-        setIsFocusInspectorCollapsed(false);
-      }
-      return next;
-    });
+  async function runServerSemanticAudit() {
+    try {
+      const audit = await runSemanticAuditForEditor({
+        projectId: project.id,
+        mode: inspectorMode,
+      });
+      setServerSemanticAudit(audit);
+      setQuerySyncMessage(
+        `Verificacao concluida: ${audit.counters.total} issue(s).`,
+      );
+      setGlobalErrorMessage(null);
+      return audit;
+    } catch (error) {
+      setServerSemanticAudit(null);
+      const message = formatErrorMessage(
+        error,
+        "Falha ao executar verificacao semantica no servidor.",
+      );
+      setGlobalErrorMessage(message);
+      return null;
+    }
+  }
+
+  async function handleToggleValidationPanel() {
+    const shouldOpen = !isValidationPanelOpen;
+    setIsValidationPanelOpen(shouldOpen);
+
+    if (!shouldOpen) {
+      return;
+    }
+
+    setIsFocusInspectorCollapsed(false);
+    await runServerSemanticAudit();
   }
 
   function clonePayload(payload: Record<string, unknown>) {
@@ -2511,7 +2796,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         return;
       }
 
-      if (pendingConnectionAssistant || pendingNodeRepair) {
+      if (event.key === "Escape" && pendingSemanticOverride) {
+        event.preventDefault();
+        handleCancelSemanticOverride();
+        return;
+      }
+
+      if (pendingConnectionAssistant || pendingNodeRepair || pendingSemanticOverride) {
         return;
       }
 
@@ -2519,6 +2810,75 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         event.preventDefault();
         setIsAddNodeDialogOpen(false);
         setAddNodeErrorMessage(null);
+        return;
+      }
+
+      const normalizedKey = event.key.toLowerCase();
+      const hasCommandModifier = event.ctrlKey || event.metaKey;
+      const targetIsEditable = isEditableKeyboardTarget(event.target);
+
+      if (
+        hasCommandModifier &&
+        !event.altKey &&
+        normalizedKey === "c" &&
+        !targetIsEditable
+      ) {
+        event.preventDefault();
+        void handleCopySelectionToClipboard().catch(() => {
+          setGlobalErrorMessage("Falha ao copiar selecao.");
+        });
+        return;
+      }
+
+      if (
+        hasCommandModifier &&
+        !event.altKey &&
+        normalizedKey === "v" &&
+        !targetIsEditable
+      ) {
+        event.preventDefault();
+        void handlePasteFromClipboard().catch(() => {
+          setGlobalErrorMessage("Falha ao colar selecao.");
+        });
+        return;
+      }
+
+      if (
+        hasCommandModifier &&
+        !event.altKey &&
+        normalizedKey === "x" &&
+        !targetIsEditable
+      ) {
+        event.preventDefault();
+        void handleCutSelectionToClipboard().catch(() => {
+          setGlobalErrorMessage("Falha ao recortar selecao.");
+        });
+        return;
+      }
+
+      if (
+        hasCommandModifier &&
+        !event.altKey &&
+        normalizedKey === "d" &&
+        !targetIsEditable
+      ) {
+        event.preventDefault();
+        void handleDuplicateSelection().catch(() => {
+          setGlobalErrorMessage("Falha ao duplicar selecao.");
+        });
+        return;
+      }
+
+      if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        !hasCommandModifier &&
+        !event.altKey &&
+        !targetIsEditable
+      ) {
+        event.preventDefault();
+        if (selectedNodeId || selectedEdgeId) {
+          handleRemoveSelected();
+        }
         return;
       }
 
@@ -2591,13 +2951,22 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [
+    handleCancelSemanticOverride,
+    handleCopySelectionToClipboard,
+    handleCutSelectionToClipboard,
+    handleDuplicateSelection,
     handleOpenAddDialog,
+    handlePasteFromClipboard,
+    handleRemoveSelected,
     isAddNodeDialogOpen,
     isCanvasFocusMode,
     isQuickFindOpen,
     pendingConnectionAssistant,
     pendingNodeRepair,
+    pendingSemanticOverride,
     panelState,
+    selectedEdgeId,
+    selectedNodeId,
   ]);
 
   function handleCloseAddDialog() {
@@ -2663,14 +3032,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
-    setPendingConnectionAssistant(null);
-    tryCreateEdgeWithSemanticRules({
-      sourceNodeId: pending.sourceNodeId,
-      targetNodeId: pending.targetNodeId,
-      edgeKind: kind,
-      explicitKind: true,
-      openAssistantOnInvalid: false,
-    });
+    void (async () => {
+      setPendingConnectionAssistant(null);
+      const ready = await ensureQueueFlushedBeforeDirectWrite();
+      if (!ready) {
+        setGlobalErrorMessage("Conclua o salvamento pendente antes de criar a relacao.");
+        return;
+      }
+
+      await createEdgeOnServer({
+        sourceNodeId: pending.sourceNodeId,
+        targetNodeId: pending.targetNodeId,
+        edgeKind: kind,
+        openAssistantOnInvalid: false,
+      });
+    })();
   }
 
   function handleCancelPendingNodeRepair() {
@@ -2685,7 +3061,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     const nodeApplied = applyLocalCommandAndQueue(
-      pending.command,
+      {
+        ...pending.command,
+        meta: {
+          ...(pending.command.meta ?? {}),
+          repairApplied: true,
+        },
+      },
       "No atualizado. Salvamento automatico agendado.",
     );
 
@@ -2703,7 +3085,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     let appliedActions = 0;
     for (const action of selectedActions) {
-      if (applySemanticRepairAction(action)) {
+      if (applySemanticRepairAction(action, true)) {
         appliedActions += 1;
       }
     }
@@ -2716,29 +3098,294 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     );
   }
 
-  function handleDuplicateSelectedNode() {
-    if (!selectedNode) {
+  function handleCancelSemanticOverride() {
+    setPendingSemanticOverride(null);
+    setSemanticOverrideReason("");
+  }
+
+  async function handleConfirmSemanticOverride() {
+    const pending = pendingSemanticOverride;
+    if (!pending) {
       return;
     }
 
-    const duplicatedNodeId = crypto.randomUUID();
-    const duplicated = applyLocalCommandAndQueue({
-      type: "addNode",
-      node: {
-        id: duplicatedNodeId,
-        kind: selectedNode.data.kind,
-        label: `${selectedNode.data.label} (copia)`,
-        position: {
-          x: selectedNode.position.x + 56,
-          y: selectedNode.position.y + 56,
-        },
-        data: clonePayload(selectedNode.data.payload),
-      },
-    });
-
-    if (duplicated) {
-      selectItem({ nodeId: duplicatedNodeId, edgeId: null });
+    const reason = semanticOverrideReason.trim();
+    if (pending.requireReason && reason.length < 3) {
+      setGlobalErrorMessage("Justificativa obrigatoria para override tecnico.");
+      return;
     }
+
+    try {
+      await pending.onConfirm(reason);
+      setPendingSemanticOverride(null);
+      setSemanticOverrideReason("");
+      setGlobalErrorMessage(null);
+    } catch (error) {
+      setGlobalErrorMessage(
+        formatErrorMessage(error, "Falha ao aplicar override tecnico."),
+      );
+    }
+  }
+
+  function buildClipboardFragmentFromSelection(): MapiaClipboardFragment | null {
+    if (selectedNode) {
+      return {
+        version: 1,
+        sourceProjectId: project.id,
+        nodes: [
+          {
+            id: selectedNode.id,
+            kind: selectedNode.data.kind,
+            label: selectedNode.data.label,
+            position: { x: selectedNode.position.x, y: selectedNode.position.y },
+            data: clonePayload(selectedNode.data.payload),
+          },
+        ],
+        edges: [],
+      };
+    }
+
+    if (selectedEdge) {
+      const sourceNode = nodesRef.current.find((node) => node.id === selectedEdge.source);
+      const targetNode = nodesRef.current.find((node) => node.id === selectedEdge.target);
+
+      if (!sourceNode || !targetNode) {
+        return null;
+      }
+
+      return {
+        version: 1,
+        sourceProjectId: project.id,
+        nodes: [
+          {
+            id: sourceNode.id,
+            kind: sourceNode.data.kind,
+            label: sourceNode.data.label,
+            position: { x: sourceNode.position.x, y: sourceNode.position.y },
+            data: clonePayload(sourceNode.data.payload),
+          },
+          {
+            id: targetNode.id,
+            kind: targetNode.data.kind,
+            label: targetNode.data.label,
+            position: { x: targetNode.position.x, y: targetNode.position.y },
+            data: clonePayload(targetNode.data.payload),
+          },
+        ],
+        edges: [
+          {
+            id: selectedEdge.id,
+            sourceNodeId: selectedEdge.source,
+            targetNodeId: selectedEdge.target,
+            kind: selectedEdge.data?.kind ?? "flows-to",
+            label: selectedEdge.label ? String(selectedEdge.label) : undefined,
+            data: clonePayload(selectedEdge.data?.payload ?? {}),
+          },
+        ],
+      };
+    }
+
+    return null;
+  }
+
+  async function writeMapiaClipboardFragment(fragment: MapiaClipboardFragment) {
+    const serialized = JSON.stringify(fragment);
+    if (!navigator.clipboard) {
+      throw new Error("Clipboard indisponivel.");
+    }
+
+    const supportsCustomMime =
+      typeof ClipboardItem !== "undefined" && typeof navigator.clipboard.write === "function";
+
+    if (supportsCustomMime) {
+      const item = new ClipboardItem({
+        [MAPIA_CLIPBOARD_MIME]: new Blob([serialized], {
+          type: MAPIA_CLIPBOARD_MIME,
+        }),
+        "text/plain": new Blob([serialized], { type: "text/plain" }),
+      });
+      await navigator.clipboard.write([item]);
+      return;
+    }
+
+    await navigator.clipboard.writeText(serialized);
+  }
+
+  async function readMapiaClipboardFragment(): Promise<MapiaClipboardFragment | null> {
+    if (!navigator.clipboard) {
+      return null;
+    }
+
+    if (typeof navigator.clipboard.read === "function") {
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          if (!item.types.includes(MAPIA_CLIPBOARD_MIME)) {
+            continue;
+          }
+
+          const blob = await item.getType(MAPIA_CLIPBOARD_MIME);
+          const text = await blob.text();
+          return JSON.parse(text) as MapiaClipboardFragment;
+        }
+      } catch {
+        // Fallback para readText abaixo.
+      }
+    }
+
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        return null;
+      }
+      const parsed = JSON.parse(text) as Partial<MapiaClipboardFragment>;
+      if (parsed.version !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+        return null;
+      }
+      return parsed as MapiaClipboardFragment;
+    } catch {
+      return null;
+    }
+  }
+
+  async function handleCopySelectionToClipboard() {
+    const fragment = buildClipboardFragmentFromSelection();
+    if (!fragment) {
+      return false;
+    }
+
+    await writeMapiaClipboardFragment(fragment);
+    setQuerySyncMessage("Selecao copiada para a area de transferencia.");
+    return true;
+  }
+
+  function applyClipboardFragment(fragment: MapiaClipboardFragment) {
+    const idMap = new Map<string, string>();
+    let appliedNodes = 0;
+    let appliedEdges = 0;
+    let skippedEdges = 0;
+    const enforceSemanticOnPaste = semanticPolicy?.strictEnabled !== false;
+
+    for (const node of fragment.nodes) {
+      const nextId = crypto.randomUUID();
+      idMap.set(node.id, nextId);
+      const applied = applyLocalCommandAndQueue({
+        type: "addNode",
+        node: {
+          id: nextId,
+          kind: node.kind,
+          label: `${node.label} (copia)`,
+          position: {
+            x: node.position.x + DEFAULT_ADD_NODE_OFFSET.x / 2,
+            y: node.position.y + DEFAULT_ADD_NODE_OFFSET.y / 2,
+          },
+          data: clonePayload(node.data),
+        },
+      });
+      if (applied) {
+        appliedNodes += 1;
+      }
+    }
+
+    for (const edge of fragment.edges) {
+      const sourceNodeId = idMap.get(edge.sourceNodeId);
+      const targetNodeId = idMap.get(edge.targetNodeId);
+      if (!sourceNodeId || !targetNodeId) {
+        skippedEdges += 1;
+        continue;
+      }
+
+      const sourceNode = nodesRef.current.find((node) => node.id === sourceNodeId);
+      const targetNode = nodesRef.current.find((node) => node.id === targetNodeId);
+      if (enforceSemanticOnPaste) {
+        const semanticCheck = validateEdgeCreation({
+          diagramType: semanticDiagramType,
+          sourceNode: sourceNode
+            ? { id: sourceNode.id, kind: sourceNode.data.kind, label: sourceNode.data.label }
+            : undefined,
+          targetNode: targetNode
+            ? { id: targetNode.id, kind: targetNode.data.kind, label: targetNode.data.label }
+            : undefined,
+          edgeKind: edge.kind,
+          mode: inspectorMode,
+        }, semanticEngineOptions);
+
+        if (!semanticCheck.ok) {
+          skippedEdges += 1;
+          continue;
+        }
+      }
+
+      const applied = applyLocalCommandAndQueue({
+        type: "addEdge",
+        edge: {
+          id: crypto.randomUUID(),
+          sourceNodeId,
+          targetNodeId,
+          kind: edge.kind,
+          label: edge.label,
+          data: clonePayload(edge.data),
+        },
+      });
+
+      if (applied) {
+        appliedEdges += 1;
+      }
+    }
+
+    const firstNodeId = idMap.values().next().value as string | undefined;
+    if (firstNodeId) {
+      selectItem({ nodeId: firstNodeId, edgeId: null });
+    }
+
+    return {
+      appliedNodes,
+      appliedEdges,
+      skippedEdges,
+    };
+  }
+
+  async function handleCutSelectionToClipboard() {
+    const copied = await handleCopySelectionToClipboard();
+    if (!copied) {
+      return false;
+    }
+
+    handleRemoveSelected();
+    setQuerySyncMessage("Selecao recortada para a area de transferencia.");
+    return true;
+  }
+
+  async function handleDuplicateSelection() {
+    const fragment = buildClipboardFragmentFromSelection();
+    if (!fragment) {
+      return false;
+    }
+
+    const result = applyClipboardFragment(fragment);
+    if (result.appliedNodes === 0 && result.appliedEdges === 0) {
+      setGlobalErrorMessage("Nao foi possivel duplicar a selecao atual.");
+      return false;
+    }
+
+    setQuerySyncMessage(
+      `Duplicacao concluida: ${result.appliedNodes} no(s), ${result.appliedEdges} relacao(oes), ${result.skippedEdges} relacao(oes) ignorada(s).`,
+    );
+    return true;
+  }
+
+  async function handlePasteFromClipboard() {
+    const fragment = await readMapiaClipboardFragment();
+    if (!fragment || fragment.nodes.length === 0) {
+      setGlobalErrorMessage("Area de transferencia sem fragmento MapIA valido.");
+      return false;
+    }
+
+    const result = applyClipboardFragment(fragment);
+    setQuerySyncMessage(
+      `Colagem concluida: ${result.appliedNodes} no(s), ${result.appliedEdges} relacao(oes), ${result.skippedEdges} relacao(oes) ignorada(s).`,
+    );
+    return true;
   }
 
   function handleReapplyLayout() {
@@ -2782,10 +3429,6 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
-    if (!window.confirm("Deseja remover a aresta selecionada?")) {
-      return;
-    }
-
     const removed = applyLocalCommandAndQueue({
       type: "removeEdge",
       edgeId: selectedEdgeId,
@@ -2802,15 +3445,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
-    setPendingConnectionAssistant(null);
-    const defaultRelation = quickAction.edgeKind;
-    tryCreateEdgeWithSemanticRules({
-      sourceNodeId: connection.source,
-      targetNodeId: connection.target,
-      edgeKind: defaultRelation,
-      explicitKind: false,
-      openAssistantOnInvalid: true,
-    });
+    void (async () => {
+      setPendingConnectionAssistant(null);
+      const ready = await ensureQueueFlushedBeforeDirectWrite();
+      if (!ready) {
+        setGlobalErrorMessage("Conclua o salvamento pendente antes de criar a relacao.");
+        return;
+      }
+
+      await createEdgeOnServer({
+        sourceNodeId: connection.source,
+        targetNodeId: connection.target,
+        edgeKind: quickAction.edgeKind,
+        openAssistantOnInvalid: true,
+      });
+    })();
   }
 
   function handleNodeDragStop(node: RFNode) {
@@ -2956,7 +3605,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
   }
 
-  function handleApplyNodeInspector() {
+  async function handleApplyNodeInspector() {
     if (!selectedNode) return;
 
     setNodeInspectorErrors({});
@@ -2993,63 +3642,85 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         return;
       }
 
-      const nextNodeKind = command.patch.kind ?? selectedNode.data.kind;
-      const isKindChange = nextNodeKind !== selectedNode.data.kind;
-
-      if (isKindChange) {
-        const validation = validateNodeKindChange({
-          diagramType: semanticDiagramType,
-          mode: inspectorMode,
-          nodeId: selectedNode.id,
-          nextKind: nextNodeKind,
-          nodes: nodesRef.current.map((node) => ({
-            id: node.id,
-            kind: node.data.kind,
-            label: node.data.label,
-          })),
-          edges: edgesRef.current.map((edge) => ({
-            id: edge.id,
-            sourceNodeId: edge.source,
-            targetNodeId: edge.target,
-            kind: edge.data?.kind ?? "flows-to",
-            label: edge.label ? String(edge.label) : undefined,
-          })),
-        });
-
-        const blockingViolation = validation.violations.find(
-          (violation) => violation.severity === "error",
-        );
-        if (blockingViolation && !validation.repairPlan) {
-          setNodeInspectorErrors({
-            kind: blockingViolation.message,
-          });
-          setNodeInspectorMessage(blockingViolation.details ?? blockingViolation.message);
-          return;
-        }
-
-        if (validation.repairPlan && validation.repairPlan.actions.length > 0) {
-          setPendingNodeRepair({
-            command,
-            repairPlan: validation.repairPlan,
-            violations: validation.violations,
-          });
-          return;
-        }
-
-        const warningViolation = validation.violations.find(
-          (violation) => violation.severity === "warning",
-        );
-        if (warningViolation && inspectorMode === "technical") {
-          const shouldApplyWarningOverride = window.confirm(
-            `${warningViolation.message}\n\nDeseja aplicar no modo tecnico mesmo assim?`,
-          );
-          if (!shouldApplyWarningOverride) {
-            return;
-          }
-        }
+      const ready = await ensureQueueFlushedBeforeDirectWrite();
+      if (!ready) {
+        setNodeInspectorMessage("Conclua o salvamento pendente antes de aplicar.");
+        return;
       }
 
-      applyLocalCommandAndQueue(command, "No atualizado. Salvamento automatico agendado.");
+      try {
+        const result = await updateNodeForEditor({
+          projectId: project.id,
+          nodeId: command.nodeId,
+          patch: command.patch,
+          expectedRevision: currentRevisionRef.current,
+          semanticMode: inspectorMode,
+        });
+
+        syncFromSnapshot(result.workingSnapshot.snapshot);
+        setCurrentRevision(result.newRevision);
+        setNodeInspectorMessage("No atualizado. Snapshot sincronizado com o servidor.");
+        setGlobalErrorMessage(null);
+      } catch (error) {
+        if (error instanceof EditorQueryError) {
+          if (error.code === "REPAIR_REQUIRED") {
+            const repairPlan = error.payload?.repairPlan as RepairPlan | undefined;
+            const violations = Array.isArray(error.payload?.violations)
+              ? (error.payload.violations as SemanticViolation[])
+              : [];
+
+            if (repairPlan && Array.isArray(repairPlan.actions)) {
+              setPendingNodeRepair({
+                command,
+                repairPlan,
+                violations,
+              });
+              return;
+            }
+          }
+
+          if (
+            error.code === "SEMANTIC_VIOLATION" &&
+            inspectorMode === "technical" &&
+            error.payload?.overrideAllowed
+          ) {
+            openTechnicalOverrideDialog({
+              title: "Override tecnico",
+              message: error.message,
+              requireReason: error.payload.requireOverrideReason ?? true,
+              onConfirm: async (reason) => {
+                const overrideResult = await updateNodeForEditor({
+                  projectId: project.id,
+                  nodeId: command.nodeId,
+                  patch: command.patch,
+                  expectedRevision: currentRevisionRef.current,
+                  semanticMode: inspectorMode,
+                  allowSemanticOverride: true,
+                  overrideReason: reason,
+                });
+                syncFromSnapshot(overrideResult.workingSnapshot.snapshot);
+                setCurrentRevision(overrideResult.newRevision);
+                setNodeInspectorMessage(
+                  "No atualizado com override tecnico registrado.",
+                );
+              },
+            });
+            return;
+          }
+
+          setNodeInspectorErrors({
+            kind: error.message,
+          });
+          setNodeInspectorMessage(
+            typeof error.payload?.details === "string"
+              ? error.payload.details
+              : error.message,
+          );
+          return;
+        }
+
+        throw error;
+      }
     } catch (error) {
       const feedback = getFriendlyInspectorFeedback(error);
       setNodeInspectorErrors(feedback.fieldErrors);
@@ -3057,7 +3728,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
   }
 
-  function handleApplyEdgeInspector() {
+  async function handleApplyEdgeInspector() {
     if (!selectedEdge) return;
 
     setEdgeInspectorErrors({});
@@ -3089,66 +3760,68 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         return;
       }
 
-      const sourceNode = nodesRef.current.find((node) => node.id === selectedEdge.source);
-      const targetNode = nodesRef.current.find((node) => node.id === selectedEdge.target);
-      const nextKind = command.patch.kind ?? (selectedEdge.data?.kind ?? "flows-to");
-      const kindValidation = validateEdgeKindChange({
-        diagramType: semanticDiagramType,
-        mode: inspectorMode,
-        edge: {
-          id: selectedEdge.id,
-          sourceNodeId: selectedEdge.source,
-          targetNodeId: selectedEdge.target,
-          kind: selectedEdge.data?.kind ?? "flows-to",
-          label: selectedEdge.label ? String(selectedEdge.label) : undefined,
-        },
-        sourceNode: sourceNode
-          ? {
-              id: sourceNode.id,
-              kind: sourceNode.data.kind,
-              label: sourceNode.data.label,
-            }
-          : undefined,
-        targetNode: targetNode
-          ? {
-              id: targetNode.id,
-              kind: targetNode.data.kind,
-              label: targetNode.data.label,
-            }
-          : undefined,
-        nextKind,
-      });
-
-      if (!kindValidation.ok) {
-        setEdgeInspectorErrors({
-          kind: kindValidation.violation?.message ?? "Relacao invalida para esta conexao.",
-        });
-        const recommendation = kindValidation.recommendedEdgeKind
-          ? ` Sugestao: ${getEdgeKindLabel(kindValidation.recommendedEdgeKind, "operational")}.`
-          : "";
-        setEdgeInspectorMessage(
-          `${kindValidation.violation?.details ?? "Escolha uma relacao permitida."}${recommendation}`,
-        );
+      const ready = await ensureQueueFlushedBeforeDirectWrite();
+      if (!ready) {
+        setEdgeInspectorMessage("Conclua o salvamento pendente antes de aplicar.");
         return;
       }
 
-      if (
-        inspectorMode === "operational" &&
-        command.patch.kind &&
-        kindValidation.recommendedEdgeKind &&
-        command.patch.kind !== kindValidation.recommendedEdgeKind
-      ) {
-        command = {
-          ...command,
-          patch: {
-            ...command.patch,
-            kind: kindValidation.recommendedEdgeKind,
-            label: getEdgeKindLabel(kindValidation.recommendedEdgeKind, "operational"),
-          },
-        };
-      }
+      try {
+        const result = await updateEdgeForEditor({
+          projectId: project.id,
+          edgeId: command.edgeId,
+          patch: command.patch,
+          expectedRevision: currentRevisionRef.current,
+          semanticMode: inspectorMode,
+        });
+        syncFromSnapshot(result.workingSnapshot.snapshot);
+        setCurrentRevision(result.newRevision);
+        setEdgeInspectorMessage("Aresta atualizada. Snapshot sincronizado com o servidor.");
+        setGlobalErrorMessage(null);
+      } catch (error) {
+        if (error instanceof EditorQueryError) {
+          if (
+            error.code === "SEMANTIC_VIOLATION" &&
+            inspectorMode === "technical" &&
+            error.payload?.overrideAllowed
+          ) {
+            openTechnicalOverrideDialog({
+              title: "Override tecnico",
+              message: error.message,
+              requireReason: error.payload.requireOverrideReason ?? true,
+              onConfirm: async (reason) => {
+                const overrideResult = await updateEdgeForEditor({
+                  projectId: project.id,
+                  edgeId: command.edgeId,
+                  patch: command.patch,
+                  expectedRevision: currentRevisionRef.current,
+                  semanticMode: inspectorMode,
+                  allowSemanticOverride: true,
+                  overrideReason: reason,
+                });
+                syncFromSnapshot(overrideResult.workingSnapshot.snapshot);
+                setCurrentRevision(overrideResult.newRevision);
+                setEdgeInspectorMessage(
+                  "Aresta atualizada com override tecnico registrado.",
+                );
+              },
+            });
+            return;
+          }
 
-      applyLocalCommandAndQueue(command, "Aresta atualizada. Salvamento automatico agendado.");
+          setEdgeInspectorErrors({
+            kind: error.message,
+          });
+          setEdgeInspectorMessage(
+            typeof error.payload?.details === "string"
+              ? error.payload.details
+              : error.message,
+          );
+          return;
+        }
+
+        throw error;
+      }
     } catch (error) {
       const feedback = getFriendlyInspectorFeedback(error);
       setEdgeInspectorErrors(feedback.fieldErrors);
@@ -3742,7 +4415,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   <button
                     className="btn"
                     type="button"
-                    onClick={handleDuplicateSelectedNode}
+                    onClick={() => {
+                      void handleDuplicateSelection();
+                    }}
                     data-testid="selection-hud-duplicate-button"
                   >
                     Duplicar
@@ -3985,6 +4660,67 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           onCancel={handleCancelPendingNodeRepair}
         />
 
+        {pendingSemanticOverride ? (
+          <div
+            className="semantic-dialog-backdrop"
+            role="presentation"
+            onClick={handleCancelSemanticOverride}
+          >
+            <div
+              className="semantic-dialog semantic-override-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Override tecnico"
+              data-testid="semantic-override-dialog"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <header className="semantic-dialog-header">
+                <h3>{pendingSemanticOverride.title}</h3>
+                <p className="helper">{pendingSemanticOverride.message}</p>
+                <p className="helper">
+                  O override tecnico registra justificativa para auditoria e compliance.
+                </p>
+              </header>
+
+              <div className="field">
+                <label htmlFor="semantic-override-reason-input">
+                  Justificativa
+                  {pendingSemanticOverride.requireReason ? " obrigatoria" : " (opcional)"}
+                </label>
+                <textarea
+                  id="semantic-override-reason-input"
+                  rows={3}
+                  value={semanticOverrideReason}
+                  onChange={(event) => setSemanticOverrideReason(event.target.value)}
+                  placeholder="Descreva o motivo tecnico do override."
+                  data-testid="semantic-override-reason-input"
+                />
+              </div>
+
+              <div className="row-actions semantic-dialog-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleCancelSemanticOverride}
+                  data-testid="semantic-override-cancel"
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => {
+                    void handleConfirmSemanticOverride();
+                  }}
+                  data-testid="semantic-override-confirm"
+                >
+                  Aplicar override
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <CommandPalette
           isOpen={isQuickFindOpen}
           query={quickFindQuery}
@@ -4059,14 +4795,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             <div className="row-actions semantic-audit-header">
               <strong>Verificacao semantica</strong>
               <span className="badge">
-                {semanticAudit.counters.total} issue(s) | {semanticAudit.bySeverity.error} erro(s)
+                {displayedSemanticAudit.counters.total} issue(s) | {displayedSemanticAudit.bySeverity.error} erro(s)
               </span>
             </div>
 
             {isValidationPanelOpen ? (
-              semanticAudit.issues.length > 0 ? (
+              displayedSemanticAudit.issues.length > 0 ? (
                 <ul className="summary-list semantic-audit-list" data-testid="semantic-audit-issues">
-                  {semanticAudit.issues.slice(0, 40).map((issue, index) => (
+                  {displayedSemanticAudit.issues.slice(0, 40).map((issue, index) => (
                     <li
                       key={issue.id}
                       className={`semantic-audit-item semantic-audit-item-${issue.severity}`}

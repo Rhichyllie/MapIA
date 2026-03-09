@@ -590,7 +590,7 @@ async function connectNodesViaSemanticHook(
         __mapiaE2eConnectNodes?: (
           sourceNodeId: string,
           targetNodeId: string,
-        ) => boolean;
+        ) => Promise<boolean>;
       };
 
       return globalState.__mapiaE2eConnectNodes?.(source, target) ?? false;
@@ -1130,6 +1130,122 @@ test.describe("Editor E2E (Fase 3A)", () => {
     await expect(page.getByTestId("canvas-selection-semantic-status")).toContainText(
       "Semantica",
     );
+  });
+
+  test("Fase 5.7 Editor: atalhos Delete/Ctrl+C/Ctrl+V/Ctrl+X/Ctrl+D", async ({
+    authenticatedPage: page,
+  }) => {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await createProjectAndOpenEditor(page, "E2E Keyboard Shortcuts");
+    await setInspectorMode(page, "technical");
+
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const initialNodeCount = await nodeLocator.count();
+
+    await runActionAndWaitForAutosave(
+      page,
+      () => addNodeViaGuidedFlow(page, { title: `No atalhos ${Date.now()}` }),
+      { context: "create node before keyboard shortcuts assertions" },
+    );
+    await expect.poll(async () => nodeLocator.count()).toBe(initialNodeCount + 1);
+    const createdNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "created node id",
+    );
+
+    await page.getByTestId(`editor-node-${createdNodeId}`).click();
+    await runActionAndWaitForAutosave(
+      page,
+      () => page.keyboard.press("ControlOrMeta+D"),
+      { context: "duplicate selected node via keyboard shortcut" },
+    );
+    await expect.poll(async () => nodeLocator.count()).toBe(initialNodeCount + 2);
+    const duplicatedNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "duplicated node id",
+    );
+
+    await page.keyboard.press("ControlOrMeta+C");
+    await runActionAndWaitForAutosave(
+      page,
+      () => page.keyboard.press("ControlOrMeta+V"),
+      { context: "paste selected node via keyboard shortcut" },
+    );
+    await expect.poll(async () => nodeLocator.count()).toBe(initialNodeCount + 3);
+    const pastedNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "pasted node id",
+    );
+
+    await runActionAndWaitForAutosave(
+      page,
+      () => page.keyboard.press("ControlOrMeta+X"),
+      { context: "cut selected node via keyboard shortcut" },
+    );
+    await expect.poll(async () => nodeLocator.count()).toBe(initialNodeCount + 2);
+    await expect(page.getByTestId(`editor-node-${pastedNodeId}`)).toHaveCount(0);
+
+    await page.getByTestId(`editor-node-${duplicatedNodeId}`).click();
+    await runActionAndWaitForAutosave(
+      page,
+      () => page.keyboard.press("Delete"),
+      { context: "delete selected node via keyboard shortcut" },
+    );
+    await expect.poll(async () => nodeLocator.count()).toBe(initialNodeCount + 1);
+  });
+
+  test("Fase 5.7 ERD: import Prisma gera entities/references e passa audit", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E ERD Import Audit");
+
+    const policyResponse = await page.request.put(
+      `/api/projects/${project.id}/semantic/policy`,
+      {
+        data: {
+          diagramType: "erd",
+          strictEnabled: true,
+          enforceOnServer: true,
+        },
+      },
+    );
+    await assertApiResponseOk(policyResponse, "set semantic policy diagramType=erd before import");
+
+    const schema = `
+model User {
+  id    String @id @default(cuid())
+  posts Post[]
+}
+
+model Post {
+  id       String @id @default(cuid())
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+`;
+
+    const importResponse = await page.request.post(
+      `/api/projects/${project.id}/imports/prisma-schema`,
+      {
+        data: {
+          schema,
+        },
+      },
+    );
+    await assertApiResponseOk(importResponse, "import prisma schema into ERD snapshot");
+
+    await page.reload();
+    await waitForEditorReady(page);
+    await assertCanvasRenderer(page, "erd");
+
+    const snapshot = await loadEditorSnapshot(page, project.id);
+    expect(snapshot.nodes.filter((node) => node.kind === "entity").length).toBeGreaterThanOrEqual(2);
+    expect(snapshot.edges.some((edge) => edge.kind === "references")).toBe(true);
+
+    await clickEditorPane(page);
+    await page.getByTestId("semantic-audit-button").click();
+    await expect(page.getByTestId("semantic-audit-panel")).toBeVisible();
+    await expect(page.getByTestId("semantic-audit-empty")).toBeVisible();
   });
 
   test("fluxo principal Dashboard -> Wizard -> Editor com persistencia", async ({
