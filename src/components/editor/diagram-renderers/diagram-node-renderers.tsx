@@ -20,38 +20,72 @@ function resolveTreeHandlePosition(direction: EditorNodeData["rendererDirection"
   } as const;
 }
 
+type ErdFieldRow = {
+  id: string;
+  name: string;
+  type: string;
+  flags: string;
+};
+
 function readEntityFields(payload: Record<string, unknown>) {
   const rawFields = payload.fields;
 
   if (!Array.isArray(rawFields)) {
-    return [];
+    return [] as ErdFieldRow[];
   }
 
   return rawFields
-    .slice(0, 4)
-    .map((field) => {
+    .slice(0, 8)
+    .map((field, index) => {
       if (typeof field === "string") {
-        return field;
+        const [rawName, rawType] = field.split(":");
+        const name = rawName?.trim() || `campo_${index + 1}`;
+        const type = rawType?.trim() || "String";
+        return {
+          id: `${name}-${index}`,
+          name,
+          type,
+          flags: "-",
+        } satisfies ErdFieldRow;
       }
 
       if (!field || typeof field !== "object") {
         return null;
       }
 
-      const fieldName = (field as { name?: unknown }).name;
-      const fieldType = (field as { type?: unknown }).type;
+      const parsedField = field as {
+        name?: unknown;
+        type?: unknown;
+        isId?: unknown;
+        isUnique?: unknown;
+        isOptional?: unknown;
+      };
+      const fieldName =
+        typeof parsedField.name === "string"
+          ? parsedField.name
+          : `campo_${index + 1}`;
+      const fieldType =
+        typeof parsedField.type === "string" ? parsedField.type : "String";
+      const flags: string[] = [];
 
-      if (typeof fieldName === "string" && typeof fieldType === "string") {
-        return `${fieldName}: ${fieldType}`;
+      if (parsedField.isId === true) {
+        flags.push("PK");
+      }
+      if (parsedField.isUnique === true) {
+        flags.push("UNQ");
+      }
+      if (parsedField.isOptional === false) {
+        flags.push("NOT NULL");
       }
 
-      if (typeof fieldName === "string") {
-        return fieldName;
-      }
-
-      return null;
+      return {
+        id: `${fieldName}-${index}`,
+        name: fieldName,
+        type: fieldType,
+        flags: flags.length > 0 ? flags.join(" | ") : "-",
+      } satisfies ErdFieldRow;
     })
-    .filter((value): value is string => Boolean(value));
+    .filter((value): value is ErdFieldRow => Boolean(value));
 }
 
 function toKindClassToken(kind: string) {
@@ -124,6 +158,7 @@ export function TreeNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
   const positions = resolveTreeHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
+  const canToggleTreeSubtree = typeof nodeData.onToggleTreeCollapse === "function";
 
   return (
     <div
@@ -138,6 +173,25 @@ export function TreeNodeRenderer({ data }: NodeProps) {
         className="diagram-port diagram-port-target"
       />
       <div className="diagram-node-tree__content">
+        <div className="diagram-node-tree__toolbar">
+          <span className="diagram-node-tree__level-badge">Hierarquia</span>
+          {canToggleTreeSubtree ? (
+            <button
+              className="diagram-node-tree__toggle"
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (nodeData.nodeId) {
+                  nodeData.onToggleTreeCollapse?.(nodeData.nodeId);
+                }
+              }}
+              data-testid="tree-node-collapse-toggle"
+            >
+              {nodeData.rendererTreeCollapsed ? "Expandir" : "Colapsar"}
+            </button>
+          ) : null}
+        </div>
         <NodeContent nodeData={nodeData} />
       </div>
       <Handle
@@ -161,7 +215,16 @@ export function FlowNodeRenderer({ data }: NodeProps) {
       data-node-tone={visual.kindPresentation.tone}
     >
       <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
-      <NodeContent nodeData={nodeData} />
+      <div className="diagram-node-flow__body">
+        <div className="diagram-node-flow__header">
+          <span className="diagram-node-flow__badge">Etapa</span>
+        </div>
+        <NodeContent nodeData={nodeData} />
+        <div className="diagram-node-flow__ports-hint" aria-hidden="true">
+          <span>Entrada</span>
+          <span>Saida</span>
+        </div>
+      </div>
       <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
     </div>
   );
@@ -179,6 +242,9 @@ export function MindmapNodeRenderer({ data }: NodeProps) {
       data-node-tone={visual.kindPresentation.tone}
     >
       <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
+      <div className="diagram-node-mindmap__role">
+        {nodeData.rendererIsRoot ? "Tema central" : "Ramificacao"}
+      </div>
       <NodeContent nodeData={nodeData} />
       <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
     </div>
@@ -199,17 +265,30 @@ export function ErdNodeRenderer({ data }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
       <div className="diagram-node-erd__title">
-        <NodeContent nodeData={nodeData} />
+        <div className="diagram-node__header-row">
+          <NodeTypeChip nodeData={nodeData} />
+        </div>
+        <strong className="diagram-node__title">{resolveDisplayLabel(nodeData)}</strong>
+        <NodeTechnicalMeta nodeData={nodeData} />
       </div>
-      <div className="diagram-node-erd__rows">
+      <div className="diagram-node-erd__rows" data-testid="erd-node-fields-table">
+        <div className="diagram-node-erd__table-head">
+          <span>Campo</span>
+          <span>Tipo</span>
+          <span>Flags</span>
+        </div>
         {fields.length > 0 ? (
           fields.map((field) => (
-            <div key={field} className="diagram-node-erd__row">
-              {field}
+            <div key={field.id} className="diagram-node-erd__row">
+              <span>{field.name}</span>
+              <span>{field.type}</span>
+              <span>{field.flags}</span>
             </div>
           ))
         ) : (
-          <div className="diagram-node-erd__row">id: string</div>
+          <div className="diagram-node-erd__empty" data-testid="erd-node-fields-empty">
+            Sem campos
+          </div>
         )}
       </div>
       <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />

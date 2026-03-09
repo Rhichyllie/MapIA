@@ -6,12 +6,15 @@ import type {
 import type { Edge, ExternalRef, GraphSnapshot, Node } from "@/src/domain";
 
 export type EditorNodeData = {
+  nodeId?: string;
   label: string;
   kind: Node["kind"];
   payload: Record<string, unknown>;
   externalRefs: ExternalRef[];
   rendererDirection?: "top-down" | "left-right";
   rendererIsRoot?: boolean;
+  rendererTreeCollapsed?: boolean;
+  onToggleTreeCollapse?: (nodeId: string) => void;
   presentationMode?: "operational" | "technical";
   displayLabel?: string;
 };
@@ -52,6 +55,7 @@ export function toFlowNodes(snapshot: GraphSnapshot): RFNode[] {
     type: node.kind === "project" ? "input" : undefined,
     domAttributes: buildNodeTestDomAttributes(node.id),
     data: {
+      nodeId: node.id,
       label: node.label,
       kind: node.kind,
       payload: node.data,

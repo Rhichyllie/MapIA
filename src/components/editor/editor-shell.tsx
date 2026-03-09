@@ -1323,8 +1323,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           .join(" "),
         data: {
           ...node.data,
+          nodeId: node.id,
           rendererDirection: renderer.treeDirection,
           rendererIsRoot: node.id === mindmapRootNodeId,
+          rendererTreeCollapsed:
+            renderer.key === "tree" && collapsedTreeNodeIdSet.has(node.id),
+          onToggleTreeCollapse:
+            renderer.key === "tree"
+              ? (targetNodeId: string) => {
+                  setCollapsedTreeNodeIds((current) =>
+                    current.includes(targetNodeId)
+                      ? current.filter((item) => item !== targetNodeId)
+                      : [...current, targetNodeId],
+                  );
+                }
+              : undefined,
           presentationMode: inspectorMode,
           displayLabel:
             inspectorMode === "operational"
