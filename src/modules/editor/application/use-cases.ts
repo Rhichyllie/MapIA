@@ -344,10 +344,20 @@ async function enforceCommandSemantics(input: {
         diagramType,
         mode: input.mode,
         sourceNode: sourceNode
-          ? { id: sourceNode.id, kind: sourceNode.kind, label: sourceNode.label }
+          ? {
+              id: sourceNode.id,
+              kind: sourceNode.kind,
+              label: sourceNode.label,
+              payload: sourceNode.data,
+            }
           : undefined,
         targetNode: targetNode
-          ? { id: targetNode.id, kind: targetNode.kind, label: targetNode.label }
+          ? {
+              id: targetNode.id,
+              kind: targetNode.kind,
+              label: targetNode.label,
+              payload: targetNode.data,
+            }
           : undefined,
         edgeKind: command.edge.kind,
       }, engineOptions);
@@ -434,10 +444,20 @@ async function enforceCommandSemantics(input: {
           payload: currentEdge.data,
         },
         sourceNode: sourceNode
-          ? { id: sourceNode.id, kind: sourceNode.kind, label: sourceNode.label }
+          ? {
+              id: sourceNode.id,
+              kind: sourceNode.kind,
+              label: sourceNode.label,
+              payload: sourceNode.data,
+            }
           : undefined,
         targetNode: targetNode
-          ? { id: targetNode.id, kind: targetNode.kind, label: targetNode.label }
+          ? {
+              id: targetNode.id,
+              kind: targetNode.kind,
+              label: targetNode.label,
+              payload: targetNode.data,
+            }
           : undefined,
         nextKind: command.patch.kind,
       }, engineOptions);
@@ -515,6 +535,7 @@ async function enforceCommandSemantics(input: {
           id: node.id,
           kind: node.kind,
           label: node.label,
+          payload: node.data,
         })),
         edges: input.snapshot.edges.map((edge) => ({
           id: edge.id,
@@ -615,6 +636,7 @@ async function enforceSnapshotSemantics(input: {
         id: node.id,
         kind: node.kind,
         label: node.label,
+        payload: node.data,
       })),
       edges: input.snapshot.edges.map((edge) => ({
         id: edge.id,

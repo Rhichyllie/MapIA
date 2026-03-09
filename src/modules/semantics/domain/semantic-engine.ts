@@ -1,4 +1,5 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
+import { resolveDiagramRole } from "@/src/modules/diagrams/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
 
 export type SemanticSeverity = "error" | "warning";
@@ -9,6 +10,7 @@ export type SemanticNodeRef = {
   id: string;
   kind: NodeKind;
   label?: string;
+  payload?: Record<string, unknown>;
 };
 
 export type SemanticEdgeRef = {
@@ -161,6 +163,62 @@ function normalizeDiagramType(diagramType: string | undefined): SemanticDiagramT
   return undefined;
 }
 
+function toSemanticKind(
+  diagramType: string | undefined,
+  nodeKind: NodeKind,
+  nodePayload: Record<string, unknown> | undefined,
+): NodeKind | null {
+  const normalizedDiagramType = normalizeDiagramType(diagramType);
+  const role = resolveDiagramRole({
+    diagramType: normalizedDiagramType,
+    nodeKind,
+    nodePayload: nodePayload ?? {},
+  });
+
+  if (role === "meta-workspace" || role === "meta-project") {
+    if (normalizedDiagramType === undefined) {
+      return nodeKind;
+    }
+
+    return null;
+  }
+
+  if (role === "tree-root" || role === "tree-node") {
+    return "page";
+  }
+
+  if (
+    role === "flow-start" ||
+    role === "flow-step" ||
+    role === "flow-end" ||
+    role === "flow-decision"
+  ) {
+    return "flow-step";
+  }
+
+  if (role === "flow-note") {
+    return "note";
+  }
+
+  if (
+    role === "mindmap-root" ||
+    role === "mindmap-branch" ||
+    role === "mindmap-reference"
+  ) {
+    return "note";
+  }
+
+  if (role === "erd-entity") {
+    return "entity";
+  }
+
+  if (role === "erd-comment") {
+    return "note";
+  }
+
+  return nodeKind;
+}
+
 function getDefaultNodeKindForSemanticDiagramType(
   diagramType: SemanticDiagramType,
 ): NodeKind {
@@ -185,8 +243,12 @@ function getDefaultNodeKindForSemanticDiagramType(
 
 function isNodeKindAllowedForProfile(
   profile: SemanticProfile,
-  nodeKind: NodeKind,
+  nodeKind: NodeKind | null | undefined,
 ): boolean {
+  if (!nodeKind) {
+    return true;
+  }
+
   if (!profile.strictRulesEnabled) {
     return true;
   }
@@ -200,10 +262,14 @@ function isNodeKindAllowedForProfile(
 
 function resolveAllowedEdgeKindsForNodes(input: {
   profile: SemanticProfile;
-  sourceKind?: NodeKind;
-  targetKind?: NodeKind;
+  sourceKind?: NodeKind | null;
+  targetKind?: NodeKind | null;
 }): EdgeKind[] {
   const { profile, sourceKind, targetKind } = input;
+
+  if (sourceKind === null || targetKind === null) {
+    return [];
+  }
 
   if (!sourceKind || !targetKind) {
     return [...profile.allowedEdgeKinds];
@@ -254,8 +320,8 @@ function resolveAllowedEdgeKindsForNodes(input: {
 
 function resolveRecommendedEdgeKind(input: {
   profile: SemanticProfile;
-  sourceKind?: NodeKind;
-  targetKind?: NodeKind;
+  sourceKind?: NodeKind | null;
+  targetKind?: NodeKind | null;
   allowedEdgeKinds: EdgeKind[];
 }): EdgeKind | undefined {
   const { profile, sourceKind, targetKind, allowedEdgeKinds } = input;
@@ -413,15 +479,21 @@ export function validateEdgeCreation(
   recommendedEdgeKind?: EdgeKind;
 } {
   const profile = getSemanticProfile(ctx.diagramType, options);
+  const sourceSemanticKind = ctx.sourceNode
+    ? toSemanticKind(ctx.diagramType, ctx.sourceNode.kind, ctx.sourceNode.payload)
+    : undefined;
+  const targetSemanticKind = ctx.targetNode
+    ? toSemanticKind(ctx.diagramType, ctx.targetNode.kind, ctx.targetNode.payload)
+    : undefined;
   const allowedEdgeKinds = resolveAllowedEdgeKindsForNodes({
     profile,
-    sourceKind: ctx.sourceNode?.kind,
-    targetKind: ctx.targetNode?.kind,
+    sourceKind: sourceSemanticKind,
+    targetKind: targetSemanticKind,
   });
   const recommendedEdgeKind = resolveRecommendedEdgeKind({
     profile,
-    sourceKind: ctx.sourceNode?.kind,
-    targetKind: ctx.targetNode?.kind,
+    sourceKind: sourceSemanticKind,
+    targetKind: targetSemanticKind,
     allowedEdgeKinds,
   });
 
@@ -488,8 +560,13 @@ export function buildRepairPlanForNodeKindChange(
   const relatedEdges = input.edges.filter(
     (edge) => edge.sourceNodeId === input.nodeId || edge.targetNodeId === input.nodeId,
   );
+  const semanticNextKind = toSemanticKind(
+    input.diagramType,
+    input.nextKind,
+    nodeMap.get(input.nodeId)?.payload,
+  );
 
-  const nodeKindAllowed = isNodeKindAllowedForProfile(profile, input.nextKind);
+  const nodeKindAllowed = isNodeKindAllowedForProfile(profile, semanticNextKind);
   if (!nodeKindAllowed && input.mode === "operational") {
     const fallbackKind = getDefaultNodeKindForSemanticDiagramType(profile.diagramType);
     if (fallbackKind !== input.nextKind) {
@@ -580,7 +657,13 @@ export function validateNodeKindChange(
     };
   }
 
-  if (!isNodeKindAllowedForProfile(profile, ctx.nextKind)) {
+  const semanticNextKind = toSemanticKind(
+    ctx.diagramType,
+    ctx.nextKind,
+    targetNode.payload,
+  );
+
+  if (!isNodeKindAllowedForProfile(profile, semanticNextKind)) {
     violations.push({
       code: "NODE_KIND_NOT_ALLOWED",
       severity: ctx.mode === "operational" ? "error" : "warning",
@@ -690,10 +773,15 @@ export function runGraphAudit(
 } {
   const profile = getSemanticProfile(diagramType, options);
   const issues: SemanticIssue[] = [];
+  const sortedNodes = [...graph.nodes].sort((a, b) => a.id.localeCompare(b.id));
   const nodeMap = new Map(
-    [...graph.nodes]
-      .sort((a, b) => a.id.localeCompare(b.id))
-      .map((node) => [node.id, node] as const),
+    sortedNodes.map((node) => [node.id, node] as const),
+  );
+  const semanticKindByNodeId = new Map(
+    sortedNodes.map((node) => [
+      node.id,
+      toSemanticKind(diagramType, node.kind, node.payload),
+    ] as const),
   );
   const sortedEdges = [...graph.edges].sort((a, b) => a.id.localeCompare(b.id));
 
@@ -709,8 +797,13 @@ export function runGraphAudit(
   }
 
   if (profile.diagramType === "flow" || profile.diagramType === "erd") {
-    for (const node of [...graph.nodes].sort((a, b) => a.id.localeCompare(b.id))) {
-      if (isNodeKindAllowedForProfile(profile, node.kind)) {
+    for (const node of sortedNodes) {
+      const semanticKind = semanticKindByNodeId.get(node.id);
+      if (!semanticKind) {
+        continue;
+      }
+
+      if (isNodeKindAllowedForProfile(profile, semanticKind)) {
         continue;
       }
 
@@ -729,7 +822,14 @@ export function runGraphAudit(
   }
 
   if (profile.diagramType === "mindmap" && graph.rootNodeId) {
-    const rootNode = nodeMap.get(graph.rootNodeId);
+    const auditNodeIds = new Set(
+      sortedNodes
+        .filter((node) => semanticKindByNodeId.get(node.id) !== null)
+        .map((node) => node.id),
+    );
+    const rootNode = auditNodeIds.has(graph.rootNodeId)
+      ? nodeMap.get(graph.rootNodeId)
+      : undefined;
 
     if (!rootNode) {
       issues.push({
@@ -741,11 +841,15 @@ export function runGraphAudit(
       });
     } else {
       const adjacency = new Map<string, Set<string>>();
-      for (const nodeId of nodeMap.keys()) {
+      for (const nodeId of auditNodeIds) {
         adjacency.set(nodeId, new Set());
       }
 
       for (const edge of sortedEdges) {
+        if (!auditNodeIds.has(edge.sourceNodeId) || !auditNodeIds.has(edge.targetNodeId)) {
+          continue;
+        }
+
         adjacency.get(edge.sourceNodeId)?.add(edge.targetNodeId);
         adjacency.get(edge.targetNodeId)?.add(edge.sourceNodeId);
       }
@@ -773,7 +877,11 @@ export function runGraphAudit(
         }
       }
 
-      for (const node of [...graph.nodes].sort((a, b) => a.id.localeCompare(b.id))) {
+      for (const node of sortedNodes) {
+        if (!auditNodeIds.has(node.id)) {
+          continue;
+        }
+
         if (visited.has(node.id)) {
           continue;
         }
@@ -808,6 +916,13 @@ export function runGraphAudit(
         targetType: "edge",
         targetId: edge.id,
       });
+      continue;
+    }
+
+    const sourceSemanticKind = semanticKindByNodeId.get(sourceNode.id);
+    const targetSemanticKind = semanticKindByNodeId.get(targetNode.id);
+
+    if (sourceSemanticKind === null || targetSemanticKind === null) {
       continue;
     }
 

@@ -315,6 +315,7 @@ export class RestoreWorkingSnapshotFromVersionUseCase {
             id: node.id,
             kind: node.kind,
             label: node.label,
+            payload: node.data,
           })),
           edges: snapshotToRestore.edges.map((edge) => ({
             id: edge.id,

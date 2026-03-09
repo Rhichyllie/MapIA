@@ -135,24 +135,47 @@ export function resolveDiagramRole(input: ResolveDiagramRoleInput): DiagramRole 
   }
 
   if (input.diagramType === "flow") {
-    if (
-      explicitRole === "flow-start" ||
-      explicitRole === "flow-end" ||
-      explicitRole === "flow-step" ||
-      explicitRole === "flow-note" ||
-      explicitRole === "flow-decision"
-    ) {
-      return explicitRole;
+    if (input.nodeKind === "flow-step") {
+      if (
+        explicitRole === "flow-start" ||
+        explicitRole === "flow-end" ||
+        explicitRole === "flow-step" ||
+        explicitRole === "flow-decision"
+      ) {
+        return explicitRole;
+      }
+
+      return "flow-step";
     }
 
     if (input.nodeKind === "note") {
+      if (explicitRole === "flow-note") {
+        return "flow-note";
+      }
+
       return "flow-note";
     }
 
-    return "flow-step";
+    if (input.nodeKind === "entity") {
+      return "erd-entity";
+    }
+
+    return "tree-node";
   }
 
   if (input.diagramType === "mindmap") {
+    if (input.nodeKind !== "note") {
+      if (input.nodeKind === "flow-step") {
+        return "flow-step";
+      }
+
+      if (input.nodeKind === "entity") {
+        return "erd-entity";
+      }
+
+      return "tree-node";
+    }
+
     if (explicitRole === "mindmap-root") {
       return "mindmap-root";
     }
@@ -174,11 +197,19 @@ export function resolveDiagramRole(input: ResolveDiagramRoleInput): DiagramRole 
   }
 
   if (input.diagramType === "erd") {
+    if (input.nodeKind === "entity") {
+      return "erd-entity";
+    }
+
     if (input.nodeKind === "note") {
       return "erd-comment";
     }
 
-    return "erd-entity";
+    if (input.nodeKind === "flow-step") {
+      return "flow-step";
+    }
+
+    return "tree-node";
   }
 
   if (input.nodeKind === "entity") {

@@ -1188,6 +1188,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             id: node.id,
             kind: node.data.kind,
             label: node.data.label,
+            payload: node.data.payload,
           })),
           edges: edges.map((edge) => ({
             id: edge.id,
@@ -1359,6 +1360,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         id: activeSourceNode.id,
         kind: activeSourceNode.data.kind,
         label: activeSourceNode.data.label,
+        payload: activeSourceNode.data.payload,
       };
 
       for (const candidate of visibleNodes) {
@@ -1374,6 +1376,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               id: candidate.id,
               kind: candidate.data.kind,
               label: candidate.data.label,
+              payload: candidate.data.payload,
             },
             mode: inspectorMode,
           },
@@ -2954,11 +2957,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         id: sourceNode.id,
         kind: sourceNode.data.kind,
         label: sourceNode.data.label,
+        payload: sourceNode.data.payload,
       },
       targetNode: {
         id: targetNode.id,
         kind: targetNode.data.kind,
         label: targetNode.data.label,
+        payload: targetNode.data.payload,
       },
       edgeKind: input.edgeKind,
       mode: inspectorMode,
@@ -4116,6 +4121,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           id: command.node.id,
           kind: command.node.kind,
           label: command.node.label,
+          payload: command.node.data,
         },
       ] as const),
     );

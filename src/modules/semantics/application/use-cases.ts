@@ -29,6 +29,7 @@ function toSemanticGraph(snapshot: GraphSnapshot): SemanticGraph {
       id: node.id,
       kind: node.kind,
       label: node.label,
+      payload: node.data,
     })),
     edges: snapshot.edges.map((edge) => ({
       id: edge.id,
