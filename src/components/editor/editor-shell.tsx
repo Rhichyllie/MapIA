@@ -26,6 +26,11 @@ import {
   type DiagramRendererKey,
 } from "./diagram-renderers";
 import {
+  computeInsertPosition,
+  computeReflow,
+  type DiagramLayoutType,
+} from "./diagram-renderers/layout/diagram-layout";
+import {
   applyEditorCommandLocally,
   applyEditorCommandsLocally,
   applyEditorCommandRemotely,
@@ -386,6 +391,15 @@ function resolveSemanticDiagramType(
   }
 
   return undefined;
+}
+
+function isDiagramLayoutType(diagramType: DiagramLayoutType) {
+  return (
+    diagramType === "tree" ||
+    diagramType === "flow" ||
+    diagramType === "mindmap" ||
+    diagramType === "erd"
+  );
 }
 
 function toSemanticEngineOptionsFromPolicy(
@@ -2953,104 +2967,91 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
   }
 
+  function buildLayoutNodesFromFlowNodes(inputNodes: RFNode[] = nodesRef.current) {
+    return inputNodes.map((node) => ({
+      id: node.id,
+      kind: node.data.kind,
+      position: {
+        x: node.position.x,
+        y: node.position.y,
+      },
+    }));
+  }
+
+  function buildLayoutEdgesFromFlowEdges(inputEdges: RFEdge[] = edgesRef.current) {
+    return inputEdges.map((edge) => ({
+      id: edge.id,
+      sourceNodeId: edge.source,
+      targetNodeId: edge.target,
+      kind: edge.data?.kind ?? "flows-to",
+    }));
+  }
+
   function resolveNodeInsertPosition(input: {
     referenceNode: RFNode | null;
     insertMode: ContextualInsertMode;
   }) {
     const { referenceNode, insertMode } = input;
-
-    if (referenceNode) {
-      if (insertMode === "flow-next-step") {
-        return {
-          x: referenceNode.position.x + 280,
-          y: referenceNode.position.y,
-        };
-      }
-
-      if (insertMode === "flow-branch") {
-        return {
-          x: referenceNode.position.x + 220,
-          y: referenceNode.position.y + 170,
-        };
-      }
-
-      if (insertMode === "tree-child") {
-        return renderer.treeDirection === "left-right"
-          ? {
-              x: referenceNode.position.x + 260,
-              y: referenceNode.position.y + 120,
-            }
-          : {
-              x: referenceNode.position.x + 170,
-              y: referenceNode.position.y + 220,
-            };
-      }
-
-      if (insertMode === "tree-sibling") {
-        return renderer.treeDirection === "left-right"
-          ? {
-              x: referenceNode.position.x,
-              y: referenceNode.position.y + 170,
-            }
-          : {
-              x: referenceNode.position.x + 220,
-              y: referenceNode.position.y,
-            };
-      }
-
-      if (insertMode === "erd-relation") {
-        return {
-          x: referenceNode.position.x + 350,
-          y: referenceNode.position.y,
-        };
-      }
-
-      if (
-        insertMode === "mindmap-branch" ||
-        insertMode === "mindmap-reference"
-      ) {
-        const rootNodeId = getMindmapRootNodeId(
-          nodesRef.current,
-          layoutMetadataRef.current.rootNodeName,
-        );
-        const anchorNode =
-          (rootNodeId
-            ? nodesRef.current.find((node) => node.id === rootNodeId)
-            : undefined) ?? referenceNode;
-        const relatedEdgeCount = edgesRef.current.filter(
-          (edge) => edge.source === anchorNode.id || edge.target === anchorNode.id,
-        ).length;
-        const angleDenominator = Math.max(nodesRef.current.length + 2, 8);
-        const angle = (2 * Math.PI * (relatedEdgeCount + 1)) / angleDenominator;
-        const radialDistance = insertMode === "mindmap-reference" ? 210 : 260;
-
-        return {
-          x: Number((anchorNode.position.x + Math.cos(angle) * radialDistance).toFixed(2)),
-          y: Number((anchorNode.position.y + Math.sin(angle) * radialDistance).toFixed(2)),
-        };
-      }
-
-      return {
-        x: referenceNode.position.x + DEFAULT_ADD_NODE_OFFSET.x,
-        y: referenceNode.position.y + DEFAULT_ADD_NODE_OFFSET.y,
-      };
-    }
-
     const containerRect = canvasRegionRef.current?.getBoundingClientRect();
     const currentViewport = viewportRef.current;
+    const basePosition = computeInsertPosition(
+      currentSupportedDiagramType,
+      referenceNode
+        ? {
+            id: referenceNode.id,
+            kind: referenceNode.data.kind,
+            position: {
+              x: referenceNode.position.x,
+              y: referenceNode.position.y,
+            },
+          }
+        : null,
+      buildLayoutNodesFromFlowNodes(),
+      {
+        x: currentViewport.x,
+        y: currentViewport.y,
+        zoom: currentViewport.zoom,
+        ...(containerRect
+          ? {
+              width: containerRect.width,
+              height: containerRect.height,
+            }
+          : {}),
+      },
+    );
 
-    if (containerRect) {
+    if (!referenceNode) {
+      return basePosition;
+    }
+
+    if (insertMode === "flow-branch") {
       return {
-        x: (containerRect.width / 2 - currentViewport.x) / currentViewport.zoom,
-        y: (containerRect.height / 2 - currentViewport.y) / currentViewport.zoom,
+        x: basePosition.x,
+        y: basePosition.y + 170,
       };
     }
 
-    const fallbackOffset = nodesRef.current.length * 28;
-    return {
-      x: 120 + fallbackOffset,
-      y: 120 + fallbackOffset / 2,
-    };
+    if (insertMode === "tree-sibling") {
+      const siblingCount = edgesRef.current.filter(
+        (edge) =>
+          (edge.data?.kind ?? "flows-to") === "contains" &&
+          edge.source === referenceNode.id,
+      ).length;
+
+      return {
+        x: basePosition.x + siblingCount * 190,
+        y: basePosition.y,
+      };
+    }
+
+    if (insertMode === "mindmap-reference") {
+      return {
+        x: Number((referenceNode.position.x + (basePosition.x - referenceNode.position.x) * 0.8).toFixed(2)),
+        y: Number((referenceNode.position.y + (basePosition.y - referenceNode.position.y) * 0.8).toFixed(2)),
+      };
+    }
+
+    return basePosition;
   }
 
   function resolveInsertModeFromActionId(
@@ -3105,8 +3106,51 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return selectedNode.id;
   }
 
+  function applyDiagramReflow(input: {
+    diagramType: DiagramLayoutType;
+    rootId?: string | null;
+  }) {
+    if (!isDiagramLayoutType(input.diagramType)) {
+      return 0;
+    }
+
+    const reflowedPositions = computeReflow(
+      input.diagramType,
+      buildLayoutNodesFromFlowNodes(),
+      buildLayoutEdgesFromFlowEdges(),
+      input.rootId,
+    );
+
+    let movedNodes = 0;
+    for (const node of nodesRef.current) {
+      const nextPosition = reflowedPositions[node.id];
+      if (!nextPosition) {
+        continue;
+      }
+
+      const hasPositionChanged =
+        Math.abs(node.position.x - nextPosition.x) > 0.5 ||
+        Math.abs(node.position.y - nextPosition.y) > 0.5;
+      if (!hasPositionChanged) {
+        continue;
+      }
+
+      movedNodes += 1;
+      applyLocalCommandAndQueue({
+        type: "moveNode",
+        nodeId: node.id,
+        position: {
+          x: nextPosition.x,
+          y: nextPosition.y,
+        },
+      });
+    }
+
+    return movedNodes;
+  }
+
   function queueTreeReflowIfNeeded(insertMode: ContextualInsertMode) {
-    if (renderer.key !== "tree") {
+    if (currentSupportedDiagramType !== "tree") {
       return;
     }
 
@@ -3114,35 +3158,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
-    const currentSnapshot = getCurrentSnapshot();
-    const reflowedSnapshot = reapplyLayoutForSnapshot(currentSnapshot);
-    const currentNodeById = new Map(
-      currentSnapshot.nodes.map((node) => [node.id, node] as const),
-    );
-
-    for (const node of reflowedSnapshot.nodes) {
-      const currentNode = currentNodeById.get(node.id);
-      if (!currentNode) {
-        continue;
-      }
-
-      const hasPositionChanged =
-        Math.abs(currentNode.position.x - node.position.x) > 0.5 ||
-        Math.abs(currentNode.position.y - node.position.y) > 0.5;
-
-      if (!hasPositionChanged) {
-        continue;
-      }
-
-      applyLocalCommandAndQueue({
-        type: "moveNode",
-        nodeId: node.id,
-        position: {
-          x: node.position.x,
-          y: node.position.y,
-        },
-      });
-    }
+    applyDiagramReflow({
+      diagramType: "tree",
+    });
   }
 
   function buildAddNodePayloadFromDraft(draft: AddNodeDraft) {
@@ -4054,12 +4072,73 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return true;
   }
 
+  function handleOrganizeDiagram() {
+    const currentSnapshot = getCurrentSnapshot();
+
+    if (currentSnapshot.allowReapplyLayout === false) {
+      setGlobalErrorMessage(
+        "Layout bloqueado por politica definida no Wizard. Ajuste antes de tentar novamente.",
+      );
+      return;
+    }
+
+    const layoutDiagramType = resolveSemanticDiagramType(
+      currentSnapshot.diagramType,
+      renderer.key,
+    );
+
+    if (!isDiagramLayoutType(layoutDiagramType)) {
+      setGlobalErrorMessage(
+        "Organizacao automatica exige tipo de diagrama suportado (hierarquia, processo, mapa mental ou ERD).",
+      );
+      return;
+    }
+
+    const movedNodes = applyDiagramReflow({
+      diagramType: layoutDiagramType,
+      rootId: layoutDiagramType === "mindmap" ? semanticRootNodeId : undefined,
+    });
+
+    setGlobalErrorMessage(null);
+    if (movedNodes === 0) {
+      setQuerySyncMessage("Diagrama ja esta organizado.");
+      return;
+    }
+
+    markDirtyState(
+      `Organizacao aplicada: ${movedNodes} no(s) reposicionado(s). Salve para persistir no snapshot.`,
+    );
+  }
+
   function handleReapplyLayout() {
     const currentSnapshot = getCurrentSnapshot();
 
     if (currentSnapshot.allowReapplyLayout === false) {
       setGlobalErrorMessage(
         "Layout bloqueado por politica definida no Wizard. Ajuste antes de tentar novamente.",
+      );
+      return;
+    }
+
+    const layoutDiagramType = resolveSemanticDiagramType(
+      currentSnapshot.diagramType,
+      renderer.key,
+    );
+
+    if (isDiagramLayoutType(layoutDiagramType)) {
+      const movedNodes = applyDiagramReflow({
+        diagramType: layoutDiagramType,
+        rootId: layoutDiagramType === "mindmap" ? semanticRootNodeId : undefined,
+      });
+
+      setGlobalErrorMessage(null);
+      if (movedNodes === 0) {
+        setQuerySyncMessage("Layout ja estava consistente.");
+        return;
+      }
+
+      markDirtyState(
+        `Layout reaplicado: ${movedNodes} no(s) reposicionado(s). Salve para persistir no snapshot.`,
       );
       return;
     }
@@ -4998,6 +5077,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                 data-testid="center-diagram-button"
               >
                 Ajustar
+              </button>
+              <button
+                className="btn"
+                type="button"
+                onClick={handleOrganizeDiagram}
+                data-testid="organize-diagram-button"
+              >
+                Organizar
               </button>
               <button
                 className="btn"
