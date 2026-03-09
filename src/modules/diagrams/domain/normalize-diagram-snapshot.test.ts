@@ -1,0 +1,135 @@
+import { describe, expect, it } from "vitest";
+import type { GraphSnapshot } from "@/src/domain";
+import { normalizeDiagramSnapshot } from "./normalize-diagram-snapshot";
+
+function createBaseSnapshot(overrides: Partial<GraphSnapshot>): GraphSnapshot {
+  return {
+    nodes: [],
+    edges: [],
+    viewport: {
+      x: 0,
+      y: 0,
+      zoom: 1,
+    },
+    ...overrides,
+  };
+}
+
+describe("normalizeDiagramSnapshot", () => {
+  it("flow with only meta nodes creates 'Inicio' and hides meta nodes", () => {
+    const snapshot = createBaseSnapshot({
+      diagramType: "flow",
+      nodes: [
+        {
+          id: "10000000-0000-4000-8000-000000000001",
+          projectId: "20000000-0000-4000-8000-000000000001",
+          kind: "workspace",
+          label: "Workspace",
+          position: { x: 0, y: 0 },
+          data: {},
+          externalRefs: [],
+        },
+        {
+          id: "10000000-0000-4000-8000-000000000002",
+          projectId: "20000000-0000-4000-8000-000000000001",
+          kind: "project",
+          label: "Projeto",
+          position: { x: 240, y: 40 },
+          data: {},
+          externalRefs: [],
+        },
+      ],
+      edges: [
+        {
+          id: "30000000-0000-4000-8000-000000000001",
+          projectId: "20000000-0000-4000-8000-000000000001",
+          sourceNodeId: "10000000-0000-4000-8000-000000000001",
+          targetNodeId: "10000000-0000-4000-8000-000000000002",
+          kind: "contains",
+          data: {},
+          externalRefs: [],
+        },
+      ],
+    });
+
+    const normalized = normalizeDiagramSnapshot({
+      snapshot,
+      diagramTypeEffective: "flow",
+      rootNodeName: undefined,
+    });
+
+    expect(normalized.hiddenNodeIds).toEqual([
+      "10000000-0000-4000-8000-000000000001",
+      "10000000-0000-4000-8000-000000000002",
+    ]);
+    expect(
+      normalized.normalizedSnapshot.nodes.some(
+        (node) =>
+          node.kind === "flow-step" &&
+          node.label === "Inicio" &&
+          (node.data.__mapia as { role?: string } | undefined)?.role === "flow-start",
+      ),
+    ).toBe(true);
+  });
+
+  it("mindmap computes stable root id using rootNodeName", () => {
+    const snapshot = createBaseSnapshot({
+      diagramType: "mindmap",
+      rootNodeName: "Tema Central",
+      nodes: [
+        {
+          id: "40000000-0000-4000-8000-000000000001",
+          projectId: "50000000-0000-4000-8000-000000000001",
+          kind: "workspace",
+          label: "Workspace",
+          position: { x: -320, y: -120 },
+          data: {},
+          externalRefs: [],
+        },
+        {
+          id: "40000000-0000-4000-8000-000000000002",
+          projectId: "50000000-0000-4000-8000-000000000001",
+          kind: "note",
+          label: "Tema Central",
+          position: { x: 140, y: 20 },
+          data: {},
+          externalRefs: [],
+        },
+        {
+          id: "40000000-0000-4000-8000-000000000003",
+          projectId: "50000000-0000-4000-8000-000000000001",
+          kind: "note",
+          label: "Ideia",
+          position: { x: 420, y: 160 },
+          data: {},
+          externalRefs: [],
+        },
+      ],
+      edges: [
+        {
+          id: "60000000-0000-4000-8000-000000000001",
+          projectId: "50000000-0000-4000-8000-000000000001",
+          sourceNodeId: "40000000-0000-4000-8000-000000000002",
+          targetNodeId: "40000000-0000-4000-8000-000000000003",
+          kind: "relates-to",
+          data: {},
+          externalRefs: [],
+        },
+      ],
+    });
+
+    const first = normalizeDiagramSnapshot({
+      snapshot,
+      diagramTypeEffective: "mindmap",
+      rootNodeName: "Tema Central",
+    });
+    const second = normalizeDiagramSnapshot({
+      snapshot,
+      diagramTypeEffective: "mindmap",
+      rootNodeName: "Tema Central",
+    });
+
+    expect(first.computedRootNodeId).toBe("40000000-0000-4000-8000-000000000002");
+    expect(second.computedRootNodeId).toBe(first.computedRootNodeId);
+  });
+});

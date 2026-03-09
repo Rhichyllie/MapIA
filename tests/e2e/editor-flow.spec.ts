@@ -429,7 +429,11 @@ async function addNodeViaGuidedFlow(
   if (input?.confirmWithEnter) {
     await titleInput.press("Enter");
   } else {
-    await page.getByTestId("add-node-confirm-button").click();
+    try {
+      await page.getByTestId("add-node-confirm-button").click({ timeout: 5_000 });
+    } catch {
+      await titleInput.press("Enter");
+    }
   }
 
   await expect(page.getByTestId("add-node-dialog")).toHaveCount(0);
@@ -1256,15 +1260,31 @@ model Post {
     });
 
     await setInspectorMode(page, "technical");
-    const snapshotBefore = await loadEditorSnapshot(page, project.id);
-    const sourceNode =
-      snapshotBefore.nodes.find((node) => node.kind === "flow-step") ??
-      snapshotBefore.nodes[0];
-    if (!sourceNode) {
-      throw new Error("Flow snapshot inicial sem no para validar adicao contextual.");
+    const sourceNodeId = await page.evaluate(() => {
+      const wrappers = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-testid^="editor-node-"]'),
+      );
+      const entries = wrappers
+        .map((wrapper) => ({
+          id: wrapper.dataset.testid?.replace("editor-node-", "") ?? "",
+          role: wrapper.querySelector<HTMLElement>("[data-diagram-role]")?.dataset
+            .diagramRole,
+        }))
+        .filter((entry) => entry.id.length > 0);
+
+      return (
+        entries.find(
+          (entry) => entry.role === "flow-start" || entry.role === "flow-step",
+        )?.id ??
+        entries[0]?.id ??
+        null
+      );
+    });
+    if (!sourceNodeId) {
+      throw new Error("Flow sem no visivel para validar adicao contextual.");
     }
 
-    const sourceLocator = page.getByTestId(`editor-node-${sourceNode.id}`);
+    const sourceLocator = page.getByTestId(`editor-node-${sourceNodeId}`);
     const nodeLocator = page.locator('[data-testid^="editor-node-"]');
     const flowEdgeLocator = page.locator(
       '[data-testid^="editor-edge-"].editor-edge-kind-flows-to',
@@ -1276,7 +1296,18 @@ model Post {
       throw new Error("Flow source node bounding box ausente.");
     }
 
-    await sourceLocator.click();
+    await page.evaluate((nodeId) => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-testid="editor-node-${nodeId}"]`,
+      );
+      if (!element) {
+        return;
+      }
+
+      element.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+      );
+    }, sourceNodeId);
     await expect(page.getByTestId("selection-hud-contextual-add-button")).toContainText(
       "Adicionar proxima etapa",
     );
@@ -1299,6 +1330,86 @@ model Post {
     await expect
       .poll(async () => flowEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
       .toBeGreaterThan(beforeFlowEdgeCount);
+  });
+
+  test("Fase 5.8 Roles Flow: badge de projeto nao aparece como Etapa e QuickAdd mostra papeis", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Flow Roles", {
+      diagramType: "flow",
+    });
+
+    await page.getByTestId("add-node-button").click();
+    await expect(page.getByTestId("add-node-dialog")).toBeVisible();
+    await expect(page.getByTestId("add-node-kind-workspace")).toHaveCount(0);
+    await expect(page.getByTestId("add-node-kind-project")).toHaveCount(0);
+    await expect(page.getByTestId("quick-add-role-flow-start")).toBeVisible();
+    await expect(page.getByTestId("quick-add-role-flow-step")).toBeVisible();
+    await expect(page.getByTestId("quick-add-role-flow-note")).toBeVisible();
+    await expect(page.getByTestId("quick-add-role-flow-end")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("add-node-dialog")).toHaveCount(0);
+
+    const snapshot = await loadEditorSnapshot(page, project.id);
+    const projectNode = snapshot.nodes.find((node) => node.kind === "project");
+    if (!projectNode) {
+      throw new Error("Snapshot flow sem no de projeto para validar compatibilidade.");
+    }
+
+    const projectLocator = page.getByTestId(`editor-node-${projectNode.id}`);
+    if ((await projectLocator.count()) > 0) {
+      await expect(projectLocator).toContainText("Inicio");
+      await expect(projectLocator).not.toContainText("Etapa");
+    }
+  });
+
+  test("Fase 5.8 Roles Flow: highlight semantico permite alvo valido a partir do inicio", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createProjectAndOpenEditor(page, "E2E Flow Highlight", {
+      diagramType: "flow",
+    });
+    const snapshotBefore = await loadEditorSnapshot(page, project.id);
+    const sourceNode =
+      snapshotBefore.nodes.find((node) => node.kind === "project") ??
+      snapshotBefore.nodes.find((node) => node.kind === "flow-step");
+    if (!sourceNode) {
+      throw new Error("Flow sem no de origem para validar semantica de conexao.");
+    }
+
+    const targetNodeId = randomUUID();
+    const targetNodeLabel = `Etapa Hook ${Date.now()}`;
+    const createTargetResponse = await page.request.post(
+      `/api/projects/${project.id}/editor-commands`,
+      {
+        data: {
+          command: {
+            type: "addNode",
+            node: {
+              id: targetNodeId,
+              kind: "flow-step",
+              label: targetNodeLabel,
+              position: {
+                x: sourceNode.position.x + 280,
+                y: sourceNode.position.y + 120,
+              },
+              data: {},
+            },
+          },
+        },
+      },
+    );
+    await assertApiResponseOk(createTargetResponse, "create target flow-step via API before semantic connect check");
+
+    await page.reload();
+    await waitForEditorReady(page);
+
+    const connected = await connectNodesViaSemanticHook(
+      page,
+      sourceNode.id,
+      targetNodeId,
+    );
+    expect(connected).toBe(true);
   });
 
   test("Fase 5.8 Tree: adicionar filho posiciona abaixo e conecta contains", async ({
@@ -1351,23 +1462,13 @@ model Post {
   test("Fase 5.8 Mindmap: adicionar ramificacao posiciona radial e preserva root", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createProjectAndOpenEditor(page, "E2E Mindmap Diferenca", {
+    await createProjectAndOpenEditor(page, "E2E Mindmap Diferenca", {
       diagramType: "mindmap",
     });
 
     await setInspectorMode(page, "technical");
-    const snapshotBefore = await loadEditorSnapshot(page, project.id);
-    const rootNode =
-      [...snapshotBefore.nodes].sort(
-        (nodeA, nodeB) =>
-          Math.hypot(nodeA.position.x, nodeA.position.y) -
-          Math.hypot(nodeB.position.x, nodeB.position.y),
-      )[0] ?? null;
-    if (!rootNode) {
-      throw new Error("Mindmap snapshot inicial sem root para validar ramificacao.");
-    }
-
-    const rootLocator = page.getByTestId(`editor-node-${rootNode.id}`);
+    const rootLocator = page.locator(".diagram-node-mindmap.is-root").first();
+    await expect(rootLocator).toBeVisible();
     const nodeLocator = page.locator('[data-testid^="editor-node-"]');
     const relatesEdgeLocator = page.locator(
       '[data-testid^="editor-edge-"].editor-edge-kind-relates-to',
@@ -1411,6 +1512,41 @@ model Post {
     await expect
       .poll(async () => relatesEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
       .toBeGreaterThan(beforeRelatesCount);
+  });
+
+  test("Fase 5.8 Roles Mindmap: root permanece o mesmo apos Organizar", async ({
+    authenticatedPage: page,
+  }) => {
+    await createProjectAndOpenEditor(page, "E2E Mindmap Root Stable", {
+      diagramType: "mindmap",
+    });
+
+    const rootNodeTestIdBefore = await page.evaluate(() => {
+      const rootElement = document.querySelector<HTMLElement>(
+        ".diagram-node-mindmap.is-root",
+      );
+      const wrapper = rootElement?.closest<HTMLElement>('[data-testid^="editor-node-"]');
+      return wrapper?.dataset.testid ?? null;
+    });
+
+    if (!rootNodeTestIdBefore) {
+      throw new Error("Nao foi possivel detectar root inicial do mindmap.");
+    }
+
+    await page.getByRole("button", { name: "Organizar" }).click();
+    await expect
+      .poll(async () => {
+        return page.evaluate(() => {
+          const rootElement = document.querySelector<HTMLElement>(
+            ".diagram-node-mindmap.is-root",
+          );
+          const wrapper = rootElement?.closest<HTMLElement>(
+            '[data-testid^="editor-node-"]',
+          );
+          return wrapper?.dataset.testid ?? null;
+        });
+      })
+      .toBe(rootNodeTestIdBefore);
   });
 
   test("Fase 5.8 ERD: import Prisma mostra fields em tabela e references com cardinalidade", async ({

@@ -1331,6 +1331,8 @@ select {
 
 .add-node-dialog {
   width: min(96vw, 580px);
+  max-height: min(88vh, 760px);
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 0.9rem;
   background: var(--surface-elevation-2);
