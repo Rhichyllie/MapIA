@@ -829,6 +829,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const [layoutMetadata, setLayoutMetadata] = useState<EditorSnapshotLayoutMetadata>(
     initialFlowState.layoutMetadata,
   );
+  const [hiddenDiagramNodeIds, setHiddenDiagramNodeIds] = useState<string[]>(
+    initialFlowState.hiddenNodeIds,
+  );
+  const [computedMindmapRootNodeId, setComputedMindmapRootNodeId] = useState<
+    string | null
+  >(initialFlowState.computedRootNodeId ?? null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorAutosaveState>(
@@ -1162,9 +1168,17 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     () => toSemanticEngineOptionsFromPolicy(semanticPolicy),
     [semanticPolicy],
   );
+  const hiddenDiagramNodeIdSet = useMemo(
+    () => new Set(hiddenDiagramNodeIds),
+    [hiddenDiagramNodeIds],
+  );
   const semanticRootNodeId =
     renderer.key === "mindmap"
-      ? getMindmapRootNodeId(nodes, layoutMetadata.rootNodeName)
+      ? computedMindmapRootNodeId ??
+        getMindmapRootNodeId(
+          nodes.filter((node) => !hiddenDiagramNodeIdSet.has(node.id)),
+          layoutMetadata.rootNodeName,
+        )
       : null;
   const semanticAudit = useMemo(
     () =>
@@ -1286,17 +1300,24 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     return hidden;
   }, [collapsedTreeNodeIdSet, edges, renderer.key]);
+  const hiddenCanvasNodeIdSet = useMemo(() => {
+    const combined = new Set(hiddenDiagramNodeIdSet);
+    for (const nodeId of hiddenTreeNodeIdSet) {
+      combined.add(nodeId);
+    }
+    return combined;
+  }, [hiddenDiagramNodeIdSet, hiddenTreeNodeIdSet]);
 
   useEffect(() => {
     if (!selectedNodeId) {
       return;
     }
 
-    if (hiddenTreeNodeIdSet.has(selectedNodeId)) {
+    if (hiddenCanvasNodeIdSet.has(selectedNodeId)) {
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
     }
-  }, [hiddenTreeNodeIdSet, selectedNodeId]);
+  }, [hiddenCanvasNodeIdSet, selectedNodeId]);
 
   useEffect(() => {
     if (!selectedEdgeId) {
@@ -1309,23 +1330,28 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     if (
-      hiddenTreeNodeIdSet.has(selected.source) ||
-      hiddenTreeNodeIdSet.has(selected.target)
+      hiddenCanvasNodeIdSet.has(selected.source) ||
+      hiddenCanvasNodeIdSet.has(selected.target)
     ) {
       setSelectedEdgeId(null);
       setSelectedNodeId(null);
     }
-  }, [edges, hiddenTreeNodeIdSet, selectedEdgeId]);
+  }, [edges, hiddenCanvasNodeIdSet, selectedEdgeId]);
 
   const renderedNodes = useMemo(() => {
-    const visibleNodes = nodes.filter((node) => !hiddenTreeNodeIdSet.has(node.id));
+    const visibleNodes = nodes.filter(
+      (node) => !hiddenCanvasNodeIdSet.has(node.id) && node.hidden !== true,
+    );
     const mindmapRootNodeId =
       renderer.key === "mindmap"
-        ? getMindmapRootNodeId(visibleNodes, layoutMetadata.rootNodeName)
+        ? computedMindmapRootNodeId &&
+          visibleNodes.some((node) => node.id === computedMindmapRootNodeId)
+          ? computedMindmapRootNodeId
+          : getMindmapRootNodeId(visibleNodes, layoutMetadata.rootNodeName)
         : null;
     const connectionTargetStateByNodeId = new Map<string, "allowed" | "blocked">();
     const activeSourceNode = activeConnectionSourceNodeId
-      ? nodes.find((node) => node.id === activeConnectionSourceNodeId) ?? null
+      ? visibleNodes.find((node) => node.id === activeConnectionSourceNodeId) ?? null
       : null;
 
     if (activeSourceNode) {
@@ -1335,7 +1361,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         label: activeSourceNode.data.label,
       };
 
-      for (const candidate of nodes) {
+      for (const candidate of visibleNodes) {
         if (candidate.id === activeSourceNode.id) {
           continue;
         }
@@ -1422,11 +1448,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     });
   }, [
     activeConnectionSourceNodeId,
+    computedMindmapRootNodeId,
     inspectorMode,
     isValidationPanelOpen,
     layoutMetadata.rootNodeName,
     nodes,
-    hiddenTreeNodeIdSet,
+    hiddenCanvasNodeIdSet,
     collapsedTreeNodeIdSet,
     renderer,
     selectedNodeId,
@@ -1437,8 +1464,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const renderedEdges = useMemo(() => {
     const visibleEdges = edges.filter(
       (edge) =>
-        !hiddenTreeNodeIdSet.has(edge.source) &&
-        !hiddenTreeNodeIdSet.has(edge.target),
+        !hiddenCanvasNodeIdSet.has(edge.source) &&
+        !hiddenCanvasNodeIdSet.has(edge.target),
     );
     const baseEdges = visibleEdges.map((edge) => {
       const edgeKind = edge.data?.kind ?? "flows-to";
@@ -1504,7 +1531,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return computeParallelEdgeMeta(baseEdges);
   }, [
     edges,
-    hiddenTreeNodeIdSet,
+    hiddenCanvasNodeIdSet,
     isValidationPanelOpen,
     renderer,
     selectedEdgeId,
@@ -1587,6 +1614,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setEdges(next.edges);
     setViewport(next.viewport);
     setLayoutMetadata(next.layoutMetadata);
+    setHiddenDiagramNodeIds(next.hiddenNodeIds);
+    setComputedMindmapRootNodeId(next.computedRootNodeId ?? null);
   }
 
   function getCurrentSnapshot() {
@@ -2189,15 +2218,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             return;
           }
 
-          const next = fromCanonicalSnapshotToFlowState(result.snapshot);
-          nodesRef.current = next.nodes;
-          edgesRef.current = next.edges;
-          viewportRef.current = next.viewport;
-          layoutMetadataRef.current = next.layoutMetadata;
-          setNodes(next.nodes);
-          setEdges(next.edges);
-          setViewport(next.viewport);
-          setLayoutMetadata(next.layoutMetadata);
+          syncFromSnapshot(result.snapshot);
           setPendingCommandsState([]);
           localMutationVersionRef.current = 0;
           setCurrentRevision(result.revision);
@@ -3082,23 +3103,31 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   }
 
   function buildLayoutNodesFromFlowNodes(inputNodes: RFNode[] = nodesRef.current) {
-    return inputNodes.map((node) => ({
+    return inputNodes
+      .filter((node) => !hiddenCanvasNodeIdSet.has(node.id) && node.hidden !== true)
+      .map((node) => ({
       id: node.id,
       kind: node.data.kind,
       position: {
         x: node.position.x,
         y: node.position.y,
       },
-    }));
+      }));
   }
 
   function buildLayoutEdgesFromFlowEdges(inputEdges: RFEdge[] = edgesRef.current) {
-    return inputEdges.map((edge) => ({
+    return inputEdges
+      .filter(
+        (edge) =>
+          !hiddenCanvasNodeIdSet.has(edge.source) &&
+          !hiddenCanvasNodeIdSet.has(edge.target),
+      )
+      .map((edge) => ({
       id: edge.id,
       sourceNodeId: edge.source,
       targetNodeId: edge.target,
       kind: edge.data?.kind ?? "flows-to",
-    }));
+      }));
   }
 
   function resolveNodeInsertPosition(input: {

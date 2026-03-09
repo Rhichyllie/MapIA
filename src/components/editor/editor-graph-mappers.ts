@@ -4,6 +4,12 @@ import type {
   Viewport,
 } from "@xyflow/react";
 import type { Edge, ExternalRef, GraphSnapshot, Node } from "@/src/domain";
+import {
+  normalizeDiagramSnapshot,
+  resolveDiagramRole,
+  type DiagramRole,
+} from "@/src/modules/diagrams/domain";
+import type { DiagramType } from "@/src/modules/graph/domain";
 
 export type EditorNodeData = {
   nodeId?: string;
@@ -11,6 +17,7 @@ export type EditorNodeData = {
   kind: Node["kind"];
   payload: Record<string, unknown>;
   externalRefs: ExternalRef[];
+  diagramRole?: DiagramRole;
   rendererDirection?: "top-down" | "left-right";
   rendererIsRoot?: boolean;
   rendererTreeCollapsed?: boolean;
@@ -48,11 +55,46 @@ function buildEdgeTestDomAttributes(edgeId: string): RFEdge["domAttributes"] {
   } as unknown as RFEdge["domAttributes"];
 }
 
-export function toFlowNodes(snapshot: GraphSnapshot): RFNode[] {
-  return snapshot.nodes.map((node) => ({
+function resolveDiagramTypeEffective(
+  diagramType: string | undefined,
+): DiagramType | "erd" | undefined {
+  if (diagramType === "tree" || diagramType === "flow" || diagramType === "mindmap") {
+    return diagramType;
+  }
+
+  if (diagramType === "erd") {
+    return "erd";
+  }
+
+  return undefined;
+}
+
+export function toFlowNodes(
+  snapshot: GraphSnapshot,
+  options?: {
+    hiddenNodeIds?: Set<string>;
+    diagramTypeEffective?: DiagramType | "erd" | undefined;
+    rootNodeName?: string;
+  },
+): RFNode[] {
+  const hiddenNodeIds = options?.hiddenNodeIds ?? new Set<string>();
+  const diagramTypeEffective =
+    options?.diagramTypeEffective ?? resolveDiagramTypeEffective(snapshot.diagramType);
+
+  return snapshot.nodes.map((node) => {
+    const diagramRole = resolveDiagramRole({
+      diagramType: diagramTypeEffective,
+      nodeKind: node.kind,
+      nodePayload: node.data,
+      nodeLabel: node.label,
+      layoutMetadata: { rootNodeName: options?.rootNodeName ?? snapshot.rootNodeName ?? null },
+    });
+
+    return {
     id: node.id,
     position: node.position,
     type: node.kind === "project" ? "input" : undefined,
+    hidden: hiddenNodeIds.has(node.id),
     domAttributes: buildNodeTestDomAttributes(node.id),
     data: {
       nodeId: node.id,
@@ -60,8 +102,10 @@ export function toFlowNodes(snapshot: GraphSnapshot): RFNode[] {
       kind: node.kind,
       payload: node.data,
       externalRefs: node.externalRefs,
+      diagramRole,
     },
-  }));
+  };
+  });
 }
 
 export function toFlowEdges(snapshot: GraphSnapshot): RFEdge[] {
@@ -126,16 +170,34 @@ export function fromCanonicalSnapshotToFlowState(snapshot: GraphSnapshot): {
   edges: RFEdge[];
   viewport: Viewport;
   layoutMetadata: EditorSnapshotLayoutMetadata;
+  hiddenNodeIds: string[];
+  computedRootNodeId?: string;
 } {
+  const diagramTypeEffective = resolveDiagramTypeEffective(snapshot.diagramType);
+  const normalization = normalizeDiagramSnapshot({
+    snapshot,
+    diagramTypeEffective,
+    rootNodeName: snapshot.rootNodeName,
+  });
+  const hiddenNodeIds = new Set(normalization.hiddenNodeIds);
+
   return {
-    nodes: toFlowNodes(snapshot),
-    edges: toFlowEdges(snapshot),
-    viewport: snapshot.viewport,
+    nodes: toFlowNodes(normalization.normalizedSnapshot, {
+      hiddenNodeIds,
+      diagramTypeEffective,
+      rootNodeName: snapshot.rootNodeName,
+    }),
+    edges: toFlowEdges(normalization.normalizedSnapshot),
+    viewport: normalization.normalizedSnapshot.viewport,
     layoutMetadata: {
       diagramType: snapshot.diagramType,
       layoutOptions: snapshot.layoutOptions,
       rootNodeName: snapshot.rootNodeName,
       allowReapplyLayout: snapshot.allowReapplyLayout,
     },
+    hiddenNodeIds: normalization.hiddenNodeIds,
+    ...(normalization.computedRootNodeId
+      ? { computedRootNodeId: normalization.computedRootNodeId }
+      : {}),
   };
 }
