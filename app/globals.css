@@ -1513,6 +1513,145 @@ select {
   background: color-mix(in srgb, var(--color-warning) 12%, var(--surface-elevation-1));
 }
 
+.semantic-audit-item-suggestion {
+  border-color: color-mix(in srgb, #0f766e 52%, transparent);
+  background: color-mix(in srgb, #0f766e 10%, var(--surface-elevation-1));
+}
+
+.semantic-audit-item-info {
+  border-color: color-mix(in srgb, #2563eb 52%, transparent);
+  background: color-mix(in srgb, #2563eb 10%, var(--surface-elevation-1));
+}
+
+.semantic-safe-fix-preview {
+  border: 1px dashed var(--editor-meta-border);
+  border-radius: 0.62rem;
+  padding: 0.45rem 0.6rem;
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface-elevation-1));
+}
+
+.erd-validation-level-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--editor-meta-border);
+  border-radius: 0.7rem;
+  padding: 0.34rem 0.48rem;
+  background: var(--editor-meta-bg);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.erd-validation-level-control select {
+  border: 1px solid var(--input-border);
+  border-radius: 0.55rem;
+  background: var(--input-bg);
+  color: inherit;
+  padding: 0.2rem 0.4rem;
+}
+
+.erd-export-feedback {
+  margin: 0.2rem 0.8rem 0.5rem;
+}
+
+.erd-export-feedback-success {
+  color: color-mix(in srgb, #15803d 82%, var(--color-text));
+}
+
+.erd-export-feedback-info {
+  color: color-mix(in srgb, #0f766e 82%, var(--color-text));
+}
+
+.erd-export-feedback-error {
+  color: var(--color-danger);
+}
+
+.erd-quick-relate-popover {
+  position: absolute;
+  z-index: 20;
+  border: 1px solid var(--editor-meta-border);
+  border-radius: 0.78rem;
+  background: var(--surface-elevation-2);
+  box-shadow: var(--shadow);
+  padding: 0.56rem;
+  display: grid;
+  gap: 0.5rem;
+  width: min(260px, calc(100vw - 2rem));
+}
+
+.erd-quick-relate-popover-header {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.erd-fields-grid {
+  border: 1px solid var(--editor-meta-border);
+  border-radius: 0.7rem;
+  overflow: hidden;
+}
+
+.erd-fields-grid-header,
+.erd-fields-grid-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(90px, 1fr) minmax(120px, 1fr) auto;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.42rem 0.5rem;
+}
+
+.erd-fields-grid-header {
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted-strong);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--surface-elevation-1));
+}
+
+.erd-fields-grid-row {
+  border-top: 1px dashed color-mix(in srgb, var(--color-border) 86%, transparent);
+}
+
+.erd-field-flags {
+  gap: 0.3rem;
+}
+
+.erd-field-flag-chip {
+  min-width: 2rem;
+  padding: 0.28rem 0.46rem;
+  font-size: 0.74rem;
+}
+
+.erd-field-flag-chip.is-active {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--color-primary) 62%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+.erd-cardinality-advanced {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 0.45rem;
+}
+
+.erd-cardinality-advanced label {
+  display: grid;
+  gap: 0.28rem;
+  font-size: 0.84rem;
+  color: var(--muted-strong);
+}
+
+.erd-cardinality-checkbox {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.erd-materialization-controls {
+  display: grid;
+  gap: 0.45rem;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+}
+
 .inspector {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -2212,6 +2351,37 @@ select {
   background: color-mix(in srgb, var(--canvas-edge-color) 8%, transparent);
 }
 
+.diagram-node-erd__badges {
+  margin-top: 0.28rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.26rem;
+}
+
+.diagram-node-erd__badge {
+  border-radius: 999px;
+  border: 1px solid var(--editor-meta-border);
+  padding: 0.08rem 0.42rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.diagram-node-erd__badge-warning {
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+}
+
+.diagram-node-erd__badge-info {
+  border-color: color-mix(in srgb, #2563eb 50%, transparent);
+  background: color-mix(in srgb, #2563eb 10%, transparent);
+}
+
+.diagram-node-erd__badge-suggestion {
+  border-color: color-mix(in srgb, #0f766e 52%, transparent);
+  background: color-mix(in srgb, #0f766e 10%, transparent);
+}
+
 .diagram-node-erd__rows {
   display: grid;
 }
@@ -2365,6 +2535,16 @@ select {
 
   .workspace-drawer {
     width: min(100%, 720px);
+  }
+
+  .erd-fields-grid-header,
+  .erd-fields-grid-row {
+    grid-template-columns: 1fr;
+  }
+
+  .erd-cardinality-advanced,
+  .erd-materialization-controls {
+    grid-template-columns: 1fr;
   }
 }
 

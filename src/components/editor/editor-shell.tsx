@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import {
   Background,
   MarkerType,
@@ -105,8 +112,35 @@ import {
   type RFNode,
 } from "./editor-graph-mappers";
 import {
+  buildBatchSafeFixCommands,
+  buildConvertToAssociativeFix,
+  buildMaterializeFkFix,
+  buildOneToOneUniqueFix,
+  erdCardinalityFromPreset,
+  erdCardinalityToPreset,
+  formatErdCardinalityLabel,
+  inferDependentSide,
+  mergeErdPolicyIntoCustomRules,
+  normalizeErdEntityPayload,
+  normalizeErdGraphFromSemantic,
+  normalizeErdPolicyFromCustomRules,
+  normalizeErdRelationPayload,
+  suggestAssociativeEntityName,
+  validateErdGraphFull,
+  type ErdCardinality,
+  type ErdCardinalityPreset,
+  type ErdEditorCommand,
+  type ErdEntityPayload,
+  type ErdField,
+  type ErdFieldFlag,
+  type ErdPolicyConfig,
+  type ErdRelationPayload,
+  type ErdRelationRef,
+} from "@/src/modules/erd/domain";
+import {
   createEdgeForEditor,
   createSnapshotVersionForEditor,
+  exportErdPreviewForEditor,
   EditorQueryError,
   importPrismaSchemaForEditor,
   listSnapshotVersionsForEditor,
@@ -120,6 +154,8 @@ import {
   saveWorkingSnapshotForEditor,
   updateEdgeForEditor,
   updateNodeForEditor,
+  updateSemanticPolicyForEditor,
+  type ErdExportPreviewPayload,
   type SemanticAuditPayload,
   type SemanticPolicyPayload,
   type EditorPrismaSchemaImportSummary,
@@ -183,6 +219,9 @@ type VersionDiffFeedback =
 type PrismaSchemaImportFeedback =
   | { kind: "success" | "error"; message: string }
   | null;
+type ErdExportFeedback =
+  | { kind: "success" | "error" | "info"; message: string }
+  | null;
 
 type OperationalEdgeDraft = {
   label: string;
@@ -244,6 +283,17 @@ type PendingConnectionAssistantState = {
   details?: string;
 };
 
+type PendingErdQuickRelateState = {
+  sourceNodeId: string;
+  targetNodeId: string;
+  sourceLabel: string;
+  targetLabel: string;
+  style: {
+    left: string;
+    top: string;
+  };
+};
+
 type PendingNodeRepairState = {
   command: Extract<EditorCommand, { type: "updateNode" }>;
   repairPlan: RepairPlan;
@@ -255,6 +305,18 @@ type PendingSemanticOverrideState = {
   message: string;
   requireReason: boolean;
   onConfirm: (reason: string) => Promise<void>;
+};
+
+type SemanticIssueLike = {
+  id: string;
+  code: string;
+  severity: "error" | "warning" | "info" | "suggestion";
+  message: string;
+  explanation?: string;
+  details?: string;
+  suggestedFixes?: unknown;
+  targetType: "graph" | "node" | "edge";
+  targetId?: string;
 };
 
 type MapiaClipboardFragment = {
@@ -275,6 +337,11 @@ type MapiaClipboardFragment = {
     label?: string;
     data: Record<string, unknown>;
   }>;
+};
+
+type ErdFieldDraftState = {
+  name: string;
+  type: string;
 };
 
 type EditorPanelState = {
@@ -618,17 +685,17 @@ function isClipboardPartialEdgePasteEnabled(
 
 function resolveErdCardinalityFromPayload(
   payload: Record<string, unknown> | undefined,
-): "1:1" | "1:N" | "N:N" | undefined {
+): ErdCardinalityPreset | undefined {
   if (!payload) {
     return undefined;
   }
 
-  const cardinality = payload.cardinality;
-  if (cardinality === "1:1" || cardinality === "1:N" || cardinality === "N:N") {
-    return cardinality;
-  }
+  const normalized = normalizeErdRelationPayload(payload, {
+    sourceEntityId: "",
+    targetEntityId: "",
+  });
 
-  return undefined;
+  return erdCardinalityToPreset(normalized.cardinality);
 }
 
 function resolveErdEdgeLabel(input: {
@@ -641,28 +708,33 @@ function resolveErdEdgeLabel(input: {
     return input.baseLabel;
   }
 
-  const cardinality = resolveErdCardinalityFromPayload(input.payload);
-  if (!cardinality) {
+  const normalized = normalizeErdRelationPayload(input.payload, {
+    sourceEntityId: "",
+    targetEntityId: "",
+  });
+  const cardinalityPreset = erdCardinalityToPreset(normalized.cardinality);
+  const cardinalityLabel = cardinalityPreset ?? formatErdCardinalityLabel(normalized.cardinality);
+  if (!normalized.cardinality) {
     return input.baseLabel;
   }
 
   const normalizedBaseLabel = input.baseLabel?.trim();
   if (normalizedBaseLabel) {
-    return `${normalizedBaseLabel} (${cardinality})`;
+    return `${normalizedBaseLabel} (${cardinalityLabel})`;
   }
 
-  return cardinality;
+  return cardinalityLabel;
 }
 
 function resolveErdEdgeClassSuffix(
   payload: Record<string, unknown> | undefined,
 ) {
-  const cardinality = resolveErdCardinalityFromPayload(payload);
-  if (!cardinality) {
+  const preset = resolveErdCardinalityFromPayload(payload);
+  if (!preset) {
     return undefined;
   }
 
-  return cardinality.replace(":", "-").toLowerCase();
+  return preset.replace(":", "-").toLowerCase();
 }
 
 function resolveEdgeMarker(edgeKind: EdgeKind) {
@@ -695,7 +767,7 @@ function resolveEdgeDashArray(
       return undefined;
     }
 
-    if (cardinality === "1:N") {
+    if (cardinality === "1:N" || cardinality === "N:1") {
       return "7 4";
     }
 
@@ -715,6 +787,196 @@ function resolveEdgeDashArray(
   }
 
   return undefined;
+}
+
+function toErdPolicyConfig(
+  policy: SemanticPolicyPayload | null | undefined,
+): ErdPolicyConfig {
+  return normalizeErdPolicyFromCustomRules(
+    readRecord(policy?.customRulesJson),
+  );
+}
+
+function isErdStrictValidationLevel(
+  policy: SemanticPolicyPayload | null | undefined,
+) {
+  return toErdPolicyConfig(policy).validationLevel === "strict";
+}
+
+function isErdDraftValidationLevel(
+  policy: SemanticPolicyPayload | null | undefined,
+) {
+  return toErdPolicyConfig(policy).validationLevel === "draft";
+}
+
+function normalizeErdEntityPayloadFromNode(node: RFNode): ErdEntityPayload {
+  return normalizeErdEntityPayload(readRecord(node.data.payload), {
+    entityId: node.id,
+    fallbackLabel: node.data.label,
+  });
+}
+
+function normalizeErdRelationPayloadFromEdge(edge: RFEdge): ErdRelationPayload {
+  return normalizeErdRelationPayload(readRecord(edge.data?.payload), {
+    sourceEntityId: edge.source,
+    targetEntityId: edge.target,
+  });
+}
+
+function createErdField(input: { entityId: string; index: number }): ErdField {
+  return {
+    id: `${input.entityId}-field-${crypto.randomUUID()}`,
+    name: `campo_${input.index}`,
+    type: "string",
+    flags: ["NULLABLE"],
+  };
+}
+
+function toggleErdFieldFlag(input: { field: ErdField; flag: ErdFieldFlag }): ErdField {
+  const nextFlags = new Set<ErdFieldFlag>(input.field.flags);
+  if (nextFlags.has(input.flag)) {
+    nextFlags.delete(input.flag);
+  } else {
+    nextFlags.add(input.flag);
+  }
+
+  if (input.flag === "NOT_NULL" && nextFlags.has("NOT_NULL")) {
+    nextFlags.delete("NULLABLE");
+  } else if (input.flag === "NOT_NULL" && !nextFlags.has("NOT_NULL")) {
+    nextFlags.add("NULLABLE");
+  }
+
+  if (input.flag === "NULLABLE" && nextFlags.has("NULLABLE")) {
+    nextFlags.delete("NOT_NULL");
+  }
+
+  if (input.flag === "PK" && nextFlags.has("PK")) {
+    nextFlags.add("NOT_NULL");
+    nextFlags.delete("NULLABLE");
+  }
+
+  return {
+    ...input.field,
+    flags: [...nextFlags],
+  };
+}
+
+function flipErdRelationPayloadDirection(payload: ErdRelationPayload): ErdRelationPayload {
+  const currentCardinality = payload.cardinality;
+  const swappedCardinality = currentCardinality
+    ? {
+        minSource: currentCardinality.minTarget,
+        maxSource: currentCardinality.maxTarget,
+        minTarget: currentCardinality.minSource,
+        maxTarget: currentCardinality.maxSource,
+      }
+    : undefined;
+  const roles = payload.roles
+    ? {
+        sourceRole: payload.roles.targetRole,
+        targetRole: payload.roles.sourceRole,
+      }
+    : undefined;
+  const materialization =
+    payload.materialization?.mode === "fk"
+      ? {
+          ...payload.materialization,
+          dependentSide:
+            payload.materialization.dependentSide === "source"
+              ? ("target" as const)
+              : ("source" as const),
+        }
+      : payload.materialization;
+
+  return {
+    ...payload,
+    ...(swappedCardinality ? { cardinality: swappedCardinality } : {}),
+    ...(roles ? { roles } : {}),
+    ...(materialization ? { materialization } : {}),
+  };
+}
+
+function readIssueSuggestedFixCommands(value: unknown): ErdEditorCommand[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const commands: ErdEditorCommand[] = [];
+  for (const command of value) {
+    if (!command || typeof command !== "object" || Array.isArray(command)) {
+      continue;
+    }
+
+    const parsed = command as ErdEditorCommand;
+    if (typeof (parsed as { type?: unknown }).type !== "string") {
+      continue;
+    }
+
+    commands.push(parsed);
+  }
+
+  return commands;
+}
+
+function readIssueSuggestedFixes(issue: SemanticIssueLike) {
+  const rawFixes = Array.isArray(issue.suggestedFixes) ? issue.suggestedFixes : [];
+
+  return rawFixes
+    .map((fix) => {
+      if (!fix || typeof fix !== "object") {
+        return null;
+      }
+
+      const parsed = fix as {
+        id?: unknown;
+        label?: unknown;
+        description?: unknown;
+        safety?: unknown;
+        commands?: unknown;
+      };
+      if (typeof parsed.id !== "string" || typeof parsed.label !== "string") {
+        return null;
+      }
+
+      const safety = parsed.safety === "manual" ? "manual" : "safe";
+      const commands = readIssueSuggestedFixCommands(parsed.commands);
+      if (commands.length === 0) {
+        return null;
+      }
+
+      return {
+        id: parsed.id,
+        label: parsed.label,
+        ...(typeof parsed.description === "string"
+          ? { description: parsed.description }
+          : {}),
+        safety,
+        commands,
+      };
+    })
+    .filter(
+      (fix): fix is {
+        id: string;
+        label: string;
+        description?: string;
+        safety: "safe" | "manual";
+        commands: ErdEditorCommand[];
+      } => Boolean(fix),
+    );
+}
+
+function getSemanticSeverityLabel(severity: SemanticIssueLike["severity"]) {
+  if (severity === "error") {
+    return "Erro";
+  }
+  if (severity === "warning") {
+    return "Aviso";
+  }
+  if (severity === "suggestion") {
+    return "Sugestao";
+  }
+
+  return "Info";
 }
 
 function getMindmapRootNodeId(
@@ -983,6 +1245,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const [isImportingPrismaSchema, setIsImportingPrismaSchema] = useState(false);
   const [prismaSchemaImportFeedback, setPrismaSchemaImportFeedback] =
     useState<PrismaSchemaImportFeedback>(null);
+  const [isExportingErdPreview, setIsExportingErdPreview] = useState(false);
+  const [erdExportFeedback, setErdExportFeedback] = useState<ErdExportFeedback>(null);
+  const [lastErdExportPreview, setLastErdExportPreview] =
+    useState<ErdExportPreviewPayload | null>(null);
   const [snapshotVersions, setSnapshotVersions] = useState<
     EditorSnapshotVersionSummary[]
   >([]);
@@ -1066,6 +1332,18 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<string[]>([]);
   const [pendingConnectionAssistant, setPendingConnectionAssistant] =
     useState<PendingConnectionAssistantState | null>(null);
+  const [pendingErdQuickRelate, setPendingErdQuickRelate] =
+    useState<PendingErdQuickRelateState | null>(null);
+  const [erdFieldDrafts, setErdFieldDrafts] = useState<Record<string, ErdFieldDraftState>>(
+    {},
+  );
+  const [erdPendingFieldFocusId, setErdPendingFieldFocusId] = useState<string | null>(null);
+  const [erdMaterializeDependentSide, setErdMaterializeDependentSide] = useState<
+    "source" | "target"
+  >("target");
+  const [erdMaterializeExistingFieldId, setErdMaterializeExistingFieldId] =
+    useState<string>("__new__");
+  const [erdMaterializeUnique, setErdMaterializeUnique] = useState(false);
   const [pendingNodeRepair, setPendingNodeRepair] =
     useState<PendingNodeRepairState | null>(null);
   const [pendingSemanticOverride, setPendingSemanticOverride] =
@@ -1282,6 +1560,20 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     () => edges.find((edge) => edge.id === selectedEdgeId) ?? null,
     [edges, selectedEdgeId],
   );
+  const selectedErdEntityPayload = useMemo(() => {
+    if (!selectedNode || selectedNode.data.kind !== "entity") {
+      return null;
+    }
+
+    return normalizeErdEntityPayloadFromNode(selectedNode);
+  }, [selectedNode]);
+  const selectedErdRelationPayload = useMemo(() => {
+    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+      return null;
+    }
+
+    return normalizeErdRelationPayloadFromEdge(selectedEdge);
+  }, [selectedEdge]);
   const renderer = useMemo(
     () =>
       resolveDiagramRenderer({
@@ -1294,6 +1586,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const semanticDiagramType = resolveSemanticDiagramType(
     layoutMetadata.diagramType,
     renderer.key,
+  );
+  const isErdDiagram = semanticDiagramType === "erd";
+  const erdPolicy = useMemo(
+    () => toErdPolicyConfig(semanticPolicy),
+    [semanticPolicy],
   );
   const semanticEngineOptions = useMemo(
     () => toSemanticEngineOptionsFromPolicy(semanticPolicy),
@@ -1327,6 +1624,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             targetNodeId: edge.target,
             kind: edge.data?.kind ?? "flows-to",
             label: edge.label ? String(edge.label) : undefined,
+            payload: edge.data?.payload,
           })),
           rootNodeId: semanticRootNodeId,
         },
@@ -1344,8 +1642,95 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     ],
   );
   const displayedSemanticAudit = serverSemanticAudit ?? semanticAudit;
+  const selectedErdSourceEntityNode = useMemo(() => {
+    if (!selectedEdge) {
+      return null;
+    }
+    const node = nodes.find((candidate) => candidate.id === selectedEdge.source);
+    return node && node.data.kind === "entity" ? node : null;
+  }, [nodes, selectedEdge]);
+  const selectedErdTargetEntityNode = useMemo(() => {
+    if (!selectedEdge) {
+      return null;
+    }
+    const node = nodes.find((candidate) => candidate.id === selectedEdge.target);
+    return node && node.data.kind === "entity" ? node : null;
+  }, [nodes, selectedEdge]);
+  const selectedErdRelationIssues = useMemo(
+    () =>
+      selectedEdge
+        ? displayedSemanticAudit.issues.filter(
+            (issue) => issue.targetType === "edge" && issue.targetId === selectedEdge.id,
+          )
+        : [],
+    [displayedSemanticAudit.issues, selectedEdge],
+  );
+  const localErdValidation = useMemo(() => {
+    if (!isErdDiagram) {
+      return null;
+    }
+
+    const graph = normalizeErdGraphFromSemantic({
+      nodes: nodes.map((node) => ({
+        id: node.id,
+        kind: node.data.kind,
+        label: node.data.label,
+        payload: node.data.payload,
+      })),
+      edges: edges.map((edge) => ({
+        id: edge.id,
+        sourceNodeId: edge.source,
+        targetNodeId: edge.target,
+        kind: edge.data?.kind ?? "flows-to",
+        label: edge.label ? String(edge.label) : undefined,
+        payload: edge.data?.payload,
+      })),
+    });
+
+    return validateErdGraphFull({
+      graph,
+      policy: erdPolicy,
+    });
+  }, [edges, erdPolicy, isErdDiagram, nodes]);
+  const localErdSafeBatchFix = useMemo(
+    () =>
+      localErdValidation
+        ? buildBatchSafeFixCommands(localErdValidation.diagnostics)
+        : null,
+    [localErdValidation],
+  );
+  const displayedSemanticSafeFixes = useMemo(() => {
+    const seen = new Set<string>();
+    const fixes: Array<{
+      id: string;
+      label: string;
+      description?: string;
+      commands: ErdEditorCommand[];
+      issueId: string;
+    }> = [];
+
+    for (const issue of displayedSemanticAudit.issues) {
+      const issueFixes = readIssueSuggestedFixes(issue);
+      for (const fix of issueFixes) {
+        if (fix.safety !== "safe" || seen.has(fix.id)) {
+          continue;
+        }
+
+        seen.add(fix.id);
+        fixes.push({
+          id: fix.id,
+          label: fix.label,
+          ...(fix.description ? { description: fix.description } : {}),
+          commands: fix.commands,
+          issueId: issue.id,
+        });
+      }
+    }
+
+    return fixes;
+  }, [displayedSemanticAudit.issues]);
   const semanticIssuesByNodeId = useMemo(() => {
-    const map = new Map<string, SemanticIssue[]>();
+    const map = new Map<string, SemanticIssueLike[]>();
     for (const issue of displayedSemanticAudit.issues) {
       if (issue.targetType !== "node" || !issue.targetId) {
         continue;
@@ -1358,7 +1743,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return map;
   }, [displayedSemanticAudit.issues]);
   const semanticIssuesByEdgeId = useMemo(() => {
-    const map = new Map<string, SemanticIssue[]>();
+    const map = new Map<string, SemanticIssueLike[]>();
     for (const issue of displayedSemanticAudit.issues) {
       if (issue.targetType !== "edge" || !issue.targetId) {
         continue;
@@ -1381,16 +1766,24 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     return [];
   }, [selectedEdge, selectedNode, semanticIssuesByEdgeId, semanticIssuesByNodeId]);
-  const selectedSemanticSeverity: "error" | "warning" | null =
+  const selectedSemanticSeverity: "error" | "warning" | "suggestion" | "info" | null =
     selectedSemanticIssues.some((issue) => issue.severity === "error")
       ? "error"
       : selectedSemanticIssues.some((issue) => issue.severity === "warning")
         ? "warning"
-        : null;
+        : selectedSemanticIssues.some((issue) => issue.severity === "suggestion")
+          ? "suggestion"
+          : selectedSemanticIssues.some((issue) => issue.severity === "info")
+            ? "info"
+            : null;
   const selectedSemanticStatusLabel = selectedSemanticSeverity
     ? selectedSemanticSeverity === "error"
       ? "Semantica: atencao"
-      : "Semantica: aviso"
+      : selectedSemanticSeverity === "warning"
+        ? "Semantica: aviso"
+        : selectedSemanticSeverity === "suggestion"
+          ? "Semantica: sugestao"
+          : "Semantica: info"
     : "Semantica: OK";
   const collapsedTreeNodeIdSet = useMemo(
     () => new Set(collapsedTreeNodeIds),
@@ -1502,6 +1895,23 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           : getMindmapRootNodeId(visibleNodes, layoutMetadata.rootNodeName)
         : null;
     const connectionTargetStateByNodeId = new Map<string, "allowed" | "blocked">();
+    const erdNnSuggestedNodeIds = new Set<string>();
+
+    if (renderer.key === "erd") {
+      for (const edge of edges) {
+        const edgeIssues = semanticIssuesByEdgeId.get(edge.id) ?? [];
+        if (
+          edgeIssues.some(
+            (issue) =>
+              issue.code === "ERD_REL_NN_ASSOCIATIVE_SUGGESTED" ||
+              issue.code === "ERD_REL_NN_STRICT_REQUIRES_ASSOCIATIVE",
+          )
+        ) {
+          erdNnSuggestedNodeIds.add(edge.source);
+          erdNnSuggestedNodeIds.add(edge.target);
+        }
+      }
+    }
     const activeSourceNode = activeConnectionSourceNodeId
       ? visibleNodes.find((node) => node.id === activeConnectionSourceNodeId) ?? null
       : null;
@@ -1541,6 +1951,36 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     return visibleNodes.map((node) => {
       const nodeIssues = semanticIssuesByNodeId.get(node.id) ?? [];
+      const erdBadges =
+        renderer.key === "erd" && node.data.kind === "entity"
+          ? (() => {
+              const entityPayload = normalizeErdEntityPayloadFromNode(node);
+              const badges: Array<{
+                label: string;
+                tone: "warning" | "info" | "suggestion";
+              }> = [];
+              const hasPk = entityPayload.fields.some((field) => field.flags.includes("PK"));
+
+              if (!hasPk) {
+                badges.push({ label: "Sem PK", tone: "warning" });
+              }
+
+              const fkPending = entityPayload.fields.some(
+                (field) =>
+                  field.flags.includes("FK") &&
+                  (!field.references?.entityId || !field.references?.relationEdgeId),
+              );
+              if (fkPending) {
+                badges.push({ label: "FK pendente", tone: "info" });
+              }
+
+              if (erdNnSuggestedNodeIds.has(node.id)) {
+                badges.push({ label: "N:N sugere associativa", tone: "suggestion" });
+              }
+
+              return badges;
+            })()
+          : [];
       const highlightedIssueClass =
         nodeIssues.length > 0 && (isValidationPanelOpen || selectedNodeId === node.id)
           ? nodeIssues.some((issue) => issue.severity === "error")
@@ -1581,6 +2021,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           rendererCanToggleTreeCollapse:
             renderer.key === "tree" &&
             treeNodesWithContainsChildren.has(node.id),
+          erdBadges,
           onToggleTreeCollapse:
             renderer.key === "tree" && treeNodesWithContainsChildren.has(node.id)
               ? (targetNodeId: string) => {
@@ -1617,6 +2058,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     selectedNodeId,
     semanticDiagramType,
     semanticEngineOptions,
+    semanticIssuesByEdgeId,
     semanticIssuesByNodeId,
   ]);
   const renderedEdges = useMemo(() => {
@@ -1762,6 +2204,89 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     setEdgeInspectorMessage(null);
   }, [selectedEdgeSyncKey]);
 
+  useEffect(() => {
+    if (!selectedErdEntityPayload) {
+      setErdFieldDrafts({});
+      return;
+    }
+
+    const nextDrafts: Record<string, ErdFieldDraftState> = {};
+    for (const field of selectedErdEntityPayload.fields) {
+      nextDrafts[field.id] = {
+        name: field.name,
+        type: field.type,
+      };
+    }
+    setErdFieldDrafts(nextDrafts);
+  }, [selectedErdEntityPayload]);
+
+  useEffect(() => {
+    if (!selectedErdRelationPayload) {
+      setErdMaterializeDependentSide("target");
+      setErdMaterializeExistingFieldId("__new__");
+      setErdMaterializeUnique(false);
+      return;
+    }
+
+    const inferredSide = inferDependentSide({
+      relation: {
+        sourceEntityId: selectedEdge?.source ?? "",
+        targetEntityId: selectedEdge?.target ?? "",
+        payload: selectedErdRelationPayload,
+      },
+      sourceEntity: selectedErdSourceEntityNode
+        ? {
+            id: selectedErdSourceEntityNode.id,
+            kind: "entity",
+            label: selectedErdSourceEntityNode.data.label,
+            payload: normalizeErdEntityPayloadFromNode(selectedErdSourceEntityNode),
+          }
+        : undefined,
+      targetEntity: selectedErdTargetEntityNode
+        ? {
+            id: selectedErdTargetEntityNode.id,
+            kind: "entity",
+            label: selectedErdTargetEntityNode.data.label,
+            payload: normalizeErdEntityPayloadFromNode(selectedErdTargetEntityNode),
+          }
+        : undefined,
+    });
+
+    const side =
+      selectedErdRelationPayload.materialization?.mode === "fk"
+        ? selectedErdRelationPayload.materialization.dependentSide
+        : inferredSide;
+    setErdMaterializeDependentSide(side);
+    setErdMaterializeExistingFieldId("__new__");
+    setErdMaterializeUnique(
+      selectedErdRelationPayload.materialization?.mode === "fk"
+        ? selectedErdRelationPayload.materialization.fk.unique === true
+        : false,
+    );
+  }, [
+    selectedEdge?.source,
+    selectedEdge?.target,
+    selectedErdRelationPayload,
+    selectedErdSourceEntityNode,
+    selectedErdTargetEntityNode,
+  ]);
+
+  useEffect(() => {
+    if (!erdPendingFieldFocusId) {
+      return;
+    }
+
+    const focusId = erdPendingFieldFocusId;
+    window.requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>(
+        `[data-erd-field-input="${focusId}:name"]`,
+      );
+      input?.focus();
+      input?.select();
+    });
+    setErdPendingFieldFocusId(null);
+  }, [erdPendingFieldFocusId]);
+
   function syncFromSnapshot(snapshot: Parameters<typeof fromCanonicalSnapshotToFlowState>[0]) {
     const next = fromCanonicalSnapshotToFlowState(snapshot);
     nodesRef.current = next.nodes;
@@ -1876,6 +2401,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       );
 
       syncFromSnapshot(nextSnapshot);
+      setServerSemanticAudit(null);
+      setLastErdExportPreview(null);
       setGlobalErrorMessage(null);
 
       const nextVersion = localMutationVersionRef.current + 1;
@@ -2916,7 +3443,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     });
   }
 
-  function handleFocusSemanticIssue(issue: SemanticIssue) {
+  function handleFocusSemanticIssue(issue: SemanticIssueLike) {
     if (issue.targetType === "node" && issue.targetId) {
       focusNodeById(issue.targetId);
       return;
@@ -3640,6 +4167,12 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         return;
       }
 
+      if (event.key === "Escape" && pendingErdQuickRelate) {
+        event.preventDefault();
+        setPendingErdQuickRelate(null);
+        return;
+      }
+
       if (event.key === "Escape" && pendingNodeRepair) {
         event.preventDefault();
         setPendingNodeRepair(null);
@@ -3823,6 +4356,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     isCanvasFocusMode,
     isQuickFindOpen,
     pendingConnectionAssistant,
+    pendingErdQuickRelate,
     pendingNodeRepair,
     pendingSemanticOverride,
     inlineRenameNodeId,
@@ -3897,47 +4431,190 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     });
   }
 
-  function handleAddErdField() {
+  function updateEntityPayloadById(input: {
+    entityId: string;
+    updater: (payload: ErdEntityPayload) => ErdEntityPayload;
+    successMessage?: string;
+  }) {
+    const entityNode = nodesRef.current.find((node) => node.id === input.entityId);
+    if (!entityNode || entityNode.data.kind !== "entity") {
+      return false;
+    }
+
+    const currentPayload = normalizeErdEntityPayloadFromNode(entityNode);
+    const nextPayload = input.updater(currentPayload);
+    return applyLocalCommandAndQueue(
+      {
+        type: "updateNode",
+        nodeId: entityNode.id,
+        patch: {
+          data: nextPayload as unknown as Record<string, unknown>,
+        },
+      },
+      input.successMessage,
+    );
+  }
+
+  function updateSelectedErdEntityPayload(
+    updater: (payload: ErdEntityPayload) => ErdEntityPayload,
+    successMessage?: string,
+  ) {
     if (!selectedNode || selectedNode.data.kind !== "entity") {
+      setGlobalErrorMessage("Selecione uma entidade ERD para editar campos.");
+      return false;
+    }
+
+    return updateEntityPayloadById({
+      entityId: selectedNode.id,
+      updater,
+      successMessage,
+    });
+  }
+
+  function handleAddErdField() {
+    if (!selectedErdEntityPayload || !selectedNode || selectedNode.data.kind !== "entity") {
       setGlobalErrorMessage("Selecione uma entidade ERD para adicionar campo.");
       return;
     }
 
-    const payload = clonePayload(selectedNode.data.payload);
-    const currentFields = Array.isArray(payload.fields)
-      ? payload.fields
-          .filter(
-            (field): field is Record<string, unknown> =>
-              Boolean(field && typeof field === "object" && !Array.isArray(field)),
-          )
-          .map((field) => ({ ...field }))
-      : [];
-
-    const nextFieldIndex = currentFields.length + 1;
-    const nextField = {
-      name: `campo_${nextFieldIndex}`,
-      type: "String",
-      isId: false,
-      isUnique: false,
-      isOptional: true,
-    };
-
-    const applied = applyLocalCommandAndQueue({
-      type: "updateNode",
-      nodeId: selectedNode.id,
-      patch: {
-        data: {
-          ...payload,
-          fields: [...currentFields, nextField],
-        },
-      },
+    const nextField = createErdField({
+      entityId: selectedNode.id,
+      index: selectedErdEntityPayload.fields.length + 1,
     });
+    const applied = updateSelectedErdEntityPayload((payload) => ({
+      ...payload,
+      fields: [...payload.fields, nextField],
+    }));
 
-    if (applied) {
-      setQuerySyncMessage(
-        `Campo '${nextField.name}' adicionado em ${selectedNode.data.label}.`,
-      );
-      setGlobalErrorMessage(null);
+    if (!applied) {
+      return;
+    }
+
+    setErdFieldDrafts((current) => ({
+      ...current,
+      [nextField.id]: {
+        name: nextField.name,
+        type: nextField.type,
+      },
+    }));
+    setErdPendingFieldFocusId(nextField.id);
+    setQuerySyncMessage(`Campo '${nextField.name}' adicionado em ${selectedNode.data.label}.`);
+    setGlobalErrorMessage(null);
+  }
+
+  function handleUpdateErdFieldDraft(
+    fieldId: string,
+    patch: Partial<ErdFieldDraftState>,
+  ) {
+    setErdFieldDrafts((current) => {
+      const baseline = current[fieldId] ?? { name: "", type: "" };
+      return {
+        ...current,
+        [fieldId]: {
+          ...baseline,
+          ...patch,
+        },
+      };
+    });
+  }
+
+  function commitErdFieldDraft(fieldId: string) {
+    if (!selectedErdEntityPayload) {
+      return;
+    }
+
+    const draft = erdFieldDrafts[fieldId];
+    if (!draft) {
+      return;
+    }
+
+    updateSelectedErdEntityPayload((payload) => ({
+      ...payload,
+      fields: payload.fields.map((field) =>
+        field.id === fieldId
+          ? {
+              ...field,
+              name: draft.name.trim() || field.name,
+              type: draft.type.trim(),
+            }
+          : field,
+      ),
+    }));
+  }
+
+  function handleRemoveErdField(fieldId: string) {
+    updateSelectedErdEntityPayload((payload) => ({
+      ...payload,
+      fields: payload.fields.filter((field) => field.id !== fieldId),
+    }));
+    setErdFieldDrafts((current) => {
+      const next = { ...current };
+      delete next[fieldId];
+      return next;
+    });
+  }
+
+  function handleToggleErdFieldFlag(fieldId: string, flag: ErdFieldFlag) {
+    updateSelectedErdEntityPayload((payload) => ({
+      ...payload,
+      fields: payload.fields.map((field) =>
+        field.id === fieldId ? toggleErdFieldFlag({ field, flag }) : field,
+      ),
+    }));
+  }
+
+  function handleMoveErdField(fieldId: string, direction: "up" | "down") {
+    updateSelectedErdEntityPayload((payload) => {
+      const index = payload.fields.findIndex((field) => field.id === fieldId);
+      if (index < 0) {
+        return payload;
+      }
+
+      const targetIndex = direction === "up" ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= payload.fields.length) {
+        return payload;
+      }
+
+      const nextFields = [...payload.fields];
+      const [field] = nextFields.splice(index, 1);
+      if (!field) {
+        return payload;
+      }
+      nextFields.splice(targetIndex, 0, field);
+      return {
+        ...payload,
+        fields: nextFields,
+      };
+    });
+  }
+
+  function handleErdFieldShortcut(
+    event: ReactKeyboardEvent<HTMLInputElement>,
+    fieldId: string,
+  ) {
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    const key = event.key.toUpperCase();
+    if (key === "P") {
+      event.preventDefault();
+      handleToggleErdFieldFlag(fieldId, "PK");
+      return;
+    }
+    if (key === "F") {
+      event.preventDefault();
+      handleToggleErdFieldFlag(fieldId, "FK");
+      return;
+    }
+    if (key === "U") {
+      event.preventDefault();
+      handleToggleErdFieldFlag(fieldId, "UQ");
+      return;
+    }
+    if (key === "N") {
+      event.preventDefault();
+      handleToggleErdFieldFlag(fieldId, "NOT_NULL");
     }
   }
 
@@ -3957,6 +4634,586 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   function handleCancelConnectionAssistant() {
     setPendingConnectionAssistant(null);
     setQuerySyncMessage("Conexao cancelada pelo usuario.");
+  }
+
+  function handleCancelErdQuickRelate() {
+    setPendingErdQuickRelate(null);
+  }
+
+  function applyErdEditorCommands(commands: ErdEditorCommand[]) {
+    let applied = 0;
+
+    for (const command of commands) {
+      if (applyLocalCommandAndQueue(command as unknown as EditorCommand)) {
+        applied += 1;
+      }
+    }
+
+    return {
+      applied,
+      total: commands.length,
+    };
+  }
+
+  function updateSelectedErdRelationPayload(
+    updater: (payload: ErdRelationPayload) => ErdRelationPayload,
+    options?: { successMessage?: string },
+  ) {
+    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+      return false;
+    }
+
+    const currentPayload = normalizeErdRelationPayloadFromEdge(selectedEdge);
+    const nextPayload = updater(currentPayload);
+    return applyLocalCommandAndQueue(
+      {
+        type: "updateEdge",
+        edgeId: selectedEdge.id,
+        patch: {
+          data: normalizeErdRelationPayload(
+            nextPayload as unknown as Record<string, unknown>,
+            {
+              sourceEntityId: selectedEdge.source,
+              targetEntityId: selectedEdge.target,
+            },
+          ) as unknown as Record<string, unknown>,
+        },
+      },
+      options?.successMessage,
+    );
+  }
+
+  function updateSelectedErdRelationName(name: string) {
+    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+      return false;
+    }
+
+    const normalizedName = name.trim();
+    const currentPayload = normalizeErdRelationPayloadFromEdge(selectedEdge);
+    const nextPayload = {
+      ...currentPayload,
+      ...(normalizedName ? { name: normalizedName } : { name: undefined }),
+    };
+    return applyLocalCommandAndQueue({
+      type: "updateEdge",
+      edgeId: selectedEdge.id,
+      patch: {
+        label: normalizedName || undefined,
+        data: normalizeErdRelationPayload(
+          nextPayload as unknown as Record<string, unknown>,
+          {
+            sourceEntityId: selectedEdge.source,
+            targetEntityId: selectedEdge.target,
+          },
+        ) as unknown as Record<string, unknown>,
+      },
+    });
+  }
+
+  function resolveSelectedErdRelationContext() {
+    if (
+      !selectedEdge ||
+      (selectedEdge.data?.kind ?? "flows-to") !== "references" ||
+      !selectedErdRelationPayload
+    ) {
+      return null;
+    }
+
+    const sourceNode = nodesRef.current.find((node) => node.id === selectedEdge.source);
+    const targetNode = nodesRef.current.find((node) => node.id === selectedEdge.target);
+    if (!sourceNode || !targetNode) {
+      return null;
+    }
+    if (sourceNode.data.kind !== "entity" || targetNode.data.kind !== "entity") {
+      return null;
+    }
+
+    const sourceEntity: ErdEntityPayload = normalizeErdEntityPayloadFromNode(sourceNode);
+    const targetEntity: ErdEntityPayload = normalizeErdEntityPayloadFromNode(targetNode);
+
+    return {
+      relation: {
+        id: selectedEdge.id,
+        sourceEntityId: selectedEdge.source,
+        targetEntityId: selectedEdge.target,
+        kind: "references" as const,
+        payload: selectedErdRelationPayload,
+      } satisfies ErdRelationRef,
+      sourceEntity: {
+        id: sourceNode.id,
+        label: sourceNode.data.label,
+        kind: "entity" as const,
+        payload: sourceEntity,
+      },
+      targetEntity: {
+        id: targetNode.id,
+        label: targetNode.data.label,
+        kind: "entity" as const,
+        payload: targetEntity,
+      },
+    };
+  }
+
+  function handleApplyErdSuggestedFix(commands: ErdEditorCommand[]) {
+    const result = applyErdEditorCommands(commands);
+    if (result.applied === 0) {
+      setGlobalErrorMessage("Nao foi possivel aplicar a correcao sugerida.");
+      return;
+    }
+
+    setGlobalErrorMessage(null);
+    setQuerySyncMessage(`Correcao aplicada (${result.applied}/${result.total} comandos).`);
+  }
+
+  function handleApplyAllSafeErdFixes() {
+    if (!localErdSafeBatchFix || localErdSafeBatchFix.commands.length === 0) {
+      setQuerySyncMessage("Nenhuma correcao segura disponivel.");
+      return;
+    }
+
+    const result = applyErdEditorCommands(localErdSafeBatchFix.commands);
+    if (result.applied === 0) {
+      setGlobalErrorMessage("Nao foi possivel aplicar correcoes seguras.");
+      return;
+    }
+
+    setGlobalErrorMessage(null);
+    setQuerySyncMessage(
+      `Correcoes seguras aplicadas (${result.applied}/${result.total}).`,
+    );
+  }
+
+  async function handleUpdateErdValidationLevel(
+    level: ErdPolicyConfig["validationLevel"],
+  ) {
+    try {
+      const currentPolicy = semanticPolicy;
+      const nextCustomRules = mergeErdPolicyIntoCustomRules({
+        customRulesJson: readRecord(currentPolicy?.customRulesJson),
+        policyPatch: {
+          validationLevel: level,
+        },
+      });
+      const updated = await updateSemanticPolicyForEditor({
+        projectId: project.id,
+        patch: {
+          customRulesJson: nextCustomRules,
+        },
+      });
+      setSemanticPolicy(updated);
+      setQuerySyncMessage(`Validação ERD atualizada para '${level}'.`);
+      setGlobalErrorMessage(null);
+    } catch (error) {
+      setGlobalErrorMessage(
+        formatErrorMessage(error, "Nao foi possivel atualizar validacao ERD."),
+      );
+    }
+  }
+
+  async function handleExportErdPreview() {
+    if (!isErdDiagram) {
+      setGlobalErrorMessage("Export preview disponivel apenas para ERD.");
+      return;
+    }
+
+    setIsExportingErdPreview(true);
+    setErdExportFeedback(null);
+
+    try {
+      const result = await exportErdPreviewForEditor({
+        projectId: project.id,
+        expectedRevision: currentRevisionRef.current,
+        format: "json",
+      });
+
+      setLastErdExportPreview(result);
+      setErdExportFeedback({
+        kind: "success",
+        message: `Preview gerado com ${result.export.entities.length} entidade(s) e ${result.export.relations.length} relacao(oes).`,
+      });
+      setGlobalErrorMessage(null);
+    } catch (error) {
+      if (error instanceof EditorQueryError && error.code === "REPAIR_REQUIRED") {
+        const safeFixCount = Array.isArray((error.payload as { suggestedFixes?: unknown })?.suggestedFixes)
+          ? ((error.payload as { suggestedFixes?: unknown[] }).suggestedFixes?.length ?? 0)
+          : 0;
+        setErdExportFeedback({
+          kind: "info",
+          message:
+            safeFixCount > 0
+              ? `Export bloqueado no strict: aplique ${safeFixCount} correcao(oes) segura(s) sugerida(s).`
+              : "Export bloqueado no strict: corrija os erros de semantica ERD.",
+        });
+      } else {
+        setErdExportFeedback({
+          kind: "error",
+          message: formatErrorMessage(error, "Falha ao gerar export preview ERD."),
+        });
+      }
+    } finally {
+      setIsExportingErdPreview(false);
+    }
+  }
+
+  function handleSwapSelectedErdRelationDirection() {
+    if (
+      !selectedEdge ||
+      (selectedEdge.data?.kind ?? "flows-to") !== "references" ||
+      !selectedErdRelationPayload
+    ) {
+      return;
+    }
+
+    const nextPayload = flipErdRelationPayloadDirection(selectedErdRelationPayload);
+    const commands: ErdEditorCommand[] = [
+      {
+        type: "removeEdge",
+        edgeId: selectedEdge.id,
+      },
+      {
+        type: "addEdge",
+        edge: {
+          id: selectedEdge.id,
+          sourceNodeId: selectedEdge.target,
+          targetNodeId: selectedEdge.source,
+          kind: "references",
+          label: selectedEdge.label ? String(selectedEdge.label) : undefined,
+          data: normalizeErdRelationPayload(
+            nextPayload as unknown as Record<string, unknown>,
+            {
+              sourceEntityId: selectedEdge.target,
+              targetEntityId: selectedEdge.source,
+            },
+          ) as unknown as Record<string, unknown>,
+        },
+      },
+    ];
+    const result = applyErdEditorCommands(commands);
+    if (result.applied > 0) {
+      setSelectedEdgeId(selectedEdge.id);
+      setSelectedNodeId(null);
+      setQuerySyncMessage("Direcao da relacao invertida.");
+      setGlobalErrorMessage(null);
+    }
+  }
+
+  function handleMaterializeSelectedErdRelationAsFk() {
+    const context = resolveSelectedErdRelationContext();
+    if (!context || !selectedEdge) {
+      return;
+    }
+
+    const dependentEntity =
+      erdMaterializeDependentSide === "source"
+        ? context.sourceEntity
+        : context.targetEntity;
+    const referencesEntity =
+      erdMaterializeDependentSide === "source"
+        ? context.targetEntity
+        : context.sourceEntity;
+    const selectedExistingField =
+      erdMaterializeExistingFieldId !== "__new__"
+        ? dependentEntity.payload.fields.find(
+            (field) => field.id === erdMaterializeExistingFieldId,
+          )
+        : undefined;
+    const cardinality = context.relation.payload.cardinality;
+    const isRequired =
+      erdMaterializeDependentSide === "source"
+        ? cardinality?.minSource === 1
+        : cardinality?.minTarget === 1;
+    const referencedPkFieldIds = referencesEntity.payload.fields
+      .filter((field) => field.flags.includes("PK"))
+      .map((field) => field.id);
+    const shouldApplyUnique =
+      erdMaterializeUnique || erdCardinalityToPreset(cardinality) === "1:1";
+
+    if (selectedExistingField) {
+      const currentFlags = new Set<ErdFieldFlag>(selectedExistingField.flags);
+      currentFlags.add("FK");
+      if (isRequired) {
+        currentFlags.add("NOT_NULL");
+        currentFlags.delete("NULLABLE");
+      } else if (!currentFlags.has("NOT_NULL")) {
+        currentFlags.add("NULLABLE");
+      }
+      if (shouldApplyUnique) {
+        currentFlags.add("UQ");
+      }
+
+      const nextField: ErdField = {
+        ...selectedExistingField,
+        flags: [...currentFlags],
+        references: {
+          entityId: referencesEntity.id,
+          relationEdgeId: selectedEdge.id,
+        },
+      };
+      const nextDependentPayload = {
+        ...dependentEntity.payload,
+        fields: dependentEntity.payload.fields.map((field) =>
+          field.id === nextField.id ? nextField : field,
+        ),
+      };
+      const nextRelationPayload: ErdRelationPayload = {
+        ...context.relation.payload,
+        materialization: {
+          mode: "fk",
+          dependentSide: erdMaterializeDependentSide,
+          fk: {
+            dependentEntityId: dependentEntity.id,
+            fkFieldIds: [nextField.id],
+            referencesEntityId: referencesEntity.id,
+            referencesFieldIds: referencedPkFieldIds,
+            ...(shouldApplyUnique ? { unique: true } : {}),
+          },
+        },
+      };
+      const result = applyErdEditorCommands([
+        {
+          type: "updateNode",
+          nodeId: dependentEntity.id,
+          patch: {
+            data: nextDependentPayload as unknown as Record<string, unknown>,
+          },
+        },
+        {
+          type: "updateEdge",
+          edgeId: selectedEdge.id,
+          patch: {
+            data: normalizeErdRelationPayload(
+              nextRelationPayload as unknown as Record<string, unknown>,
+              {
+                sourceEntityId: selectedEdge.source,
+                targetEntityId: selectedEdge.target,
+              },
+            ) as unknown as Record<string, unknown>,
+          },
+        },
+      ]);
+      if (result.applied > 0) {
+        setQuerySyncMessage("Relacao materializada em campo existente.");
+      }
+      return;
+    }
+
+    const fkFix = buildMaterializeFkFix({
+      relation: context.relation,
+      sourceEntity: context.sourceEntity,
+      targetEntity: context.targetEntity,
+      policy: erdPolicy,
+      preferredDependentSide: erdMaterializeDependentSide,
+    });
+    handleApplyErdSuggestedFix(fkFix.commands);
+  }
+
+  function handleConvertSelectedErdRelationToAssociative() {
+    const context = resolveSelectedErdRelationContext();
+    if (!context) {
+      return;
+    }
+
+    const fix = buildConvertToAssociativeFix({
+      relation: context.relation,
+      sourceEntity: context.sourceEntity,
+      targetEntity: context.targetEntity,
+      policy: erdPolicy,
+    });
+    if (!fix) {
+      return;
+    }
+
+    handleApplyErdSuggestedFix(fix.commands);
+  }
+
+  function handleMarkSelectedErdRelationConceptual() {
+    updateSelectedErdRelationPayload((payload) => ({
+      ...payload,
+      materialization: {
+        mode: "conceptual",
+      },
+    }));
+  }
+
+  function handleApplySelectedErdOneToOneUniqueFix() {
+    const context = resolveSelectedErdRelationContext();
+    if (!context) {
+      return;
+    }
+
+    const fix = buildOneToOneUniqueFix({
+      relation: context.relation,
+      sourceEntity: context.sourceEntity,
+      targetEntity: context.targetEntity,
+    });
+    if (!fix) {
+      return;
+    }
+
+    handleApplyErdSuggestedFix(fix.commands);
+  }
+
+  function resolveRolesForQuickRelatePreset(
+    preset: ErdCardinalityPreset,
+  ): NonNullable<ErdRelationPayload["roles"]> {
+    if (preset === "1:N") {
+      return {
+        sourceRole: "hasMany",
+        targetRole: "belongsTo",
+      };
+    }
+
+    if (preset === "N:1") {
+      return {
+        sourceRole: "belongsTo",
+        targetRole: "hasMany",
+      };
+    }
+
+    if (preset === "1:1") {
+      return {
+        sourceRole: "hasOne",
+        targetRole: "belongsTo",
+      };
+    }
+
+    return {
+      sourceRole: "manyToMany",
+      targetRole: "manyToMany",
+    };
+  }
+
+  function buildBaseQuickRelatePayload(
+    preset: ErdCardinalityPreset,
+  ): ErdRelationPayload {
+    return {
+      cardinality: erdCardinalityFromPreset(preset),
+      roles: resolveRolesForQuickRelatePreset(preset),
+      materialization: {
+        mode: "conceptual",
+      },
+    };
+  }
+
+  function handleSelectErdQuickRelatePreset(preset: ErdCardinalityPreset) {
+    const pending = pendingErdQuickRelate;
+    if (!pending) {
+      return;
+    }
+
+    const sourceNode = nodesRef.current.find((node) => node.id === pending.sourceNodeId);
+    const targetNode = nodesRef.current.find((node) => node.id === pending.targetNodeId);
+    setPendingErdQuickRelate(null);
+
+    if (!sourceNode || !targetNode) {
+      setGlobalErrorMessage("Nao foi possivel criar relacao rapida: entidade nao encontrada.");
+      return;
+    }
+
+    const relationId = crypto.randomUUID();
+    const relationPayload = buildBaseQuickRelatePayload(preset);
+    const commands: ErdEditorCommand[] = [
+      {
+        type: "addEdge",
+        edge: {
+          id: relationId,
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          kind: "references",
+          data: normalizeErdRelationPayload(relationPayload as unknown as Record<string, unknown>, {
+            sourceEntityId: sourceNode.id,
+            targetEntityId: targetNode.id,
+          }) as unknown as Record<string, unknown>,
+        },
+      },
+    ];
+    const sourceEntity: ErdRelationRef["sourceEntityId"] = sourceNode.id;
+    const targetEntity: ErdRelationRef["targetEntityId"] = targetNode.id;
+    const relationRef: ErdRelationRef = {
+      id: relationId,
+      sourceEntityId: sourceEntity,
+      targetEntityId: targetEntity,
+      kind: "references",
+      payload: relationPayload,
+    };
+    const sourceEntityRef = {
+      id: sourceNode.id,
+      label: sourceNode.data.label,
+      kind: "entity" as const,
+      payload: normalizeErdEntityPayloadFromNode(sourceNode),
+    };
+    const targetEntityRef = {
+      id: targetNode.id,
+      label: targetNode.data.label,
+      kind: "entity" as const,
+      payload: normalizeErdEntityPayloadFromNode(targetNode),
+    };
+
+    if (!erdPolicy.allowConceptualRelations) {
+      if (preset === "N:N") {
+        const associativeFix = buildConvertToAssociativeFix({
+          relation: relationRef,
+          sourceEntity: sourceEntityRef,
+          targetEntity: targetEntityRef,
+          policy: erdPolicy,
+        });
+
+        if (associativeFix) {
+          commands.push(...associativeFix.commands);
+        }
+      } else {
+        const fkFix = buildMaterializeFkFix({
+          relation: relationRef,
+          sourceEntity: sourceEntityRef,
+          targetEntity: targetEntityRef,
+          policy: erdPolicy,
+        });
+        commands.push(...fkFix.commands);
+      }
+    }
+
+    const result = applyErdEditorCommands(commands);
+    if (result.applied === 0) {
+      setGlobalErrorMessage("Nao foi possivel criar a relacao rapida.");
+      return;
+    }
+
+    const latestAddedEdgeId = [...commands]
+      .reverse()
+      .find((command) => command.type === "addEdge")?.edge.id;
+    if (latestAddedEdgeId) {
+      setSelectedEdgeId(latestAddedEdgeId);
+      setSelectedNodeId(null);
+    }
+
+    if (preset === "N:N") {
+      setQuerySyncMessage(
+        erdPolicy.allowConceptualRelations
+          ? "Relacao criada. Sugestao: converter em associativa."
+          : "Relacao N:N convertida automaticamente para associativa.",
+      );
+    } else if (erdPolicy.allowConceptualRelations) {
+      const inferredDependentSide = inferDependentSide({
+        relation: relationRef,
+        sourceEntity: sourceEntityRef,
+        targetEntity: targetEntityRef,
+      });
+      const dependentLabel =
+        inferredDependentSide === "source"
+          ? sourceEntityRef.label ?? sourceEntityRef.id
+          : targetEntityRef.label ?? targetEntityRef.id;
+      const referencedLabel =
+        inferredDependentSide === "source"
+          ? targetEntityRef.label ?? targetEntityRef.id
+          : sourceEntityRef.label ?? sourceEntityRef.id;
+      setQuerySyncMessage(
+        `Relacao criada. Sugestao: materializar FK em ${dependentLabel} para referenciar ${referencedLabel}.`,
+      );
+    } else {
+      setQuerySyncMessage("Relacao criada e materializada automaticamente.");
+    }
+
+    setGlobalErrorMessage(null);
   }
 
   function handleSelectConnectionAssistantKind(kind: EdgeKind) {
@@ -4592,6 +5849,42 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   function handleConnect(connection: Connection) {
     if (!connection.source || !connection.target) {
       return;
+    }
+
+    if (isErdDiagram) {
+      const sourceNode = nodesRef.current.find((node) => node.id === connection.source);
+      const targetNode = nodesRef.current.find((node) => node.id === connection.target);
+      if (
+        sourceNode &&
+        targetNode &&
+        sourceNode.data.kind === "entity" &&
+        targetNode.data.kind === "entity"
+      ) {
+        const canvasRect = canvasRegionRef.current?.getBoundingClientRect();
+        const viewportState = viewportRef.current;
+        const topBarOffset = 78;
+        const rawLeft =
+          targetNode.position.x * viewportState.zoom + viewportState.x + 48;
+        const rawTop =
+          targetNode.position.y * viewportState.zoom + viewportState.y + topBarOffset;
+        const maxLeft = (canvasRect?.width ?? 920) - 240;
+        const maxTop = (canvasRect?.height ?? 620) - 220;
+        const left = Math.max(12, Math.min(rawLeft, maxLeft));
+        const top = Math.max(topBarOffset, Math.min(rawTop, maxTop));
+
+        setPendingConnectionAssistant(null);
+        setPendingErdQuickRelate({
+          sourceNodeId: sourceNode.id,
+          targetNodeId: targetNode.id,
+          sourceLabel: sourceNode.data.label,
+          targetLabel: targetNode.data.label,
+          style: {
+            left: `${left}px`,
+            top: `${top}px`,
+          },
+        });
+        return;
+      }
     }
 
     void (async () => {
@@ -5499,6 +6792,37 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               >
                 {isValidationPanelOpen ? "Ocultar verificacao" : "Verificar"}
               </button>
+              {isErdDiagram ? (
+                <label className="erd-validation-level-control">
+                  <span>Validação ERD</span>
+                  <select
+                    value={erdPolicy.validationLevel}
+                    onChange={(event) => {
+                      void handleUpdateErdValidationLevel(
+                        event.target.value as ErdPolicyConfig["validationLevel"],
+                      );
+                    }}
+                    data-testid="erd-validation-level-select"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="guided">Guided</option>
+                    <option value="strict">Strict</option>
+                  </select>
+                </label>
+              ) : null}
+              {isErdDiagram ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    void handleExportErdPreview();
+                  }}
+                  disabled={isExportingErdPreview}
+                  data-testid="erd-export-preview-button"
+                >
+                  {isExportingErdPreview ? "Gerando preview..." : "Gerar/Exportar (preview)"}
+                </button>
+              ) : null}
               <button
                 className="btn"
                 type="button"
@@ -5517,6 +6841,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               </button>
             </div>
           </div>
+          {erdExportFeedback ? (
+            <div
+              className={`helper erd-export-feedback erd-export-feedback-${erdExportFeedback.kind}`}
+              role={erdExportFeedback.kind === "error" ? "alert" : "status"}
+              data-testid="erd-export-feedback"
+            >
+              {erdExportFeedback.message}
+            </div>
+          ) : null}
 
           <CanvasToolbar
             onZoomIn={handleZoomIn}
@@ -5670,6 +7003,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             onPaneClick={() => {
               selectItem({ nodeId: null, edgeId: null });
               setActiveConnectionSourceNodeId(null);
+              setPendingErdQuickRelate(null);
               handleCancelInlineRename();
             }}
             colorMode="light"
@@ -5693,6 +7027,44 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               className={renderer.minimapClassName}
             />
           </ReactFlow>
+
+          {pendingErdQuickRelate ? (
+            <div
+              className="erd-quick-relate-popover"
+              style={pendingErdQuickRelate.style}
+              data-testid="erd-quick-relate-popover"
+            >
+              <div className="erd-quick-relate-popover-header">
+                <strong>Relacionar entidades</strong>
+                <span className="helper">
+                  {pendingErdQuickRelate.sourceLabel} - {pendingErdQuickRelate.targetLabel}
+                </span>
+              </div>
+              <div className="row-actions">
+                {(["1:1", "1:N", "N:1", "N:N"] as ErdCardinalityPreset[]).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    className="btn"
+                    onClick={() => handleSelectErdQuickRelatePreset(preset)}
+                    data-testid={`erd-quick-relate-preset-${preset.replace(":", "-")}`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <div className="row-actions">
+                <button
+                  className="btn btn-link"
+                  type="button"
+                  onClick={handleCancelErdQuickRelate}
+                  data-testid="erd-quick-relate-cancel"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {inlineRenameNode && inlineRenamePopoverStyle ? (
             <form
@@ -6092,34 +7464,72 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               <span className="badge">
                 {displayedSemanticAudit.counters.total} issue(s) | {displayedSemanticAudit.bySeverity.error} erro(s)
               </span>
+              {isErdDiagram && localErdSafeBatchFix?.safeFixes.length ? (
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleApplyAllSafeErdFixes}
+                  data-testid="semantic-audit-apply-all-safe-fixes"
+                >
+                  Corrigir tudo seguro
+                </button>
+              ) : null}
             </div>
 
             {isValidationPanelOpen ? (
               displayedSemanticAudit.issues.length > 0 ? (
-                <ul className="summary-list semantic-audit-list" data-testid="semantic-audit-issues">
-                  {displayedSemanticAudit.issues.slice(0, 40).map((issue, index) => (
-                    <li
-                      key={issue.id}
-                      className={`semantic-audit-item semantic-audit-item-${issue.severity}`}
-                      data-testid={`semantic-issue-item-${index}`}
-                    >
-                      <div className="semantic-audit-item-main">
-                        <strong>{issue.severity === "error" ? "Erro" : "Aviso"}</strong>
-                        <span>{issue.message}</span>
-                      </div>
-                      <div className="row-actions">
-                        <button
-                          className="btn btn-link"
-                          type="button"
-                          onClick={() => handleFocusSemanticIssue(issue)}
-                          data-testid={`semantic-issue-goto-${index}`}
+                <>
+                  {isErdDiagram && localErdSafeBatchFix?.safeFixes.length ? (
+                    <ul className="summary-list semantic-safe-fix-preview">
+                      {localErdSafeBatchFix.safeFixes.slice(0, 6).map((fix) => (
+                        <li key={fix.id}>
+                          {fix.description ? `${fix.label}: ${fix.description}` : fix.label}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  <ul className="summary-list semantic-audit-list" data-testid="semantic-audit-issues">
+                    {displayedSemanticAudit.issues.slice(0, 40).map((issue, index) => {
+                      const issueFixes = readIssueSuggestedFixes(issue);
+                      return (
+                        <li
+                          key={issue.id}
+                          className={`semantic-audit-item semantic-audit-item-${issue.severity}`}
+                          data-testid={`semantic-issue-item-${index}`}
                         >
-                          Ir para
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                          <div className="semantic-audit-item-main">
+                            <strong>{getSemanticSeverityLabel(issue.severity)}</strong>
+                            <span>{issue.message}</span>
+                            {issue.explanation ? (
+                              <span className="helper">{issue.explanation}</span>
+                            ) : null}
+                          </div>
+                          <div className="row-actions">
+                            <button
+                              className="btn btn-link"
+                              type="button"
+                              onClick={() => handleFocusSemanticIssue(issue)}
+                              data-testid={`semantic-issue-goto-${index}`}
+                            >
+                              Ir para
+                            </button>
+                            {issueFixes.map((fix) => (
+                              <button
+                                key={fix.id}
+                                className="btn"
+                                type="button"
+                                onClick={() => handleApplyErdSuggestedFix(fix.commands)}
+                                data-testid={`semantic-issue-fix-${index}-${fix.id}`}
+                              >
+                                {fix.label}
+                              </button>
+                            ))}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               ) : (
                 <p className="helper" data-testid="semantic-audit-empty">
                   Nenhuma inconsistencia semantica detectada.
@@ -6130,7 +7540,261 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             )}
           </section>
 
-          {selectedNode && inspectorMode === "operational" && operationalNodeDraft ? (
+          {selectedNode &&
+          inspectorMode === "operational" &&
+          isErdDiagram &&
+          selectedNode.data.kind === "entity" &&
+          selectedErdEntityPayload ? (
+            <div className="stack-sm erd-entity-inspector">
+              <div className="row-actions inspector-selection-row">
+                <span className="badge">Entidade (ERD)</span>
+                {nodeInspectorDirty ? (
+                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                    Rascunho nao aplicado
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="field">
+                <label htmlFor="erd-entity-label-input">Nome da entidade</label>
+                <input
+                  id="erd-entity-label-input"
+                  value={operationalNodeDraft?.label ?? selectedNode.data.label}
+                  onChange={(event) =>
+                    setOperationalNodeDraft((current) =>
+                      current ? { ...current, label: event.target.value } : current,
+                    )
+                  }
+                  data-testid="erd-entity-label-input"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="erd-entity-table-name-input">Nome da tabela (opcional)</label>
+                <input
+                  id="erd-entity-table-name-input"
+                  defaultValue={selectedErdEntityPayload.tableName ?? ""}
+                  key={`erd-table-name-${selectedNode.id}-${selectedErdEntityPayload.tableName ?? ""}`}
+                  onBlur={(event) => {
+                    const tableName = event.target.value.trim();
+                    updateSelectedErdEntityPayload((payload) => ({
+                      ...payload,
+                      ...(tableName ? { tableName } : { tableName: undefined }),
+                    }));
+                  }}
+                  placeholder="Ex.: users"
+                  data-testid="erd-entity-table-name-input"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="erd-entity-description-input">Descricao (opcional)</label>
+                <textarea
+                  id="erd-entity-description-input"
+                  rows={2}
+                  defaultValue={selectedErdEntityPayload.description ?? ""}
+                  key={`erd-description-${selectedNode.id}-${selectedErdEntityPayload.description ?? ""}`}
+                  onBlur={(event) => {
+                    const description = event.target.value.trim();
+                    updateSelectedErdEntityPayload((payload) => ({
+                      ...payload,
+                      ...(description ? { description } : { description: undefined }),
+                    }));
+                  }}
+                  data-testid="erd-entity-description-input"
+                />
+              </div>
+
+              <div className="erd-fields-grid" data-testid="erd-entity-fields-grid">
+                <div className="erd-fields-grid-header">
+                  <span>Nome</span>
+                  <span>Tipo</span>
+                  <span>Flags</span>
+                  <span>Acoes</span>
+                </div>
+                {selectedErdEntityPayload.fields.map((field, index) => {
+                  const draft = erdFieldDrafts[field.id] ?? {
+                    name: field.name,
+                    type: field.type,
+                  };
+                  const nextField = selectedErdEntityPayload.fields[index + 1];
+
+                  return (
+                    <div
+                      key={field.id}
+                      className="erd-fields-grid-row"
+                      data-testid={`erd-field-row-${field.id}`}
+                    >
+                      <input
+                        value={draft.name}
+                        onChange={(event) =>
+                          handleUpdateErdFieldDraft(field.id, { name: event.target.value })
+                        }
+                        onBlur={() => commitErdFieldDraft(field.id)}
+                        onKeyDown={(event) => {
+                          handleErdFieldShortcut(event, field.id);
+                          if (event.key !== "Enter") {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          commitErdFieldDraft(field.id);
+                          if (nextField) {
+                            window.requestAnimationFrame(() => {
+                              document
+                                .querySelector<HTMLInputElement>(
+                                  `[data-erd-field-input="${nextField.id}:name"]`,
+                                )
+                                ?.focus();
+                            });
+                            return;
+                          }
+
+                          handleAddErdField();
+                        }}
+                        data-erd-field-input={`${field.id}:name`}
+                        data-testid={`erd-field-name-input-${index}`}
+                      />
+                      <input
+                        value={draft.type}
+                        onChange={(event) =>
+                          handleUpdateErdFieldDraft(field.id, { type: event.target.value })
+                        }
+                        onBlur={() => commitErdFieldDraft(field.id)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") {
+                            handleErdFieldShortcut(event, field.id);
+                            return;
+                          }
+
+                          event.preventDefault();
+                          commitErdFieldDraft(field.id);
+                          if (nextField) {
+                            window.requestAnimationFrame(() => {
+                              document
+                                .querySelector<HTMLInputElement>(
+                                  `[data-erd-field-input="${nextField.id}:name"]`,
+                                )
+                                ?.focus();
+                            });
+                            return;
+                          }
+                          handleAddErdField();
+                        }}
+                        list="erd-logical-types"
+                        data-erd-field-input={`${field.id}:type`}
+                        data-testid={`erd-field-type-input-${index}`}
+                      />
+                      <div className="row-actions erd-field-flags">
+                        {(["PK", "FK", "UQ", "NOT_NULL"] as ErdFieldFlag[]).map((flag) => (
+                          <button
+                            key={flag}
+                            className={`btn btn-link erd-field-flag-chip ${
+                              field.flags.includes(flag) ? "is-active" : ""
+                            }`}
+                            type="button"
+                            onClick={() => handleToggleErdFieldFlag(field.id, flag)}
+                            data-testid={`erd-field-flag-${flag.toLowerCase()}-${index}`}
+                          >
+                            {flag === "NOT_NULL" ? "N" : flag}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="row-actions">
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => handleMoveErdField(field.id, "up")}
+                          disabled={index === 0}
+                          data-testid={`erd-field-move-up-${index}`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => handleMoveErdField(field.id, "down")}
+                          disabled={index === selectedErdEntityPayload.fields.length - 1}
+                          data-testid={`erd-field-move-down-${index}`}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => handleRemoveErdField(field.id)}
+                          data-testid={`erd-field-remove-${index}`}
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <datalist id="erd-logical-types">
+                <option value="string" />
+                <option value="text" />
+                <option value="integer" />
+                <option value="uuid" />
+                <option value="datetime" />
+                <option value="boolean" />
+                <option value="json" />
+                <option value="decimal" />
+              </datalist>
+
+              <div className="row-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleAddErdField}
+                  data-testid="erd-fields-add-button"
+                >
+                  + Campo
+                </button>
+                <span className="helper">
+                  Enter cria novo campo. Atalhos por linha: P (PK), F (FK), U (UQ), N
+                  (NOT_NULL).
+                </span>
+              </div>
+
+              {nodeInspectorMessage ? (
+                <div
+                  className={`inspector-feedback ${nodeInspectorHasErrors ? "is-error" : ""}`}
+                  aria-live="polite"
+                  data-testid="inspector-node-feedback"
+                >
+                  {nodeInspectorMessage}
+                </div>
+              ) : null}
+
+              <div className="row-actions inspector-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={handleApplyNodeInspector}
+                  disabled={saveState.status === "saving"}
+                  data-testid="inspector-apply-node"
+                >
+                  Aplicar alteracoes
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleNodeInspectorReset}
+                  data-testid="inspector-reset-node"
+                >
+                  Reverter
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {selectedNode &&
+          inspectorMode === "operational" &&
+          operationalNodeDraft &&
+          (!isErdDiagram || selectedNode.data.kind !== "entity") ? (
             <div className="stack-sm">
               <div className="row-actions inspector-selection-row">
                 <span className="badge">No selecionado</span>
@@ -6528,7 +8192,491 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           </div>
         ) : null}
 
-          {selectedEdge && inspectorMode === "operational" && operationalEdgeDraft ? (
+          {selectedEdge &&
+          inspectorMode === "operational" &&
+          isErdDiagram &&
+          (selectedEdge.data?.kind ?? "flows-to") === "references" &&
+          selectedErdRelationPayload ? (
+            <div className="stack-sm erd-relation-inspector">
+              <div className="row-actions inspector-selection-row">
+                <span className="badge">Relação (ERD)</span>
+                {edgeInspectorDirty ? (
+                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                    Rascunho nao aplicado
+                  </span>
+                ) : null}
+              </div>
+
+              <section className="inspector-section-body">
+                <h4>Geral</h4>
+                <div className="field">
+                  <label htmlFor="erd-relation-name-input">Nome da relação</label>
+                  <input
+                    id="erd-relation-name-input"
+                    defaultValue={selectedErdRelationPayload.name ?? ""}
+                    key={`erd-relation-name-${selectedEdge.id}-${selectedErdRelationPayload.name ?? ""}`}
+                    onBlur={(event) => {
+                      updateSelectedErdRelationName(event.target.value);
+                    }}
+                    placeholder="Opcional"
+                    data-testid="erd-relation-name-input"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="erd-relation-description-input">Descrição</label>
+                  <textarea
+                    id="erd-relation-description-input"
+                    rows={2}
+                    defaultValue={selectedErdRelationPayload.description ?? ""}
+                    key={`erd-relation-description-${selectedEdge.id}-${selectedErdRelationPayload.description ?? ""}`}
+                    onBlur={(event) => {
+                      const description = event.target.value.trim();
+                      updateSelectedErdRelationPayload((payload) => ({
+                        ...payload,
+                        ...(description ? { description } : { description: undefined }),
+                      }));
+                    }}
+                    data-testid="erd-relation-description-input"
+                  />
+                </div>
+                <dl className="inspector-meta-list">
+                  <div>
+                    <dt>Origem</dt>
+                    <dd>{selectedEdgeSourceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Destino</dt>
+                    <dd>{selectedEdgeTargetLabel}</dd>
+                  </div>
+                </dl>
+                <div className="row-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleSwapSelectedErdRelationDirection}
+                    data-testid="erd-relation-swap-direction"
+                  >
+                    Trocar direção
+                  </button>
+                </div>
+              </section>
+
+              <section className="inspector-section-body">
+                <h4>Cardinalidade</h4>
+                <div className="row-actions">
+                  {(["1:1", "1:N", "N:1", "N:N"] as ErdCardinalityPreset[]).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={`btn ${
+                        erdCardinalityToPreset(selectedErdRelationPayload.cardinality) === preset
+                          ? "btn-primary"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        updateSelectedErdRelationPayload((payload) => ({
+                          ...payload,
+                          cardinality: erdCardinalityFromPreset(preset),
+                        }))
+                      }
+                      data-testid={`erd-relation-cardinality-preset-${preset.replace(":", "-")}`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <div className="erd-cardinality-advanced">
+                  {(() => {
+                    const cardinality =
+                      selectedErdRelationPayload.cardinality ??
+                      erdCardinalityFromPreset("1:N");
+
+                    return (
+                      <>
+                        <label>
+                          Min origem
+                          <select
+                            value={String(cardinality.minSource)}
+                            onChange={(event) =>
+                              updateSelectedErdRelationPayload((payload) => ({
+                                ...payload,
+                                cardinality: {
+                                  ...(payload.cardinality ?? cardinality),
+                                  minSource: event.target.value === "1" ? 1 : 0,
+                                },
+                              }))
+                            }
+                            data-testid="erd-cardinality-min-source"
+                          >
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                          </select>
+                        </label>
+                        <label>
+                          Max origem
+                          <select
+                            value={String(cardinality.maxSource)}
+                            onChange={(event) =>
+                              updateSelectedErdRelationPayload((payload) => ({
+                                ...payload,
+                                cardinality: {
+                                  ...(payload.cardinality ?? cardinality),
+                                  maxSource: event.target.value === "N" ? "N" : 1,
+                                },
+                              }))
+                            }
+                            data-testid="erd-cardinality-max-source"
+                          >
+                            <option value="1">1</option>
+                            <option value="N">N</option>
+                          </select>
+                        </label>
+                        <label>
+                          Min destino
+                          <select
+                            value={String(cardinality.minTarget)}
+                            onChange={(event) =>
+                              updateSelectedErdRelationPayload((payload) => ({
+                                ...payload,
+                                cardinality: {
+                                  ...(payload.cardinality ?? cardinality),
+                                  minTarget: event.target.value === "1" ? 1 : 0,
+                                },
+                              }))
+                            }
+                            data-testid="erd-cardinality-min-target"
+                          >
+                            <option value="0">0</option>
+                            <option value="1">1</option>
+                          </select>
+                        </label>
+                        <label>
+                          Max destino
+                          <select
+                            value={String(cardinality.maxTarget)}
+                            onChange={(event) =>
+                              updateSelectedErdRelationPayload((payload) => ({
+                                ...payload,
+                                cardinality: {
+                                  ...(payload.cardinality ?? cardinality),
+                                  maxTarget: event.target.value === "N" ? "N" : 1,
+                                },
+                              }))
+                            }
+                            data-testid="erd-cardinality-max-target"
+                          >
+                            <option value="1">1</option>
+                            <option value="N">N</option>
+                          </select>
+                        </label>
+                        <label className="erd-cardinality-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={cardinality.minSource === 0}
+                            onChange={(event) =>
+                              updateSelectedErdRelationPayload((payload) => ({
+                                ...payload,
+                                cardinality: {
+                                  ...(payload.cardinality ?? cardinality),
+                                  minSource: event.target.checked ? 0 : 1,
+                                },
+                              }))
+                            }
+                            data-testid="erd-cardinality-optional-source"
+                          />
+                          Origem opcional
+                        </label>
+                        <label className="erd-cardinality-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={cardinality.minTarget === 0}
+                            onChange={(event) =>
+                              updateSelectedErdRelationPayload((payload) => ({
+                                ...payload,
+                                cardinality: {
+                                  ...(payload.cardinality ?? cardinality),
+                                  minTarget: event.target.checked ? 0 : 1,
+                                },
+                              }))
+                            }
+                            data-testid="erd-cardinality-optional-target"
+                          />
+                          Destino opcional
+                        </label>
+                      </>
+                    );
+                  })()}
+                </div>
+              </section>
+
+              <section className="inspector-section-body">
+                <h4>Papéis</h4>
+                <div className="field">
+                  <label htmlFor="erd-role-source-input">sourceRole</label>
+                  <input
+                    id="erd-role-source-input"
+                    defaultValue={selectedErdRelationPayload.roles?.sourceRole ?? ""}
+                    key={`erd-role-source-${selectedEdge.id}-${selectedErdRelationPayload.roles?.sourceRole ?? ""}`}
+                    onBlur={(event) => {
+                      const sourceRole = event.target.value.trim();
+                      updateSelectedErdRelationPayload((payload) => ({
+                        ...payload,
+                        roles: {
+                          ...(payload.roles ?? {}),
+                          ...(sourceRole ? { sourceRole } : { sourceRole: undefined }),
+                        },
+                      }));
+                    }}
+                    data-testid="erd-role-source-input"
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="erd-role-target-input">targetRole</label>
+                  <input
+                    id="erd-role-target-input"
+                    defaultValue={selectedErdRelationPayload.roles?.targetRole ?? ""}
+                    key={`erd-role-target-${selectedEdge.id}-${selectedErdRelationPayload.roles?.targetRole ?? ""}`}
+                    onBlur={(event) => {
+                      const targetRole = event.target.value.trim();
+                      updateSelectedErdRelationPayload((payload) => ({
+                        ...payload,
+                        roles: {
+                          ...(payload.roles ?? {}),
+                          ...(targetRole ? { targetRole } : { targetRole: undefined }),
+                        },
+                      }));
+                    }}
+                    data-testid="erd-role-target-input"
+                  />
+                </div>
+                <p className="helper" data-testid="erd-role-preview">
+                  {selectedEdgeSourceLabel} {selectedErdRelationPayload.roles?.sourceRole ?? "relaciona"}
+                  {" / "}
+                  {selectedEdgeTargetLabel} {selectedErdRelationPayload.roles?.targetRole ?? "relaciona"}
+                </p>
+              </section>
+
+              <section className="inspector-section-body">
+                <h4>Materialização</h4>
+                <p className="helper">
+                  Estado atual:{" "}
+                  {selectedErdRelationPayload.materialization?.mode === "fk"
+                    ? "FK materializada"
+                    : selectedErdRelationPayload.materialization?.mode === "associative"
+                      ? "Associativa"
+                      : "Conceitual"}
+                </p>
+                <div className="erd-materialization-controls">
+                  <label>
+                    Lado dependente
+                    <select
+                      value={erdMaterializeDependentSide}
+                      onChange={(event) =>
+                        setErdMaterializeDependentSide(
+                          event.target.value as "source" | "target",
+                        )
+                      }
+                      data-testid="erd-materialize-dependent-side"
+                    >
+                      <option value="source">Origem</option>
+                      <option value="target">Destino</option>
+                    </select>
+                  </label>
+                  {(() => {
+                    const dependentEntityNode =
+                      erdMaterializeDependentSide === "source"
+                        ? selectedErdSourceEntityNode
+                        : selectedErdTargetEntityNode;
+                    const dependentFields = dependentEntityNode
+                      ? normalizeErdEntityPayloadFromNode(dependentEntityNode).fields
+                      : [];
+
+                    return (
+                      <label>
+                        Campo FK
+                        <select
+                          value={erdMaterializeExistingFieldId}
+                          onChange={(event) => setErdMaterializeExistingFieldId(event.target.value)}
+                          data-testid="erd-materialize-field-select"
+                        >
+                          <option value="__new__">Criar novo campo</option>
+                          {dependentFields.map((field) => (
+                            <option key={field.id} value={field.id}>
+                              {field.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })()}
+                  <label className="erd-cardinality-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={erdMaterializeUnique}
+                      onChange={(event) => setErdMaterializeUnique(event.target.checked)}
+                      data-testid="erd-materialize-unique-toggle"
+                    />
+                    UNIQUE no FK (1:1)
+                  </label>
+                </div>
+                <div className="row-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleMaterializeSelectedErdRelationAsFk}
+                    data-testid="erd-materialize-fk-button"
+                  >
+                    Materializar como FK
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleApplySelectedErdOneToOneUniqueFix}
+                    data-testid="erd-materialize-apply-unique-button"
+                  >
+                    Aplicar UNIQUE (1:1)
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleConvertSelectedErdRelationToAssociative}
+                    disabled={erdCardinalityToPreset(selectedErdRelationPayload.cardinality) !== "N:N"}
+                    data-testid="erd-convert-associative-button"
+                  >
+                    Converter em associativa
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={handleMarkSelectedErdRelationConceptual}
+                    disabled={!erdPolicy.allowConceptualRelations}
+                    data-testid="erd-mark-conceptual-button"
+                  >
+                    Marcar como conceitual
+                  </button>
+                </div>
+              </section>
+
+              <section className="inspector-section-body">
+                <h4>Integridade referencial</h4>
+                <div className="erd-cardinality-advanced">
+                  <label>
+                    onDelete
+                    <select
+                      value={selectedErdRelationPayload.referentialActions?.onDelete ?? ""}
+                      onChange={(event) =>
+                        updateSelectedErdRelationPayload((payload) => ({
+                          ...payload,
+                          referentialActions: {
+                            ...(payload.referentialActions ?? {}),
+                            ...(event.target.value
+                              ? { onDelete: event.target.value as "restrict" | "cascade" | "setNull" | "noAction" }
+                              : { onDelete: undefined }),
+                          },
+                        }))
+                      }
+                      data-testid="erd-referential-on-delete"
+                    >
+                      <option value="">(padrao)</option>
+                      <option value="restrict">restrict</option>
+                      <option value="cascade">cascade</option>
+                      <option value="setNull">setNull</option>
+                      <option value="noAction">noAction</option>
+                    </select>
+                  </label>
+                  <label>
+                    onUpdate
+                    <select
+                      value={selectedErdRelationPayload.referentialActions?.onUpdate ?? ""}
+                      onChange={(event) =>
+                        updateSelectedErdRelationPayload((payload) => ({
+                          ...payload,
+                          referentialActions: {
+                            ...(payload.referentialActions ?? {}),
+                            ...(event.target.value
+                              ? { onUpdate: event.target.value as "restrict" | "cascade" | "setNull" | "noAction" }
+                              : { onUpdate: undefined }),
+                          },
+                        }))
+                      }
+                      data-testid="erd-referential-on-update"
+                    >
+                      <option value="">(padrao)</option>
+                      <option value="restrict">restrict</option>
+                      <option value="cascade">cascade</option>
+                      <option value="setNull">setNull</option>
+                      <option value="noAction">noAction</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+              <section className="inspector-section-body">
+                <h4>Diagnósticos</h4>
+                {selectedErdRelationIssues.length > 0 ? (
+                  <ul className="summary-list">
+                    {selectedErdRelationIssues.map((issue) => (
+                      <li key={issue.id}>
+                        <span>
+                          {getSemanticSeverityLabel(issue.severity)}: {issue.message}
+                        </span>
+                        <div className="row-actions">
+                          <button
+                            className="btn btn-link"
+                            type="button"
+                            onClick={() => handleFocusSemanticIssue(issue)}
+                            data-testid={`erd-relation-issue-goto-${issue.id}`}
+                          >
+                            Ir para
+                          </button>
+                          {readIssueSuggestedFixes(issue).map((fix) => (
+                            <button
+                              key={fix.id}
+                              className="btn"
+                              type="button"
+                              onClick={() => handleApplyErdSuggestedFix(fix.commands)}
+                              data-testid={`erd-relation-issue-fix-${fix.id}`}
+                            >
+                              {fix.label}
+                            </button>
+                          ))}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="helper">Sem diagnosticos para esta relação.</p>
+                )}
+              </section>
+
+              {edgeInspectorMessage ? (
+                <div
+                  className={`inspector-feedback ${edgeInspectorHasErrors ? "is-error" : ""}`}
+                  aria-live="polite"
+                  data-testid="inspector-edge-feedback"
+                >
+                  {edgeInspectorMessage}
+                </div>
+              ) : null}
+
+              <div className="row-actions inspector-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={handleRemoveSelected}
+                  disabled={saveState.status === "saving"}
+                  data-testid="erd-relation-remove-button"
+                >
+                  Remover relacao
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {selectedEdge &&
+          inspectorMode === "operational" &&
+          operationalEdgeDraft &&
+          (!isErdDiagram || (selectedEdge.data?.kind ?? "flows-to") !== "references") ? (
             <div className="stack-sm">
               <div className="row-actions inspector-selection-row">
                 <span className="badge">Aresta selecionada</span>
