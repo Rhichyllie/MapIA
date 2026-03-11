@@ -57,6 +57,11 @@ type PrismaRelationCandidate = {
 
 type PrismaRelation = PrismaRelationCandidate & {
   cardinality: PrismaRelationCardinality;
+  sourceIsList: boolean;
+  sourceIsOptional: boolean;
+  targetIsList: boolean;
+  targetIsOptional: boolean;
+  ownerModelName?: string;
 };
 
 export type PrismaSchemaImportSummary = {
@@ -127,6 +132,76 @@ function parseRelationEnumValue(
   );
 
   return match?.[1];
+}
+
+function normalizePrismaScalarType(type: string) {
+  const normalized = type.trim().toLowerCase();
+
+  if (normalized === "int" || normalized === "bigint") {
+    return "integer";
+  }
+  if (normalized === "float") {
+    return "decimal";
+  }
+  if (normalized === "string") {
+    return "string";
+  }
+  if (normalized === "datetime") {
+    return "datetime";
+  }
+  if (normalized === "bool" || normalized === "boolean") {
+    return "boolean";
+  }
+  if (normalized === "json") {
+    return "json";
+  }
+  if (normalized === "decimal") {
+    return "decimal";
+  }
+  if (normalized === "uuid") {
+    return "uuid";
+  }
+  if (normalized === "bytes") {
+    return "string";
+  }
+
+  return normalized;
+}
+
+function toErdReferentialAction(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "cascade") {
+    return "cascade" as const;
+  }
+  if (normalized === "restrict") {
+    return "restrict" as const;
+  }
+  if (normalized === "setnull" || normalized === "set_null") {
+    return "setNull" as const;
+  }
+  if (normalized === "noaction" || normalized === "no_action") {
+    return "noAction" as const;
+  }
+
+  return undefined;
+}
+
+function buildErdCardinalityForRelation(relation: PrismaRelation) {
+  const maxSource = relation.sourceIsList ? "N" : 1;
+  const maxTarget = relation.targetIsList ? "N" : 1;
+  const minSource = relation.sourceIsOptional || relation.sourceIsList ? 0 : 1;
+  const minTarget = relation.targetIsOptional || relation.targetIsList ? 0 : 1;
+
+  return {
+    minSource: minSource as 0 | 1,
+    maxSource: maxSource as 1 | "N",
+    minTarget: minTarget as 0 | 1,
+    maxTarget: maxTarget as 1 | "N",
+  };
 }
 
 function parseModelTableName(modelName: string, body: string) {
@@ -328,14 +403,24 @@ function dedupeRelations(
           (candidate.fkFields && candidate.fkFields.length > 0) ||
           (candidate.references && candidate.references.length > 0),
       ) ?? primary;
+    const opposite = sorted.find(
+      (candidate) =>
+        candidate.sourceModelName === primary.targetModelName &&
+        candidate.targetModelName === primary.sourceModelName,
+    );
 
     relations.push({
       ...primary,
       cardinality: resolveCardinalityForCandidates(sorted),
+      sourceIsList: primary.isList,
+      sourceIsOptional: primary.isOptional,
+      targetIsList: opposite?.isList ?? false,
+      targetIsOptional: opposite?.isOptional ?? true,
       fkFields: owner.fkFields,
       references: owner.references,
       onDelete: owner.onDelete,
       onUpdate: owner.onUpdate,
+      ownerModelName: owner.sourceModelName,
     });
   }
 
@@ -690,6 +775,17 @@ export function importPrismaSchemaToGraphSnapshot(
     const nodeIdByModelName = new Map<string, string>();
     const sortedModels = [...models].sort((a, b) => a.name.localeCompare(b.name));
     const modelNameSet = new Set(sortedModels.map((model) => model.name));
+    const modelByName = new Map(sortedModels.map((model) => [model.name, model]));
+    const fieldIdByModelAndFieldName = new Map<string, string>();
+    const nodeByModelName = new Map<string, {
+      id: string;
+      projectId: string;
+      kind: "entity";
+      label: string;
+      position: { x: number; y: number };
+      data: Record<string, unknown>;
+      externalRefs: ReturnType<typeof buildImportedNodeExternalRefs>;
+    }>();
 
     const nodes = sortedModels.map((model, index) => {
       const nodeId = deterministicUuidFromParts([
@@ -702,13 +798,46 @@ export function importPrismaSchemaToGraphSnapshot(
 
       const scalarFields = model.fields
         .filter((field) => !modelNameSet.has(field.type))
-        .map((field) => ({
-          name: field.name,
-          type: field.type,
-          isOptional: field.isOptional,
-          isId: /(^|\s)@id(\s|$)/.test(field.attributesRaw),
-          isUnique: /(^|\s)@unique(\s|$)/.test(field.attributesRaw),
-        }));
+        .map((field) => {
+          const isId = /(^|\s)@id(\s|$)/.test(field.attributesRaw);
+          const isUnique = /(^|\s)@unique(\s|$)/.test(field.attributesRaw);
+          const hasDefault = /(^|\s)@default\s*\(/.test(field.attributesRaw);
+          const hasAutoIncrement = /@default\s*\(\s*autoincrement\s*\(/i.test(field.attributesRaw);
+          const flags = new Set<string>();
+          if (isId) {
+            flags.add("PK");
+          }
+          if (isUnique) {
+            flags.add("UQ");
+          }
+          if (field.isOptional) {
+            flags.add("NULLABLE");
+          } else {
+            flags.add("NOT_NULL");
+          }
+          if (hasDefault) {
+            flags.add("DEFAULT");
+          }
+          if (hasAutoIncrement) {
+            flags.add("AUTO_INCREMENT");
+          }
+
+          const fieldId = deterministicUuidFromParts([
+            "prisma-schema-import",
+            input.projectId,
+            "field",
+            model.name,
+            field.name,
+          ]);
+          fieldIdByModelAndFieldName.set(`${model.name}.${field.name}`, fieldId);
+
+          return {
+            id: fieldId,
+            name: field.name,
+            type: normalizePrismaScalarType(field.type),
+            flags: [...flags],
+          };
+        });
 
       const columnIndex = index % 3;
       const rowIndex = Math.floor(index / 3);
@@ -726,7 +855,8 @@ export function importPrismaSchemaToGraphSnapshot(
         incrementWarningCategory(warningsByCategory, "provenance.node.miss");
       }
 
-      return {
+      const pkCount = scalarFields.filter((field) => field.flags.includes("PK")).length;
+      const node = {
         id: nodeId,
         projectId: input.projectId,
         kind: "entity" as const,
@@ -740,9 +870,16 @@ export function importPrismaSchemaToGraphSnapshot(
           tableName: model.tableName,
           source: "prisma-schema",
           fields: scalarFields,
+          semantic: {
+            normalizedName: model.name,
+            pkKind: pkCount > 1 ? "composite" : pkCount === 1 ? "single" : "none",
+            hasPk: pkCount > 0,
+          },
         },
         externalRefs,
       };
+      nodeByModelName.set(model.name, node);
+      return node;
     });
 
     scalarFieldsCount = sortedModels.reduce(
@@ -778,48 +915,172 @@ export function importPrismaSchemaToGraphSnapshot(
         );
       }
 
+      const relationId = deterministicUuidFromParts([
+        "prisma-schema-import",
+        input.projectId,
+        "relation",
+        relation.relationName ?? "",
+        relation.sourceModelName,
+        relation.sourceFieldName,
+        relation.targetModelName,
+      ]);
+      const cardinality = buildErdCardinalityForRelation(relation);
+      const preset =
+        cardinality.maxSource === "N" && cardinality.maxTarget === "N"
+          ? "N:N"
+          : cardinality.maxSource === "N"
+            ? "N:1"
+            : cardinality.maxTarget === "N"
+              ? "1:N"
+              : "1:1";
+      const roles =
+        preset === "1:N"
+          ? { sourceRole: "hasMany", targetRole: "belongsTo" }
+          : preset === "N:1"
+            ? { sourceRole: "belongsTo", targetRole: "hasMany" }
+            : preset === "1:1"
+              ? { sourceRole: "hasOne", targetRole: "belongsTo" }
+              : { sourceRole: "manyToMany", targetRole: "manyToMany" };
+
+      const ownerModelName = relation.ownerModelName;
+      const ownerModel = ownerModelName ? modelByName.get(ownerModelName) : undefined;
+      const dependentSide =
+        ownerModelName && ownerModelName === relation.sourceModelName
+          ? ("source" as const)
+          : ownerModelName && ownerModelName === relation.targetModelName
+            ? ("target" as const)
+            : undefined;
+      const referencesModelName =
+        dependentSide === "source"
+          ? relation.targetModelName
+          : dependentSide === "target"
+            ? relation.sourceModelName
+            : undefined;
+      const fkFieldIds = (relation.fkFields ?? [])
+        .map((fieldName) => fieldIdByModelAndFieldName.get(`${ownerModelName}.${fieldName}`))
+        .filter((fieldId): fieldId is string => Boolean(fieldId));
+      const referencesFieldIds = (relation.references ?? [])
+        .map((fieldName) =>
+          referencesModelName
+            ? fieldIdByModelAndFieldName.get(`${referencesModelName}.${fieldName}`)
+            : undefined,
+        )
+        .filter((fieldId): fieldId is string => Boolean(fieldId));
+      const fallbackReferencePkFieldIds = referencesModelName
+        ? (nodeByModelName.get(referencesModelName)?.data.fields as Array<{
+            id: string;
+            flags: string[];
+          }> | undefined)
+            ?.filter((field) => field.flags.includes("PK"))
+            .map((field) => field.id) ?? []
+        : [];
+      const hasFkMaterialization =
+        Boolean(dependentSide) &&
+        Boolean(ownerModelName) &&
+        fkFieldIds.length > 0 &&
+        Boolean(referencesModelName);
+      const uniqueOnFk =
+        preset === "1:1" &&
+        Boolean(
+          ownerModel &&
+            relation.fkFields?.some((fkFieldName) => {
+              const field = ownerModel.fields.find((candidate) => candidate.name === fkFieldName);
+              return field ? /(^|\s)@unique(\s|$)/.test(field.attributesRaw) : false;
+            }),
+        );
+      const materialization = hasFkMaterialization
+        ? {
+            mode: "fk",
+            dependentSide,
+            fk: {
+              dependentEntityId:
+                dependentSide === "source" ? sourceNodeId : targetNodeId,
+              fkFieldIds,
+              referencesEntityId:
+                dependentSide === "source" ? targetNodeId : sourceNodeId,
+              referencesFieldIds:
+                referencesFieldIds.length > 0
+                  ? referencesFieldIds
+                  : fallbackReferencePkFieldIds,
+              ...(uniqueOnFk ? { unique: true } : {}),
+            },
+          }
+        : {
+            mode: "conceptual",
+          };
+      const referentialActions = {
+        ...(toErdReferentialAction(relation.onDelete)
+          ? { onDelete: toErdReferentialAction(relation.onDelete) }
+          : {}),
+        ...(toErdReferentialAction(relation.onUpdate)
+          ? { onUpdate: toErdReferentialAction(relation.onUpdate) }
+          : {}),
+      };
+
+      if (hasFkMaterialization && dependentSide && ownerModelName) {
+        const dependentModelName =
+          dependentSide === "source" ? relation.sourceModelName : relation.targetModelName;
+        const referencedEntityId =
+          dependentSide === "source" ? targetNodeId : sourceNodeId;
+        const dependentNode = nodeByModelName.get(dependentModelName);
+        if (dependentNode) {
+          const required = dependentSide === "source" ? cardinality.minSource === 1 : cardinality.minTarget === 1;
+          const dependentFields = Array.isArray(dependentNode.data.fields)
+            ? (dependentNode.data.fields as Array<{
+                id: string;
+                name: string;
+                type: string;
+                flags: string[];
+                references?: Record<string, unknown>;
+              }>)
+            : [];
+          dependentNode.data.fields = dependentFields.map((field) => {
+            if (!fkFieldIds.includes(field.id)) {
+              return field;
+            }
+
+            const flags = new Set(field.flags);
+            flags.add("FK");
+            if (required) {
+              flags.add("NOT_NULL");
+              flags.delete("NULLABLE");
+            } else if (!flags.has("NOT_NULL")) {
+              flags.add("NULLABLE");
+            }
+            if (uniqueOnFk) {
+              flags.add("UQ");
+            }
+
+            return {
+              ...field,
+              flags: [...flags],
+              references: {
+                entityId: referencedEntityId,
+                relationEdgeId: relationId,
+              },
+            };
+          });
+        }
+      }
+
       return [
         {
-          id: deterministicUuidFromParts([
-            "prisma-schema-import",
-            input.projectId,
-            "relation",
-            relation.relationName ?? "",
-            relation.sourceModelName,
-            relation.sourceFieldName,
-            relation.targetModelName,
-          ]),
+          id: relationId,
           projectId: input.projectId,
           sourceNodeId,
           targetNodeId,
           kind: "references" as const,
-          label: relation.sourceFieldName,
-          data: (() => {
-            const fk =
-              relation.fkFields ||
-              relation.references ||
-              relation.onDelete ||
-              relation.onUpdate
-                ? {
-                    ...(relation.fkFields ? { fkFields: relation.fkFields } : {}),
-                    ...(relation.references ? { references: relation.references } : {}),
-                    ...(relation.onDelete ? { onDelete: relation.onDelete } : {}),
-                    ...(relation.onUpdate ? { onUpdate: relation.onUpdate } : {}),
-                  }
-                : undefined;
-
-            return {
-              source: "prisma-schema",
-              ...(relation.relationName ? { relationName: relation.relationName } : {}),
-              sourceFieldName: relation.sourceFieldName,
-              cardinality: relation.cardinality,
-              ...(relation.fkFields ? { fkFields: relation.fkFields } : {}),
-              ...(relation.references ? { references: relation.references } : {}),
-              ...(relation.onDelete ? { onDelete: relation.onDelete } : {}),
-              ...(relation.onUpdate ? { onUpdate: relation.onUpdate } : {}),
-              ...(fk ? { fk } : {}),
-            };
-          })(),
+          label: relation.relationName ?? relation.sourceFieldName,
+          data: {
+            source: "prisma-schema",
+            ...(relation.relationName ? { relationName: relation.relationName } : {}),
+            sourceFieldName: relation.sourceFieldName,
+            name: relation.relationName ?? relation.sourceFieldName,
+            cardinality,
+            roles,
+            materialization,
+            referentialActions,
+          },
           externalRefs,
         },
       ];
