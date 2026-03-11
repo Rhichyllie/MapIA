@@ -23,6 +23,10 @@ export type EditorNodeData = {
   rendererTreeCollapsed?: boolean;
   rendererCanToggleTreeCollapse?: boolean;
   onToggleTreeCollapse?: (nodeId: string) => void;
+  erdBadges?: Array<{
+    label: string;
+    tone: "warning" | "info" | "suggestion";
+  }>;
   presentationMode?: "operational" | "technical";
   displayLabel?: string;
 };

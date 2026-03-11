@@ -27,6 +27,17 @@ type ErdFieldRow = {
   flags: string;
 };
 
+function normalizeFieldFlagsForDisplay(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  return value
+    .filter((flag): flag is string => typeof flag === "string")
+    .map((flag) => flag.trim())
+    .filter(Boolean);
+}
+
 function readEntityFields(payload: Record<string, unknown>) {
   const rawFields = payload.fields;
 
@@ -56,6 +67,7 @@ function readEntityFields(payload: Record<string, unknown>) {
       const parsedField = field as {
         name?: unknown;
         type?: unknown;
+        flags?: unknown;
         isId?: unknown;
         isUnique?: unknown;
         isOptional?: unknown;
@@ -68,13 +80,27 @@ function readEntityFields(payload: Record<string, unknown>) {
         typeof parsedField.type === "string" ? parsedField.type : "String";
       const flags: string[] = [];
 
-      if (parsedField.isId === true) {
+      const normalizedFlags = normalizeFieldFlagsForDisplay(parsedField.flags);
+      for (const flag of normalizedFlags) {
+        if (flag === "NOT_NULL") {
+          flags.push("NOT NULL");
+          continue;
+        }
+
+        flags.push(flag);
+      }
+
+      if (parsedField.isId === true && !flags.includes("PK")) {
         flags.push("PK");
       }
-      if (parsedField.isUnique === true) {
-        flags.push("UNQ");
+      if (parsedField.isUnique === true && !flags.includes("UQ")) {
+        flags.push("UQ");
       }
-      if (parsedField.isOptional === false) {
+      if (
+        parsedField.isOptional === false &&
+        !flags.includes("NOT_NULL") &&
+        !flags.includes("NOT NULL")
+      ) {
         flags.push("NOT NULL");
       }
 
@@ -396,6 +422,18 @@ export function ErdNodeRenderer({ data }: NodeProps) {
           <NodeTypeChip nodeData={nodeData} />
         </div>
         <strong className="diagram-node__title">{resolveDisplayLabel(nodeData)}</strong>
+        {nodeData.erdBadges && nodeData.erdBadges.length > 0 ? (
+          <div className="diagram-node-erd__badges">
+            {nodeData.erdBadges.slice(0, 3).map((badge, index) => (
+              <span
+                key={`${badge.label}-${index}`}
+                className={`diagram-node-erd__badge diagram-node-erd__badge-${badge.tone}`}
+              >
+                {badge.label}
+              </span>
+            ))}
+          </div>
+        ) : null}
         <NodeTechnicalMeta nodeData={nodeData} />
       </div>
       <div className="diagram-node-erd__rows" data-testid="erd-node-fields-table">
