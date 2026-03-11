@@ -1,6 +1,10 @@
 import { AppError } from "@/src/lib/app-error";
 import { validateGraphSnapshotInvariants } from "@/src/modules/graph/domain";
 import {
+  normalizeErdPolicyFromCustomRules,
+  normalizeErdRelationPayload,
+} from "@/src/modules/erd/domain";
+import {
   hasMinimumSemanticOverrideReason,
   runGraphAudit,
   validateEdgeCreation,
@@ -83,70 +87,8 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return value as Record<string, unknown>;
 }
 
-function readStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const normalized = value.filter(
-    (item): item is string => typeof item === "string" && item.trim().length > 0,
-  );
-
-  return normalized.length > 0 ? normalized : undefined;
-}
-
-function resolveDefaultErdCardinality() {
-  return "1:N" as const;
-}
-
-function enrichErdReferenceEdgeData(data: unknown) {
-  const payload = readRecord(data) ?? {};
-  const nestedFk = readRecord(payload.fk);
-
-  const fkFields =
-    readStringArray(payload.fkFields) ??
-    readStringArray(nestedFk?.fkFields);
-  const references =
-    readStringArray(payload.references) ??
-    readStringArray(nestedFk?.references);
-  const onDelete =
-    typeof payload.onDelete === "string"
-      ? payload.onDelete
-      : typeof nestedFk?.onDelete === "string"
-        ? nestedFk.onDelete
-        : undefined;
-  const onUpdate =
-    typeof payload.onUpdate === "string"
-      ? payload.onUpdate
-      : typeof nestedFk?.onUpdate === "string"
-        ? nestedFk.onUpdate
-        : undefined;
-  const cardinality =
-    payload.cardinality === "1:1" ||
-    payload.cardinality === "1:N" ||
-    payload.cardinality === "N:N"
-      ? payload.cardinality
-      : resolveDefaultErdCardinality();
-
-  const fkPayload =
-    fkFields || references || onDelete || onUpdate
-      ? {
-          ...(fkFields ? { fkFields } : {}),
-          ...(references ? { references } : {}),
-          ...(onDelete ? { onDelete } : {}),
-          ...(onUpdate ? { onUpdate } : {}),
-        }
-      : undefined;
-
-  return {
-    ...payload,
-    cardinality,
-    ...(fkFields ? { fkFields } : {}),
-    ...(references ? { references } : {}),
-    ...(onDelete ? { onDelete } : {}),
-    ...(onUpdate ? { onUpdate } : {}),
-    ...(fkPayload ? { fk: fkPayload } : {}),
-  };
+function isErdDiagramType(diagramType: string | undefined) {
+  return diagramType === "erd";
 }
 
 function enrichCommandForSemanticPolicy(input: {
@@ -173,7 +115,10 @@ function enrichCommandForSemanticPolicy(input: {
       ...command,
       edge: {
         ...command.edge,
-        data: enrichErdReferenceEdgeData(command.edge.data),
+        data: normalizeErdRelationPayload(readRecord(command.edge.data), {
+          sourceEntityId: command.edge.sourceNodeId,
+          targetEntityId: command.edge.targetNodeId,
+        }) as unknown as Record<string, unknown>,
       },
     };
   }
@@ -196,9 +141,13 @@ function enrichCommandForSemanticPolicy(input: {
       ...command,
       patch: {
         ...command.patch,
-        data: enrichErdReferenceEdgeData(
-          command.patch.data ?? currentEdge.data,
-        ),
+        data: normalizeErdRelationPayload(
+          readRecord(command.patch.data ?? currentEdge.data),
+          {
+            sourceEntityId: currentEdge.sourceNodeId,
+            targetEntityId: currentEdge.targetNodeId,
+          },
+        ) as unknown as Record<string, unknown>,
       },
     };
   }
@@ -278,6 +227,13 @@ async function loadOrCreateSemanticPolicy(input: {
     enforceOnServer: true,
     allowTechOverride: false,
     requireOverrideReason: true,
+    ...(input.snapshotDiagramType === "erd"
+      ? {
+          customRulesJson: {
+            erd: normalizeErdPolicyFromCustomRules(undefined),
+          },
+        }
+      : {}),
     updatedByIdentity: input.actorIdentity,
   });
 }
@@ -316,11 +272,19 @@ async function enforceCommandSemantics(input: {
   overrideReason?: string;
 }) {
   const { policy } = input;
-  if (!policy.enforceOnServer || !policy.strictEnabled) {
+  if (!policy.enforceOnServer) {
     return;
   }
 
   const diagramType = resolvePolicyDiagramType(policy, input.snapshot.diagramType);
+  if (isErdDiagramType(diagramType)) {
+    return;
+  }
+
+  if (!policy.strictEnabled) {
+    return;
+  }
+
   const engineOptions = buildSemanticEngineOptions(policy);
   const canOverride = canUseTechnicalOverride({
     mode: input.mode,
@@ -629,6 +593,14 @@ async function enforceSnapshotSemantics(input: {
   }
 
   const diagramType = resolvePolicyDiagramType(policy, input.snapshot.diagramType);
+  if (isErdDiagramType(diagramType)) {
+    return;
+  }
+
+  if (!policy.strictEnabled) {
+    return;
+  }
+
   const engineOptions = buildSemanticEngineOptions(policy);
   const audit = runGraphAudit(
     {
@@ -652,7 +624,7 @@ async function enforceSnapshotSemantics(input: {
     engineOptions,
   );
 
-  if (!policy.strictEnabled || audit.bySeverity.error === 0) {
+  if (audit.bySeverity.error === 0) {
     return;
   }
 
