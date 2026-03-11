@@ -1,5 +1,6 @@
 import { AppError } from "@/src/lib/app-error";
 import type { GraphSnapshot } from "@/src/domain";
+import { normalizeErdPolicyFromCustomRules } from "@/src/modules/erd/domain";
 import {
   runGraphAudit,
   type SemanticEngineOptions,
@@ -76,7 +77,7 @@ async function appendAuditEventLog(deps: SemanticUseCaseDeps, input: {
   mode: SemanticMode;
   source: "draft_validate" | "working_snapshot_audit";
   issuesCount: number;
-  bySeverity: { error: number; warning: number };
+  bySeverity: { error: number; warning: number; info: number; suggestion: number };
 }) {
   await deps.semanticEventLogRepository.append({
     projectId: input.projectId,
@@ -119,6 +120,13 @@ async function loadOrCreatePolicy(
     enforceOnServer: true,
     allowTechOverride: false,
     requireOverrideReason: true,
+    ...(workingSnapshot?.snapshot.diagramType === "erd"
+      ? {
+          customRulesJson: {
+            erd: normalizeErdPolicyFromCustomRules(undefined),
+          },
+        }
+      : {}),
     updatedByIdentity: parsed.actorIdentity,
   });
 }

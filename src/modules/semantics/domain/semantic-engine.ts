@@ -1,10 +1,25 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
 import { resolveDiagramRole } from "@/src/modules/diagrams/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
+import {
+  normalizeErdGraphFromSemantic,
+  normalizeErdPolicyFromCustomRules,
+  validateErdGraphFull,
+  type ErdEditorCommand,
+  type ErdSuggestedFix,
+} from "@/src/modules/erd/domain";
 
-export type SemanticSeverity = "error" | "warning";
+export type SemanticSeverity = "error" | "warning" | "info" | "suggestion";
 export type SemanticMode = "operational" | "technical";
 export type SemanticDiagramType = DiagramType | "erd" | undefined;
+
+export type SemanticSuggestedFix = {
+  id: string;
+  label: string;
+  description?: string;
+  safety: "safe" | "manual";
+  commands: ErdEditorCommand[];
+};
 
 export type SemanticNodeRef = {
   id: string;
@@ -26,8 +41,9 @@ export type SemanticViolation = {
   code: string;
   severity: SemanticSeverity;
   message: string;
+  explanation?: string;
   details?: string;
-  suggestedFixes?: string[];
+  suggestedFixes?: Array<SemanticSuggestedFix | string>;
 };
 
 export type ConnectionContext = {
@@ -405,6 +421,22 @@ function buildIssueId(
   index: number,
 ) {
   return `${code}:${targetType}:${targetId ?? "graph"}:${index}`;
+}
+
+function mapErdFixesToSemanticFixes(
+  fixes: ErdSuggestedFix[] | undefined,
+): SemanticSuggestedFix[] | undefined {
+  if (!fixes || fixes.length === 0) {
+    return undefined;
+  }
+
+  return fixes.map((fix) => ({
+    id: fix.id,
+    label: fix.label,
+    ...(fix.description ? { description: fix.description } : {}),
+    safety: fix.safety,
+    commands: fix.commands,
+  }));
 }
 
 export function getSemanticProfile(
@@ -785,6 +817,88 @@ export function runGraphAudit(
   );
   const sortedEdges = [...graph.edges].sort((a, b) => a.id.localeCompare(b.id));
 
+  const bySeverityBase: Record<SemanticSeverity, number> = {
+    error: 0,
+    warning: 0,
+    info: 0,
+    suggestion: 0,
+  };
+
+  if (profile.diagramType === "erd") {
+    for (const edge of sortedEdges) {
+      const sourceNode = nodeMap.get(edge.sourceNodeId);
+      const targetNode = nodeMap.get(edge.targetNodeId);
+
+      if (sourceNode && targetNode) {
+        continue;
+      }
+
+      issues.push({
+        id: buildIssueId("EDGE_ENDPOINT_NOT_FOUND", "edge", edge.id, issues.length),
+        code: "EDGE_ENDPOINT_NOT_FOUND",
+        severity: "error",
+        message: `Aresta '${edge.id}' aponta para no inexistente.`,
+        details: "Ajuste origem/destino ou remova a relacao quebrada.",
+        targetType: "edge",
+        targetId: edge.id,
+      });
+    }
+
+    const erdGraph = normalizeErdGraphFromSemantic({
+      nodes: sortedNodes,
+      edges: sortedEdges,
+    });
+    const erdPolicy = normalizeErdPolicyFromCustomRules(options?.customRulesJson);
+    const erdValidation = validateErdGraphFull({
+      graph: erdGraph,
+      policy: erdPolicy,
+    });
+
+    for (const diagnostic of erdValidation.diagnostics) {
+      const semanticIssue: SemanticIssue = {
+        id: diagnostic.id,
+        code: diagnostic.code,
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        explanation: diagnostic.explanation,
+        details: diagnostic.explanation,
+        suggestedFixes: mapErdFixesToSemanticFixes(diagnostic.suggestedFixes),
+        targetType:
+          diagnostic.target.type === "graph"
+            ? "graph"
+            : diagnostic.target.type === "relation"
+              ? "edge"
+              : "node",
+        targetId:
+          diagnostic.target.type === "entity"
+            ? diagnostic.target.entityId
+            : diagnostic.target.type === "field"
+              ? diagnostic.target.entityId
+              : diagnostic.target.type === "relation"
+                ? diagnostic.target.relationId
+                : undefined,
+      };
+
+      issues.push(semanticIssue);
+    }
+
+    const bySeverity = { ...bySeverityBase };
+    for (const issue of issues) {
+      bySeverity[issue.severity] += 1;
+    }
+
+    return {
+      issues,
+      counters: {
+        total: issues.length,
+        nodes: issues.filter((issue) => issue.targetType === "node").length,
+        edges: issues.filter((issue) => issue.targetType === "edge").length,
+        graph: issues.filter((issue) => issue.targetType === "graph").length,
+      },
+      bySeverity,
+    };
+  }
+
   if (profile.diagramType === undefined) {
     issues.push({
       id: buildIssueId("DIAGRAM_TYPE_UNDEFINED", "graph", undefined, issues.length),
@@ -796,7 +910,7 @@ export function runGraphAudit(
     });
   }
 
-  if (profile.diagramType === "flow" || profile.diagramType === "erd") {
+  if (profile.diagramType === "flow") {
     for (const node of sortedNodes) {
       const semanticKind = semanticKindByNodeId.get(node.id);
       if (!semanticKind) {
@@ -955,9 +1069,11 @@ export function runGraphAudit(
   }
 
   const bySeverity: Record<SemanticSeverity, number> = {
-    error: issues.filter((issue) => issue.severity === "error").length,
-    warning: issues.filter((issue) => issue.severity === "warning").length,
+    ...bySeverityBase,
   };
+  for (const issue of issues) {
+    bySeverity[issue.severity] += 1;
+  }
 
   return {
     issues,

@@ -78,6 +78,8 @@ export type ValidateSemanticDraftResult = {
   bySeverity: {
     error: number;
     warning: number;
+    info: number;
+    suggestion: number;
   };
 };
 

@@ -101,9 +101,17 @@ export type SemanticAuditPayload = {
   issues: Array<{
     id: string;
     code: string;
-    severity: "error" | "warning";
+    severity: "error" | "warning" | "info" | "suggestion";
     message: string;
+    explanation?: string;
     details?: string;
+    suggestedFixes?: Array<{
+      id: string;
+      label: string;
+      description?: string;
+      safety: "safe" | "manual";
+      commands: unknown[];
+    }>;
     targetType: "graph" | "node" | "edge";
     targetId?: string;
   }>;
@@ -116,8 +124,48 @@ export type SemanticAuditPayload = {
   bySeverity: {
     error: number;
     warning: number;
+    info: number;
+    suggestion: number;
   };
   snapshotRevision?: number;
+};
+
+export type ErdExportPreviewPayload = {
+  export: {
+    format: "json";
+    entities: Array<{
+      id: string;
+      name: string;
+      tableName?: string;
+      description?: string;
+      fields: Array<{
+        id: string;
+        name: string;
+        type: string;
+        flags: string[];
+        default?: string;
+        description?: string;
+        references?: {
+          entityId: string;
+          fieldId?: string;
+          relationEdgeId?: string;
+        };
+      }>;
+    }>;
+    relations: Array<{
+      id: string;
+      sourceEntityId: string;
+      targetEntityId: string;
+      name?: string;
+      description?: string;
+      payload: Record<string, unknown>;
+    }>;
+  };
+  diagnostics: SemanticAuditPayload["issues"];
+  bySeverity: SemanticAuditPayload["bySeverity"];
+  counters: SemanticAuditPayload["counters"];
+  revision: number;
+  format: "json";
 };
 
 export type EditorSemanticMode = "operational" | "technical";
@@ -591,6 +639,40 @@ export async function runSemanticAuditForEditor(input: {
   }
 
   return payload.data.audit;
+}
+
+export async function exportErdPreviewForEditor(input: {
+  projectId: string;
+  expectedRevision?: number;
+  format?: "json";
+}) {
+  const response = await fetch(
+    `/api/projects/${input.projectId}/erd/export-preview`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        format: input.format ?? "json",
+        ...(input.expectedRevision !== undefined
+          ? { expectedRevision: input.expectedRevision }
+          : {}),
+      }),
+    },
+  );
+
+  const payload = (await parseResponseJson(response)) as {
+    data?: ErdExportPreviewPayload;
+  } & EditorApiErrorPayload;
+
+  if (!response.ok || !payload.data?.export) {
+    throwQueryError({
+      response,
+      payload,
+      fallbackMessage: "Nao foi possivel gerar preview de exportacao ERD.",
+    });
+  }
+
+  return payload.data;
 }
 
 export async function createEdgeForEditor(input: {
