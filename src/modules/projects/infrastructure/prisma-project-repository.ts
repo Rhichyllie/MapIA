@@ -4,6 +4,14 @@ import { ProjectSchema, type Project } from "@/src/modules/projects/domain";
 
 type PrismaProjectDelegate = PrismaClient["project"];
 
+function parseProjectRow<T extends { description: string | null }>(row: T): Project {
+  // Mantemos `description` nullable no banco e normalizamos no boundary de leitura.
+  return ProjectSchema.parse({
+    ...row,
+    description: row.description ?? "",
+  });
+}
+
 export class PrismaProjectRepository implements ProjectRepository {
   constructor(private readonly delegate: PrismaProjectDelegate) {}
 
@@ -24,12 +32,12 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
 
-    return ProjectSchema.parse(created);
+    return parseProjectRow(created);
   }
 
   async findById(id: string): Promise<Project | null> {
     const project = await this.delegate.findUnique({ where: { id } });
-    return project ? ProjectSchema.parse(project) : null;
+    return project ? parseProjectRow(project) : null;
   }
 
   async findByWorkspaceIdAndSlug(
@@ -45,7 +53,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
 
-    return project ? ProjectSchema.parse(project) : null;
+    return project ? parseProjectRow(project) : null;
   }
 
   async listByWorkspaceId(workspaceId: string): Promise<Project[]> {
@@ -54,7 +62,7 @@ export class PrismaProjectRepository implements ProjectRepository {
       orderBy: { createdAt: "desc" },
     });
 
-    return projects.map((project) => ProjectSchema.parse(project));
+    return projects.map(parseProjectRow);
   }
 
   async updateMetadata(input: {
@@ -74,6 +82,6 @@ export class PrismaProjectRepository implements ProjectRepository {
       },
     });
 
-    return ProjectSchema.parse(updated);
+    return parseProjectRow(updated);
   }
 }

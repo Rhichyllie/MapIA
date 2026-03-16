@@ -1,7 +1,13 @@
 import type { NodeKind } from "@/src/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
 
-type DiagramScopedDiagramType = DiagramType | "erd" | undefined;
+type DiagramScopedDiagramType =
+  | DiagramType
+  | "erd"
+  | "sitemap"
+  | "graph"
+  | "timeline"
+  | undefined;
 type DiagramScopedInspectorMode = "operational" | "technical";
 type DiagramScopedPolicy =
   | {
@@ -52,12 +58,24 @@ function resolveProfileKinds(
     return ["page", "note"];
   }
 
+  if (diagramType === "sitemap") {
+    return ["page", "note"];
+  }
+
   if (diagramType === "mindmap") {
     return ["note"];
   }
 
   if (diagramType === "erd") {
     return resolveAllowErdNote(policy) ? ["entity", "note"] : ["entity"];
+  }
+
+  if (diagramType === "graph") {
+    return ["entity", "page", "note"];
+  }
+
+  if (diagramType === "timeline") {
+    return ["note", "flow-step"];
   }
 
   return ["page", "flow-step", "entity", "note"];

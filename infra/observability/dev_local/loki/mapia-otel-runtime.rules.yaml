@@ -1,0 +1,79 @@
+groups:
+  - name: mapia-otel-runtime-warnings
+    interval: 30s
+    rules:
+      - alert: otel_bootstrap_failed
+        expr: |
+          sum by (service_name, deployment_environment) (
+            count_over_time({service_name=~".+", deployment_environment=~".+"} |= "[otel-runtime] BOOTSTRAP_FAILED" [5m])
+          ) > 0
+        for: 1m
+        labels:
+          severity: critical
+          telemetry_phase: 4e9
+          signal_class: log
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "OTel runtime bootstrap failed"
+          description: "BOOTSTRAP_FAILED observado apos startup/deploy. App pode continuar funcional sem telemetria OTel."
+
+      - alert: otel_runtime_unexpectedly_disabled
+        expr: |
+          sum by (service_name, deployment_environment) (
+            count_over_time({service_name=~".+", deployment_environment=~"staging|production"} |= "[otel-runtime] BOOTSTRAP_DISABLED" [15m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: log
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "OTel runtime desabilitado inesperadamente"
+          description: "BOOTSTRAP_DISABLED em staging/prod. Diferenciar desligamento intencional de misconfig/endpoint ausente."
+
+      - alert: otel_runtime_unexpectedly_disabled_production_persistent
+        expr: |
+          sum by (service_name, deployment_environment) (
+            count_over_time({service_name=~".+", deployment_environment="production"} |= "[otel-runtime] BOOTSTRAP_DISABLED" [30m])
+          ) > 0
+        for: 10m
+        labels:
+          severity: critical
+          telemetry_phase: 4e9
+          signal_class: log
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "OTel runtime desabilitado persistentemente (production)"
+          description: "BOOTSTRAP_DISABLED persistente em producao fora de janela de manutencao planejada."
+
+      - alert: otel_instrumentation_init_failed_observed
+        expr: |
+          sum by (service_name, deployment_environment) (
+            count_over_time({service_name=~".+", deployment_environment=~"staging|production"} |= "[otel-runtime] INSTRUMENTATION_INIT_FAILED" [15m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: log
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Falha de inicializacao de instrumentacao OTel"
+          description: "INSTRUMENTATION_INIT_FAILED observado. Runtime pode subir sem instrumentacao HTTP/Prisma esperada."
+
+      - alert: otel_shutdown_failed_observed
+        expr: |
+          sum by (service_name, deployment_environment) (
+            count_over_time({service_name=~".+", deployment_environment=~"staging|production"} |= "[otel-runtime] SHUTDOWN_FAILED" [30m])
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: log
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "OTel runtime shutdown failed recorrente"
+          description: "SHUTDOWN_FAILED repetido (>1 em 30m) em staging/prod. Reduz ruido de ocorrencias isoladas em restart/deploy."

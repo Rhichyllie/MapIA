@@ -1,0 +1,1037 @@
+{
+  "version": 1,
+  "phase": "4E.9",
+  "environment_scope": "dev_local",
+  "status": "dev_local_real_evidence",
+  "collected_at": "2026-03-03T17:53:23Z",
+  "collector": {
+    "script": "infra/observability/scripts/collect-observability-evidence.py",
+    "profile_requested": null,
+    "environment_scope": "dev_local",
+    "environments": [
+      "dev_local"
+    ],
+    "http_timeout_seconds": 3,
+    "windows": {
+      "alert": "15m",
+      "operational": "7d",
+      "trend": "30d"
+    },
+    "env_file": {
+      "enabled": false,
+      "mode": "merge",
+      "priority": "envfile",
+      "path": null,
+      "selected_keys_count": 0,
+      "applied_keys_count": 0,
+      "conflict_keys_count": 0
+    },
+    "endpoints_source": {
+      "grafana_url": "env",
+      "prometheus_url": "env",
+      "loki_url": "env"
+    }
+  },
+  "environment_access": {
+    "grafana": {
+      "available": true,
+      "reason": null
+    },
+    "prometheus": {
+      "available": true,
+      "reason": null
+    },
+    "loki": {
+      "available": true,
+      "reason": null
+    }
+  },
+  "remote_smoke": {
+    "grafana": {
+      "executed": true,
+      "token_env": "GRAFANA_API_TOKEN",
+      "health": {
+        "commit": "701c851be7a930e04fbc6ebb1cd4254da80edd4c",
+        "database": "ok",
+        "version": "10.4.2"
+      },
+      "dashboards": [
+        {
+          "uid": "mapia-importing-health",
+          "status": "http_error",
+          "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-importing-health: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+        },
+        {
+          "uid": "mapia-importing-performance",
+          "status": "http_error",
+          "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-importing-performance: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+        },
+        {
+          "uid": "mapia-otel-runtime-warnings",
+          "status": "http_error",
+          "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-otel-runtime-warnings: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+        },
+        {
+          "uid": "mapia-http-platform-overview",
+          "status": "http_error",
+          "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-http-platform-overview: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+        }
+      ],
+      "status": "partial"
+    },
+    "prometheus": {
+      "executed": true,
+      "status": "ok"
+    },
+    "loki": {
+      "executed": true,
+      "status": "ok"
+    }
+  },
+  "naming_observed": {
+    "status": "collected",
+    "profile_candidates": {
+      "otel_collector_prometheus_tempo_latency": {
+        "labels": {
+          "deployment_environment": true,
+          "service_name": true,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": true
+        },
+        "score": 16
+      },
+      "resource_labels_mixed_duration_ms": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 13
+      },
+      "resource_labels_short": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": true
+        },
+        "score": 14
+      },
+      "tempo_spanmetrics_duration_ms": {
+        "labels": {
+          "deployment_environment": true,
+          "service_name": true,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 15
+      }
+    },
+    "final_profile": "otel_collector_prometheus_tempo_latency",
+    "prometheus": {
+      "labels_present": [
+        "__name__",
+        "branch",
+        "call",
+        "code",
+        "config",
+        "deployment_environment",
+        "dialer_name",
+        "endpoint",
+        "event",
+        "goarch",
+        "goos",
+        "goversion",
+        "handler",
+        "importing_outcome",
+        "instance",
+        "interval",
+        "job",
+        "le",
+        "listener_name",
+        "name",
+        "operation",
+        "quantile",
+        "reason",
+        "revision",
+        "role",
+        "rule_group",
+        "scrape_job",
+        "service_name",
+        "service_version",
+        "slice",
+        "span_name",
+        "status_code",
+        "step_name",
+        "tags",
+        "type",
+        "version",
+        "warning_type"
+      ],
+      "metrics_present": {
+        "otel_collector_prometheus_tempo_latency": {
+          "labels": {
+            "deployment_environment": true,
+            "service_name": true,
+            "service_version": true,
+            "span_name": true,
+            "status_code": true
+          },
+          "metrics": {
+            "importing_runs_finalized_total": true,
+            "importing_adapter_warnings_total": true,
+            "importing_adapter_late_drops_total": true,
+            "importing_run_duration_bucket_ms": true,
+            "importing_step_duration_bucket_ms": true,
+            "prisma_operations_total": true,
+            "prisma_errors_total": true,
+            "prisma_slow_queries_total": true,
+            "prisma_query_duration_bucket_ms": true,
+            "spanmetrics_calls_total": true,
+            "spanmetrics_latency_bucket_ms": true
+          },
+          "score": 16
+        }
+      }
+    },
+    "loki": {
+      "labels_present": []
+    }
+  },
+  "signals": {
+    "dev_local": {
+      "importing_failure_rate": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\",importing_outcome=\"failure\"}[15m]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\",importing_outcome=\"failure\"}[7d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\",importing_outcome=\"failure\"}[30d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "importing_run_duration_p95": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[15m])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[7d])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[30d])))",
+            "value": NaN,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "importing_adapter_warning_rate": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "importing_adapter_late_drops": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "prisma_error_rate": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_errors_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_errors_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_errors_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "prisma_slow_query_rate": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "prisma_query_duration_p95": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[15m])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[7d])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[30d])))",
+            "value": NaN,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "http_spanmetrics_volume": {
+        "windows": {
+          "alert_15m": {
+            "status": "ok",
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=~\"development|dev|dev_local|local\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "operational_7d": {
+            "status": "ok",
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=~\"development|dev|dev_local|local\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "trend_30d": {
+            "status": "ok",
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=~\"development|dev|dev_local|local\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "status": "evidence_present_all_windows"
+      },
+      "runtime_warnings_recurrence": {
+        "windows": {
+          "alert_15m": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [15m]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [15m]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [15m]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [15m]))"
+            }
+          },
+          "operational_7d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [7d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [7d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [7d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [7d]))"
+            }
+          },
+          "trend_30d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [30d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [30d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [30d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [30d]))"
+            }
+          }
+        },
+        "status": "no_data_or_query_error"
+      }
+    }
+  },
+  "threshold_decisions": {
+    "dev_local": {}
+  },
+  "notes": [
+    "Preencher via coleta automatizada ou export agregado seguro.",
+    "Thresholds finais nao devem ser promovidos sem evidencias reais 15m/7d/30d.",
+    "Escopo dev_local coleta apenas localhost/dev e nao representa staging/producao."
+  ],
+  "prometheus": {
+    "executed": true,
+    "status": "ok",
+    "environment_scope": "dev_local",
+    "environments": [
+      "dev_local"
+    ],
+    "naming_file": "calibration/naming-compatibility.4e9.yaml",
+    "rules_api": {
+      "status": "ok"
+    },
+    "labels": {
+      "status": "ok",
+      "values": [
+        "__name__",
+        "branch",
+        "call",
+        "code",
+        "config",
+        "deployment_environment",
+        "dialer_name",
+        "endpoint",
+        "event",
+        "goarch",
+        "goos",
+        "goversion",
+        "handler",
+        "importing_outcome",
+        "instance",
+        "interval",
+        "job",
+        "le",
+        "listener_name",
+        "name",
+        "operation",
+        "quantile",
+        "reason",
+        "revision",
+        "role",
+        "rule_group",
+        "scrape_job",
+        "service_name",
+        "service_version",
+        "slice",
+        "span_name",
+        "status_code",
+        "step_name",
+        "tags",
+        "type",
+        "version",
+        "warning_type"
+      ]
+    },
+    "metrics_catalog": {
+      "status": "ok",
+      "count": 255
+    },
+    "profile_candidates": {
+      "otel_collector_prometheus_tempo_latency": {
+        "labels": {
+          "deployment_environment": true,
+          "service_name": true,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": true
+        },
+        "score": 16
+      },
+      "resource_labels_mixed_duration_ms": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 13
+      },
+      "resource_labels_short": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": true
+        },
+        "score": 14
+      },
+      "tempo_spanmetrics_duration_ms": {
+        "labels": {
+          "deployment_environment": true,
+          "service_name": true,
+          "service_version": true,
+          "span_name": true,
+          "status_code": true
+        },
+        "metrics": {
+          "importing_runs_finalized_total": true,
+          "importing_adapter_warnings_total": true,
+          "importing_adapter_late_drops_total": true,
+          "importing_run_duration_bucket_ms": true,
+          "importing_step_duration_bucket_ms": true,
+          "prisma_operations_total": true,
+          "prisma_errors_total": true,
+          "prisma_slow_queries_total": true,
+          "prisma_query_duration_bucket_ms": true,
+          "spanmetrics_calls_total": true,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 15
+      }
+    },
+    "best_profile_by_presence_score": "otel_collector_prometheus_tempo_latency",
+    "profile_detection": {
+      "status": "unique_best_candidate",
+      "best_score": 16,
+      "tied_candidates": [
+        "otel_collector_prometheus_tempo_latency"
+      ]
+    },
+    "profile_used_for_queries": "otel_collector_prometheus_tempo_latency",
+    "env_label_probe": {
+      "label": "deployment_environment",
+      "present": true,
+      "matcher_mode": "by_label",
+      "values_sample": [
+        "dev_local"
+      ]
+    },
+    "signals": {
+      "dev_local": {
+        "alert_15m": {
+          "importing_failure_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\",importing_outcome=\"failure\"}[15m]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_failure_rate_volume_runs": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_run_duration_p95": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[15m])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "importing_adapter_warning_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_adapter_warning_rate_volume_warnings": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_adapter_late_drops": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_error_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_errors_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_error_rate_volume_ops": {
+            "status": "ok",
+            "expr": "sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_slow_query_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_slow_query_rate_volume_slow": {
+            "status": "ok",
+            "expr": "sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_query_duration_p95": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[15m])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "http_spanmetrics_volume": {
+            "status": "ok",
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=~\"development|dev|dev_local|local\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[15m]))",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "operational_7d": {
+          "importing_failure_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\",importing_outcome=\"failure\"}[7d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_failure_rate_volume_runs": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_run_duration_p95": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[7d])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "importing_adapter_warning_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_adapter_warning_rate_volume_warnings": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_adapter_late_drops": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_error_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_errors_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_error_rate_volume_ops": {
+            "status": "ok",
+            "expr": "sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_slow_query_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_slow_query_rate_volume_slow": {
+            "status": "ok",
+            "expr": "sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_query_duration_p95": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[7d])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "http_spanmetrics_volume": {
+            "status": "ok",
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=~\"development|dev|dev_local|local\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[7d]))",
+            "value": 0.0,
+            "result_count": 1
+          }
+        },
+        "trend_30d": {
+          "importing_failure_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\",importing_outcome=\"failure\"}[30d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_failure_rate_volume_runs": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_run_duration_p95": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[30d])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "importing_adapter_warning_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))) / clamp_min((sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_adapter_warning_rate_volume_warnings": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_warnings_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "importing_adapter_late_drops": {
+            "status": "ok",
+            "expr": "sum(increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_error_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_errors_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_error_rate_volume_ops": {
+            "status": "ok",
+            "expr": "sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_slow_query_rate": {
+            "status": "ok",
+            "expr": "(sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))) / clamp_min((sum(increase(prisma_telemetry_operations_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))), 1)",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_slow_query_rate_volume_slow": {
+            "status": "ok",
+            "expr": "sum(increase(prisma_telemetry_slow_queries_total{deployment_environment=~\"development|dev|dev_local|local\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          },
+          "prisma_query_duration_p95": {
+            "status": "ok",
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=~\"development|dev|dev_local|local\"}[30d])))",
+            "value": NaN,
+            "result_count": 1
+          },
+          "http_spanmetrics_volume": {
+            "status": "ok",
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=~\"development|dev|dev_local|local\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[30d]))",
+            "value": 0.0,
+            "result_count": 1
+          }
+        }
+      }
+    }
+  },
+  "loki": {
+    "executed": true,
+    "status": "ok",
+    "environment_scope": "dev_local",
+    "environments": [
+      "dev_local"
+    ],
+    "labels_api": {
+      "status": "ok",
+      "labels": []
+    },
+    "runtime_warning_counts": {
+      "env_label_used": null,
+      "by_environment": {
+        "dev_local": {
+          "alert_15m": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [15m]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [15m]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [15m]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [15m]))"
+            }
+          },
+          "operational_7d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [7d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [7d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [7d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [7d]))"
+            }
+          },
+          "trend_30d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [30d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [30d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [30d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [30d]))"
+            }
+          }
+        }
+      }
+    }
+  },
+  "grafana": {
+    "executed": true,
+    "token_env": "GRAFANA_API_TOKEN",
+    "health": {
+      "commit": "701c851be7a930e04fbc6ebb1cd4254da80edd4c",
+      "database": "ok",
+      "version": "10.4.2"
+    },
+    "dashboards": [
+      {
+        "uid": "mapia-importing-health",
+        "status": "http_error",
+        "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-importing-health: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+      },
+      {
+        "uid": "mapia-importing-performance",
+        "status": "http_error",
+        "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-importing-performance: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+      },
+      {
+        "uid": "mapia-otel-runtime-warnings",
+        "status": "http_error",
+        "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-otel-runtime-warnings: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+      },
+      {
+        "uid": "mapia-http-platform-overview",
+        "status": "http_error",
+        "error": "HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-http-platform-overview: {\"extra\":null,\"message\":\"Invalid API key\",\"messageId\":\"api-key.invalid\",\"statusCode\":401,\"traceID\":\"\"}\n"
+      }
+    ],
+    "status": "partial"
+  }
+}

@@ -24,24 +24,36 @@ import type {
 } from "@xyflow/react";
 import { EdgeKindSchema, type EdgeKind, type NodeKind } from "@/src/domain";
 import {
+  listGraphQuickAddRoleOptions,
+  mapGraphRoleToNodeKind,
+  resolveGraphDefaultRoleForKind,
+  resolveGraphEdgeSemantic,
+  resolveGraphNodeSemantic,
   resolveDiagramRole,
   writeDiagramRoleToPayload,
   type DiagramRole,
 } from "@/src/modules/diagrams/domain";
+import type {
+  InitialView,
+  ProjectProfile,
+} from "@/src/modules/creation-assistant/domain";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import {
   getDiagramTypeLabel,
   isSupportedDiagramType,
   reapplyLayoutForSnapshot,
-  type DiagramType,
 } from "@/src/modules/graph/domain";
 import type { EditorCommand } from "@/src/modules/editor/application";
+import { resolveEditorPersona } from "@/src/modules/editor/domain";
 import {
   computeParallelEdgeMeta,
   resolveDiagramRenderer,
   type DiagramRendererKey,
 } from "./diagram-renderers";
+import { resolveFlowEdgeMarker } from "./diagram-renderers/flow-presentation";
+import { FlowSelectionHud } from "./flow-interactions/flow-selection-hud";
 import {
+  computeFlowContextualNudgePositions,
   computeInsertPosition,
   computeReflow,
   type DiagramLayoutType,
@@ -86,6 +98,7 @@ import {
   type InspectorMode,
   type OperationalNodeDraft,
 } from "./editor-inspector-personas";
+import { resolveInspectorSelectionState } from "./inspector-selection-state";
 import { CanvasToolbar } from "./canvas-toolbar";
 import { CommandPalette } from "./command-palette";
 import { filterNodeQuickFindOptions } from "./editor-quick-find";
@@ -93,14 +106,36 @@ import {
   getContextualAddActionForDiagram,
   getContextualActionsForDiagram,
   type DiagramContextualAction,
+  type ContextualDiagramType,
   getDefaultNodeKindForDiagram,
+  getEdgeKindDescriptionForDiagram,
   getEdgeKindLabel,
+  getEdgeKindLabelForDiagram,
   getEdgeKindPresentation,
   getNodeKindDescription,
+  getNodeKindDescriptionForDiagram,
   getNodeKindLabel,
+  getNodeKindLabelForDiagram,
   getNodeKindPresentation,
   getOperationalDisplayLabel,
 } from "./presentation/kinds";
+import {
+  buildProcessRelationsViewModel,
+  getProcessInspectorCopy,
+  getProcessQuickAddRoleOptions,
+  getProcessRoleMeta,
+  resolveProcessNodeRole,
+} from "./presentation/process-semantics";
+import {
+  ProcessOperationalEdgeInspector,
+} from "./process-inspector/process-operational-edge-inspector";
+import {
+  ProcessOperationalNodeInspector,
+} from "./process-inspector/process-operational-node-inspector";
+import {
+  resolveProcessEdgeInspectorViewModel,
+  resolveProcessNodeInspectorViewModel,
+} from "./process-inspector/process-inspector-view-model";
 import {
   getAllowedKindsForDiagram,
 } from "./presentation/diagram-scoped-options";
@@ -195,11 +230,14 @@ type EditorProjectViewModel = {
   name: string;
   slug: string;
   template: ProjectTemplate;
+  creationProfile?: ProjectProfile;
+  creationInitialView?: InitialView;
 };
 
 type EditorShellProps = {
   project: EditorProjectViewModel;
   initialSnapshot: Parameters<typeof fromCanonicalSnapshotToFlowState>[0];
+  initialRevision: number;
 };
 
 type PendingEditorCommand = {
@@ -244,6 +282,34 @@ type SelectionHudQuickAction = {
   edgeLabel?: string;
 };
 
+type InspectorRelationPreview = {
+  id: string;
+  direction: "incoming" | "outgoing";
+  directionLabel: string;
+  relationTypeLabel: string;
+  edgeKind: EdgeKind;
+  otherLabel: string;
+  otherNodeId: string;
+  sourceLabel: string;
+  targetLabel: string;
+  relationLabel?: string;
+  lane?: "before" | "after" | "branch" | "note";
+  laneLabel?: string;
+  transitionLabel?: string;
+  supportingLabel?: string;
+};
+
+type InspectorNodeRelationsView = {
+  incomingCount: number;
+  outgoingCount: number;
+  summaryChips: Array<{
+    id: "before" | "after" | "branch" | "note";
+    label: string;
+    count: number;
+  }>;
+  preview: InspectorRelationPreview[];
+};
+
 type QuickAddRoleOption = {
   role: DiagramRole;
   label: string;
@@ -255,8 +321,16 @@ type ContextualInsertMode =
   | "default"
   | "tree-child"
   | "tree-sibling"
+  | "sitemap-child"
+  | "sitemap-sibling"
   | "flow-next-step"
   | "flow-branch"
+  | "flow-note"
+  | "timeline-next"
+  | "timeline-dependency"
+  | "graph-neighbor"
+  | "graph-dependency"
+  | "graph-supporting"
   | "mindmap-branch"
   | "mindmap-reference"
   | "erd-relation";
@@ -443,7 +517,9 @@ function buildPrismaSchemaImportFeedbackMessage(
   return `Schema Prisma importado com sucesso (${summary.modelsCount} modelo(s), ${summary.relationsCount} relacao(oes), ${summary.scalarFieldsCount} campo(s) escalar(es)).`;
 }
 
-function resolveDiagramTypeForQuickActions(rendererKey: DiagramRendererKey): DiagramType | undefined {
+function resolveDiagramTypeForQuickActions(
+  rendererKey: DiagramRendererKey,
+): ContextualDiagramType {
   if (rendererKey === "tree") {
     return "tree";
   }
@@ -452,8 +528,20 @@ function resolveDiagramTypeForQuickActions(rendererKey: DiagramRendererKey): Dia
     return "flow";
   }
 
+  if (rendererKey === "sitemap") {
+    return "sitemap";
+  }
+
   if (rendererKey === "mindmap") {
     return "mindmap";
+  }
+
+  if (rendererKey === "graph") {
+    return "graph";
+  }
+
+  if (rendererKey === "timeline") {
+    return "timeline";
   }
 
   return undefined;
@@ -467,13 +555,28 @@ function resolveSemanticDiagramType(
     diagramType === "tree" ||
     diagramType === "flow" ||
     diagramType === "mindmap" ||
-    diagramType === "erd"
+    diagramType === "erd" ||
+    diagramType === "sitemap" ||
+    diagramType === "graph" ||
+    diagramType === "timeline"
   ) {
     return diagramType;
   }
 
   if (rendererKey === "erd") {
     return "erd";
+  }
+
+  if (rendererKey === "sitemap") {
+    return "sitemap";
+  }
+
+  if (rendererKey === "graph") {
+    return "graph";
+  }
+
+  if (rendererKey === "timeline") {
+    return "timeline";
   }
 
   return undefined;
@@ -484,7 +587,10 @@ function isDiagramLayoutType(diagramType: DiagramLayoutType) {
     diagramType === "tree" ||
     diagramType === "flow" ||
     diagramType === "mindmap" ||
-    diagramType === "erd"
+    diagramType === "erd" ||
+    diagramType === "sitemap" ||
+    diagramType === "graph" ||
+    diagramType === "timeline"
   );
 }
 
@@ -508,8 +614,14 @@ function toSemanticEngineOptionsFromPolicy(
   };
 }
 
-function buildDefaultNodeTitle(kind: NodeKind, nextIndex: number) {
-  const nodeKindLabel = getNodeKindLabel(kind, "operational");
+function buildDefaultNodeTitle(
+  kind: NodeKind,
+  nextIndex: number,
+  diagramType?: ContextualDiagramType,
+) {
+  const nodeKindLabel = diagramType
+    ? getNodeKindLabelForDiagram(diagramType, kind, "operational")
+    : getNodeKindLabel(kind, "operational");
   return `${nodeKindLabel} ${nextIndex}`;
 }
 
@@ -517,7 +629,14 @@ function mapRoleToSemanticNodeKind(
   role: DiagramRole,
   fallbackKind: NodeKind,
 ): NodeKind {
-  if (role === "tree-root" || role === "tree-node") {
+  if (
+    role === "tree-root" ||
+    role === "tree-node" ||
+    role === "hierarchy-root" ||
+    role === "hierarchy-node" ||
+    role === "sitemap-home" ||
+    role === "sitemap-section"
+  ) {
     return "page";
   }
 
@@ -542,6 +661,18 @@ function mapRoleToSemanticNodeKind(
     return "note";
   }
 
+  if (role === "graph-core" || role === "graph-topic") {
+    return mapGraphRoleToNodeKind(role, fallbackKind);
+  }
+
+  if (role === "graph-supporting") {
+    return mapGraphRoleToNodeKind(role, fallbackKind);
+  }
+
+  if (role === "timeline-milestone") {
+    return fallbackKind === "flow-step" ? "flow-step" : "note";
+  }
+
   if (role === "erd-entity") {
     return "entity";
   }
@@ -554,7 +685,7 @@ function mapRoleToSemanticNodeKind(
 }
 
 function toRoleAwareSemanticNodeRef(input: {
-  diagramType: DiagramType | "erd" | undefined;
+  diagramType: ContextualDiagramType;
   node: RFNode;
   rootNodeName?: string;
 }) {
@@ -575,61 +706,101 @@ function toRoleAwareSemanticNodeRef(input: {
 }
 
 function resolveQuickAddRoleOptions(
-  diagramType: DiagramType | "erd" | undefined,
+  diagramType: ContextualDiagramType,
 ): QuickAddRoleOption[] {
-  if (diagramType !== "flow") {
-    return [];
+  if (diagramType === "flow") {
+    return getProcessQuickAddRoleOptions();
   }
 
-  return [
-    {
-      role: "flow-start",
-      label: "Inicio",
-      description: "No inicial do fluxo.",
-      baseKind: "flow-step",
-    },
-    {
-      role: "flow-step",
-      label: "Etapa",
-      description: "Passo padrao do processo.",
-      baseKind: "flow-step",
-    },
-    {
-      role: "flow-note",
-      label: "Nota",
-      description: "Anotacao auxiliar do fluxo.",
-      baseKind: "note",
-    },
-    {
-      role: "flow-end",
-      label: "Fim",
-      description: "Encerramento do fluxo.",
-      baseKind: "flow-step",
-    },
-  ];
+  if (diagramType === "tree") {
+    return [
+      {
+        role: "hierarchy-root",
+        label: "No raiz",
+        description: "Ponto principal da hierarquia.",
+        baseKind: "page",
+      },
+      {
+        role: "hierarchy-node",
+        label: "No hierarquico",
+        description: "Nivel da estrutura em arvore.",
+        baseKind: "page",
+      },
+    ];
+  }
+
+  if (diagramType === "sitemap") {
+    return [
+      {
+        role: "sitemap-home",
+        label: "Home",
+        description: "Pagina inicial de navegacao.",
+        baseKind: "page",
+      },
+      {
+        role: "sitemap-section",
+        label: "Secao",
+        description: "Secao navegavel do sitemap.",
+        baseKind: "page",
+      },
+    ];
+  }
+
+  if (diagramType === "graph") {
+    return listGraphQuickAddRoleOptions();
+  }
+
+  if (diagramType === "timeline") {
+    return [
+      {
+        role: "timeline-milestone",
+        label: "Marco",
+        description: "Evento em uma sequencia temporal.",
+        baseKind: "note",
+      },
+    ];
+  }
+
+  return [];
 }
 
 function resolveDefaultRoleForKind(input: {
-  diagramType: DiagramType | "erd" | undefined;
+  diagramType: ContextualDiagramType;
   kind: NodeKind;
 }) {
-  if (input.diagramType !== "flow") {
+  if (input.diagramType === "flow") {
+    if (input.kind === "note") {
+      return "flow-note" as const;
+    }
+
+    if (input.kind === "flow-step") {
+      return "flow-step" as const;
+    }
+
     return undefined;
   }
 
-  if (input.kind === "note") {
-    return "flow-note" as const;
+  if (input.diagramType === "tree") {
+    return "hierarchy-node" as const;
   }
 
-  if (input.kind === "flow-step") {
-    return "flow-step" as const;
+  if (input.diagramType === "sitemap") {
+    return "sitemap-section" as const;
+  }
+
+  if (input.diagramType === "graph") {
+    return resolveGraphDefaultRoleForKind(input.kind);
+  }
+
+  if (input.diagramType === "timeline") {
+    return "timeline-milestone" as const;
   }
 
   return undefined;
 }
 
 function buildContextualActionsFromDiagramType(
-  diagramType: DiagramType | "erd" | undefined,
+  diagramType: ContextualDiagramType,
 ): SelectionHudQuickAction[] {
   return getContextualActionsForDiagram(diagramType)
     .filter((action): action is DiagramContextualAction & {
@@ -647,7 +818,7 @@ function buildContextualActionsFromDiagramType(
 }
 
 function buildQuickActionFromDiagramType(
-  diagramType: DiagramType | "erd" | undefined,
+  diagramType: ContextualDiagramType,
 ): SelectionHudQuickAction {
   const action = getContextualAddActionForDiagram(diagramType);
   return {
@@ -737,8 +908,150 @@ function resolveErdEdgeClassSuffix(
   return preset.replace(":", "-").toLowerCase();
 }
 
-function resolveEdgeMarker(edgeKind: EdgeKind) {
+function getDiagramRoleLabel(role: DiagramRole | undefined) {
+  if (!role) {
+    return "Sem papel definido";
+  }
+
+  if (
+    role === "flow-start" ||
+    role === "flow-step" ||
+    role === "flow-note" ||
+    role === "flow-end" ||
+    role === "flow-decision"
+  ) {
+    return getProcessRoleMeta(role).kindLabel;
+  }
+
+  if (
+    role === "graph-core" ||
+    role === "graph-topic" ||
+    role === "graph-supporting"
+  ) {
+    return resolveGraphNodeSemantic({
+      diagramRole: role,
+      kind: role === "graph-supporting" ? "page" : "entity",
+    }).roleBadgeLabel;
+  }
+
+  const map: Partial<Record<DiagramRole, string>> = {
+    "meta-workspace": "Workspace",
+    "meta-project": "Projeto",
+    "tree-root": "Raiz",
+    "tree-node": "No de hierarquia",
+    "hierarchy-root": "No raiz",
+    "hierarchy-node": "No hierarquico",
+    "sitemap-home": "Pagina Home",
+    "sitemap-section": "Secao navegavel",
+    "mindmap-root": "Tema central",
+    "mindmap-branch": "Ramificacao",
+    "mindmap-reference": "Referencia",
+    "graph-core": "Nucleo da rede",
+    "graph-topic": "Componente conectado",
+    "graph-supporting": "Apoio arquitetural",
+    "timeline-milestone": "Marco temporal",
+    "erd-entity": "Entidade",
+    "erd-comment": "Comentario ERD",
+  };
+
+  return map[role] ?? "Sem papel definido";
+}
+
+function buildNodeStructureTips(input: {
+  diagramType: ContextualDiagramType;
+  diagramRole: DiagramRole | undefined;
+  nodeKind?: NodeKind;
+  nodeLabel?: string;
+  incomingCount: number;
+  outgoingCount: number;
+}) {
+  const tips: string[] = [];
+
+  if (input.diagramType === "graph") {
+    return resolveGraphNodeSemantic({
+      diagramRole: input.diagramRole,
+      kind: input.diagramRole === "graph-supporting" ? "page" : "entity",
+      incomingCount: input.incomingCount,
+      outgoingCount: input.outgoingCount,
+    }).structureTips;
+  } else if (input.diagramType === "flow") {
+    const role = resolveProcessNodeRole({
+      diagramRole: input.diagramRole,
+      kind: input.nodeKind ?? (input.diagramRole === "flow-note" ? "note" : "flow-step"),
+      label: input.nodeLabel,
+    });
+    const roleMeta = getProcessRoleMeta(role);
+    tips.push(roleMeta.summary);
+    if (input.incomingCount + input.outgoingCount === 0) {
+      tips.push(roleMeta.guidanceWhenSparse);
+    } else {
+      tips.push(roleMeta.guidanceWhenConnected);
+    }
+    if (role === "flow-decision") {
+      tips.push("Destaque saídas com nomes curtos para deixar a bifurcacao didatica.");
+    }
+  } else if (input.diagramType === "tree" || input.diagramType === "sitemap") {
+    tips.push("Foco em pai, filhos, nivel e ordem.");
+    tips.push(
+      `Estrutura atual: ${input.incomingCount} vinculo(s) acima e ${input.outgoingCount} abaixo.`,
+    );
+  } else if (input.diagramType === "erd") {
+    tips.push("Foco em campos, chaves e cardinalidade.");
+  } else if (input.diagramType === "mindmap") {
+    tips.push("Foco em ramificacoes e temas relacionados.");
+  } else if (input.diagramType === "timeline") {
+    tips.push("Foco em marcos, sequencia e dependencias temporais.");
+  } else {
+    tips.push("Foco em contexto e conexoes principais.");
+  }
+
+  return tips;
+}
+
+function resolveEdgeMarker(
+  edgeKind: EdgeKind,
+  input?: { rendererKey?: DiagramRendererKey },
+) {
   const presentation = getEdgeKindPresentation(edgeKind);
+
+  if (input?.rendererKey === "flow") {
+    if (presentation.arrowStyle === "none") {
+      return undefined;
+    }
+
+    return (
+      resolveFlowEdgeMarker(edgeKind) ??
+      ({
+        type:
+          presentation.arrowStyle === "open"
+            ? MarkerType.Arrow
+            : MarkerType.ArrowClosed,
+        color: "var(--flow-edge-main)",
+      } as const)
+    );
+  }
+
+  if (input?.rendererKey === "graph") {
+    const graphEdgeSemantic = resolveGraphEdgeSemantic(edgeKind);
+
+    if (graphEdgeSemantic.markerStyle === "none") {
+      return undefined;
+    }
+
+    if (graphEdgeSemantic.markerStyle === "open") {
+      return {
+        type: MarkerType.Arrow,
+        color: "var(--canvas-edge-color)",
+      } as const;
+    }
+
+    if (graphEdgeSemantic.markerStyle === "closed") {
+      return {
+        type: MarkerType.ArrowClosed,
+        color: "var(--canvas-edge-color)",
+      } as const;
+    }
+  }
 
   if (presentation.arrowStyle === "none") {
     return undefined;
@@ -761,6 +1074,18 @@ function resolveEdgeDashArray(
   edgeKind: EdgeKind,
   input?: { rendererKey?: DiagramRendererKey; payload?: Record<string, unknown> },
 ) {
+  if (input?.rendererKey === "flow") {
+    if (edgeKind === "depends-on") {
+      return "12 8";
+    }
+
+    if (edgeKind === "references") {
+      return "4 10";
+    }
+
+    return undefined;
+  }
+
   if (input?.rendererKey === "erd" && edgeKind === "references") {
     const cardinality = resolveErdCardinalityFromPayload(input.payload);
     if (cardinality === "1:1") {
@@ -776,6 +1101,19 @@ function resolveEdgeDashArray(
     }
   }
 
+  if (input?.rendererKey === "graph") {
+    const graphEdgeSemantic = resolveGraphEdgeSemantic(edgeKind);
+    if (graphEdgeSemantic.strokeStyle === "dashed") {
+      return "10 6";
+    }
+
+    if (graphEdgeSemantic.strokeStyle === "dotted") {
+      return "2 8";
+    }
+
+    return undefined;
+  }
+
   const presentation = getEdgeKindPresentation(edgeKind);
 
   if (presentation.lineStyle === "dashed") {
@@ -784,6 +1122,167 @@ function resolveEdgeDashArray(
 
   if (presentation.lineStyle === "dotted") {
     return "2 7";
+  }
+
+  return undefined;
+}
+
+function resolveEdgeLabelStyle(
+  edgeKind: EdgeKind,
+  input?: { rendererKey?: DiagramRendererKey },
+) {
+  if (input?.rendererKey === "flow") {
+    if (edgeKind === "depends-on") {
+      return {
+        fill: "#9a3412",
+        fontWeight: 800,
+        fontSize: "0.7rem",
+        letterSpacing: "0.02em",
+      } as const;
+    }
+
+    if (edgeKind === "references") {
+      return {
+        fill: "#5b21b6",
+        fontWeight: 700,
+        fontSize: "0.68rem",
+      } as const;
+    }
+
+    return {
+      fill: "#14532d",
+      fontWeight: 800,
+      fontSize: "0.7rem",
+      letterSpacing: "0.04em",
+      textTransform: "uppercase",
+    } as const;
+  }
+
+  if (input?.rendererKey !== "graph") {
+    return undefined;
+  }
+
+  const graphEdgeSemantic = resolveGraphEdgeSemantic(edgeKind);
+
+  if (graphEdgeSemantic.emphasis === "primary") {
+    return {
+      fill: "#92400e",
+      fontWeight: 700,
+      textTransform: "uppercase",
+    } as const;
+  }
+
+  if (graphEdgeSemantic.emphasis === "secondary") {
+    return {
+      fill: "#1d4ed8",
+      fontWeight: 700,
+    } as const;
+  }
+
+  if (graphEdgeSemantic.emphasis === "supporting") {
+    return {
+      fill: "#334155",
+      fontWeight: 700,
+    } as const;
+  }
+
+  return {
+    fontWeight: 700,
+  } as const;
+}
+
+function resolveEdgeLabelBgStyle(
+  edgeKind: EdgeKind,
+  input?: { rendererKey?: DiagramRendererKey },
+) {
+  if (input?.rendererKey === "flow") {
+    if (edgeKind === "depends-on") {
+      return {
+        fill: "rgba(255, 247, 237, 0.94)",
+        stroke: "rgba(194, 65, 12, 0.18)",
+      } as const;
+    }
+
+    if (edgeKind === "references") {
+      return {
+        fill: "rgba(248, 245, 255, 0.94)",
+        stroke: "rgba(109, 40, 217, 0.14)",
+      } as const;
+    }
+
+    return {
+      fill: "rgba(240, 253, 244, 0.94)",
+      stroke: "rgba(21, 128, 61, 0.14)",
+    } as const;
+  }
+
+  if (input?.rendererKey !== "graph") {
+    return undefined;
+  }
+
+  const graphEdgeSemantic = resolveGraphEdgeSemantic(edgeKind);
+
+  if (graphEdgeSemantic.emphasis === "primary") {
+    return {
+      fill: "rgba(254, 243, 199, 0.92)",
+      stroke: "rgba(217, 119, 6, 0.28)",
+    } as const;
+  }
+
+  if (graphEdgeSemantic.emphasis === "secondary") {
+    return {
+      fill: "rgba(219, 234, 254, 0.92)",
+      stroke: "rgba(37, 99, 235, 0.22)",
+    } as const;
+  }
+
+  if (graphEdgeSemantic.emphasis === "supporting") {
+    return {
+      fill: "rgba(241, 245, 249, 0.94)",
+      stroke: "rgba(71, 85, 105, 0.2)",
+    } as const;
+  }
+
+  return undefined;
+}
+
+function resolveEdgeLabelBgPadding(
+  edgeKind: EdgeKind,
+  input?: { rendererKey?: DiagramRendererKey },
+) {
+  if (input?.rendererKey === "flow") {
+    if (edgeKind === "references") {
+      return [8, 4] as [number, number];
+    }
+
+    if (edgeKind === "depends-on") {
+      return [10, 5] as [number, number];
+    }
+
+    return [9, 4] as [number, number];
+  }
+
+  if (input?.rendererKey === "graph") {
+    return [10, 5] as [number, number];
+  }
+
+  return undefined;
+}
+
+function resolveEdgeLabelBgBorderRadius(
+  edgeKind: EdgeKind,
+  input?: { rendererKey?: DiagramRendererKey },
+) {
+  if (input?.rendererKey === "flow") {
+    if (edgeKind === "references") {
+      return 12;
+    }
+
+    return 999;
+  }
+
+  if (input?.rendererKey === "graph") {
+    return 10;
   }
 
   return undefined;
@@ -1205,7 +1704,11 @@ function areOperationalEdgeDraftValuesEqual(
   );
 }
 
-export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
+export function EditorShell({
+  project,
+  initialSnapshot,
+  initialRevision,
+}: EditorShellProps) {
   const initialFlowState = useMemo(
     () => fromCanonicalSnapshotToFlowState(initialSnapshot),
     [initialSnapshot],
@@ -1353,7 +1856,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const [serverSemanticAudit, setServerSemanticAudit] =
     useState<SemanticAuditPayload | null>(null);
   const [semanticPolicy, setSemanticPolicy] = useState<SemanticPolicyPayload | null>(null);
-  const [currentRevision, setCurrentRevision] = useState<number>(1);
+  const [currentRevision, setCurrentRevision] = useState<number>(initialRevision);
 
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
@@ -1560,6 +2063,25 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     () => edges.find((edge) => edge.id === selectedEdgeId) ?? null,
     [edges, selectedEdgeId],
   );
+
+  useEffect(() => {
+    if (selectedNodeId && selectedEdgeId) {
+      setSelectedEdgeId(null);
+    }
+  }, [selectedEdgeId, selectedNodeId]);
+
+  useEffect(() => {
+    if (selectedNodeId && !selectedNode) {
+      setSelectedNodeId(null);
+    }
+  }, [selectedNode, selectedNodeId]);
+
+  useEffect(() => {
+    if (selectedEdgeId && !selectedEdge) {
+      setSelectedEdgeId(null);
+    }
+  }, [selectedEdge, selectedEdgeId]);
+
   const selectedErdEntityPayload = useMemo(() => {
     if (!selectedNode || selectedNode.data.kind !== "entity") {
       return null;
@@ -1987,11 +2509,31 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             ? "editor-node-has-issue editor-node-issue-error"
             : "editor-node-has-issue editor-node-issue-warning"
           : null;
+      const graphNodeSemantic =
+        renderer.key === "graph"
+          ? resolveGraphNodeSemantic({
+              diagramRole: node.data.diagramRole,
+              kind: node.data.kind,
+              label: node.data.label,
+              payload: node.data.payload,
+            })
+          : null;
 
       return {
         ...node,
         type: renderer.nodeType,
         hidden: hiddenCanvasNodeIdSet.has(node.id) || node.hidden === true,
+        style: graphNodeSemantic
+          ? {
+              ...(node.style ?? {}),
+              zIndex:
+                graphNodeSemantic.variant === "core"
+                  ? 3
+                  : graphNodeSemantic.variant === "component"
+                    ? 2
+                    : 1,
+            }
+          : node.style,
         className: [
           node.className,
           `editor-node-renderer-${renderer.key}`,
@@ -2097,9 +2639,29 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         label: renderedLabel,
         type: edge.type ?? renderer.defaultEdgeOptions.type,
         markerEnd:
-          resolveEdgeMarker(edgeKind) ??
+          resolveEdgeMarker(edgeKind, {
+            rendererKey: renderer.key,
+          }) ??
           edge.markerEnd ??
           renderer.defaultEdgeOptions.markerEnd,
+        labelStyle: resolveEdgeLabelStyle(edgeKind, {
+          rendererKey: renderer.key,
+        }),
+        labelBgStyle: resolveEdgeLabelBgStyle(edgeKind, {
+          rendererKey: renderer.key,
+        }),
+        labelShowBg:
+          renderer.key === "graph" || renderer.key === "flow"
+            ? true
+            : edge.labelShowBg,
+        labelBgPadding:
+          resolveEdgeLabelBgPadding(edgeKind, {
+            rendererKey: renderer.key,
+          }) ?? edge.labelBgPadding,
+        labelBgBorderRadius:
+          resolveEdgeLabelBgBorderRadius(edgeKind, {
+            rendererKey: renderer.key,
+          }) ?? edge.labelBgBorderRadius,
         animated: edge.animated ?? renderer.defaultEdgeOptions.animated,
         style: {
           ...(edge.style ?? {}),
@@ -2459,16 +3021,40 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     );
 
     try {
+      let expectedRevision = currentRevisionRef.current;
+
       for (const entry of queue) {
-        const remoteResult = await applyEditorCommandRemotely(
-          project.id,
-          entry.command,
-          {
-            expectedRevision: currentRevisionRef.current,
-            semanticMode: inspectorMode,
-          },
-        );
-        setCurrentRevision(remoteResult.newRevision);
+        let attempt = 0;
+
+        while (true) {
+          try {
+            const remoteResult = await applyEditorCommandRemotely(
+              project.id,
+              entry.command,
+              {
+                expectedRevision,
+                semanticMode: inspectorMode,
+              },
+            );
+            expectedRevision = remoteResult.newRevision;
+            setCurrentRevision(remoteResult.newRevision);
+            break;
+          } catch (error) {
+            const conflictRevision =
+              error instanceof EditorRemoteError && error.code === "CONFLICT"
+                ? error.payload?.currentRevision
+                : null;
+
+            if (typeof conflictRevision === "number" && attempt === 0) {
+              expectedRevision = conflictRevision;
+              setCurrentRevision(conflictRevision);
+              attempt += 1;
+              continue;
+            }
+
+            throw error;
+          }
+        }
 
         if (requestTrackerRef.current.isStaleResponse(requestId)) {
           return;
@@ -2897,6 +3483,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             pendingCommandsRef.current.length > 0 ||
             localMutationVersionRef.current > 0
           ) {
+            setCurrentRevision(result.revision);
             setQuerySyncMessage(
               "Sincronizacao inicial ignorada porque ja existem alteracoes locais.",
             );
@@ -3066,6 +3653,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     (isSupportedDiagramType(layoutMetadata.diagramType)
       ? layoutMetadata.diagramType
       : resolveDiagramTypeForQuickActions(renderer.key));
+  const editorPersona = useMemo(
+    () =>
+      resolveEditorPersona(
+        project.creationProfile,
+        project.creationInitialView,
+      ),
+    [project.creationInitialView, project.creationProfile],
+  );
 
   const nodeKindOptions = useMemo(() => {
     const scopedOptions = getAllowedKindsForDiagram(
@@ -3095,6 +3690,18 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       ),
     [currentSupportedDiagramType, semanticPolicy],
   );
+  const personaDefaultNodeKind = useMemo(() => {
+    const preferredKind = editorPersona.quickAdd.defaultNodeKind;
+    if (quickAddKindOptions.some((option) => option.kind === preferredKind)) {
+      return preferredKind;
+    }
+
+    return getDefaultNodeKindForDiagram(currentSupportedDiagramType);
+  }, [
+    currentSupportedDiagramType,
+    editorPersona.quickAdd.defaultNodeKind,
+    quickAddKindOptions,
+  ]);
   const quickAddRoleOptions = useMemo(
     () => resolveQuickAddRoleOptions(currentSupportedDiagramType),
     [currentSupportedDiagramType],
@@ -3115,43 +3722,139 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       ),
     [inspectorMode, nodes],
   );
-  const selectedNodeRelations = useMemo(() => {
+  const nodeRoleById = useMemo(
+    () =>
+      new Map(
+        nodes.map((node) => [
+          node.id,
+          resolveDiagramRole({
+            diagramType: currentSupportedDiagramType,
+            nodeKind: node.data.kind,
+            nodePayload: node.data.payload,
+            nodeLabel: node.data.label,
+            layoutMetadata: { rootNodeName: layoutMetadata.rootNodeName ?? null },
+          }),
+        ]),
+      ),
+    [currentSupportedDiagramType, layoutMetadata.rootNodeName, nodes],
+  );
+  const processSelectedNodeRelations = useMemo(() => {
+    if (!selectedNode || currentSupportedDiagramType !== "flow") {
+      return null;
+    }
+
+    return buildProcessRelationsViewModel({
+      selectedNodeId: selectedNode.id,
+      selectedNodeRole: nodeRoleById.get(selectedNode.id),
+      selectedNodeKind: selectedNode.data.kind,
+      selectedNodeLabel:
+        nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+      edges: edges.map((edge) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        label: edge.label ? String(edge.label) : undefined,
+        edgeKind: edge.data?.kind ?? "relates-to",
+        sourceRole: nodeRoleById.get(edge.source),
+        targetRole: nodeRoleById.get(edge.target),
+      })),
+      nodeLabelById,
+    });
+  }, [currentSupportedDiagramType, edges, nodeLabelById, nodeRoleById, selectedNode]);
+  const selectedNodeRelations = useMemo<InspectorNodeRelationsView>(() => {
     if (!selectedNode) {
       return {
         incomingCount: 0,
         outgoingCount: 0,
-        preview: [] as Array<{
-          id: string;
-          direction: "incoming" | "outgoing";
-          relation: string;
-          otherLabel: string;
-          otherNodeId: string;
-        }>,
+        summaryChips: [],
+        preview: [],
+      };
+    }
+
+    if (currentSupportedDiagramType === "flow" && processSelectedNodeRelations) {
+      return {
+        ...processSelectedNodeRelations,
+        preview: processSelectedNodeRelations.preview.map((relation) => ({
+          ...relation,
+          directionLabel:
+            relation.direction === "incoming" ? "Entrada" : "Saida",
+          relationTypeLabel: getEdgeKindLabelForDiagram(
+            currentSupportedDiagramType,
+            relation.edgeKind,
+            inspectorMode === "technical" ? "technical" : "operational",
+          ),
+        })),
       };
     }
 
     const incoming = edges.filter((edge) => edge.target === selectedNode.id);
     const outgoing = edges.filter((edge) => edge.source === selectedNode.id);
-    const preview = [...incoming, ...outgoing].slice(0, 6).map((edge) => ({
+    const preview: InspectorRelationPreview[] = [...incoming, ...outgoing]
+      .slice(0, 6)
+      .map((edge) => ({
       id: edge.id,
       direction: edge.target === selectedNode.id ? "incoming" : "outgoing",
-      relation: getEdgeKindLabel(
-        edge.data?.kind ?? "flows-to",
+      directionLabel:
+        currentSupportedDiagramType === "graph"
+          ? edge.target === selectedNode.id
+            ? "Recebe"
+            : "Aponta para"
+          : edge.target === selectedNode.id
+            ? "Entrada"
+            : "Saida",
+      relationTypeLabel: getEdgeKindLabelForDiagram(
+        currentSupportedDiagramType,
+        edge.data?.kind ?? "relates-to",
         inspectorMode === "technical" ? "technical" : "operational",
       ),
+      relationLabel: edge.label ? String(edge.label) : undefined,
+      edgeKind: edge.data?.kind ?? "relates-to",
       otherNodeId: edge.target === selectedNode.id ? edge.source : edge.target,
       otherLabel:
         nodeLabelById.get(
           edge.target === selectedNode.id ? edge.source : edge.target,
         ) ?? "No sem titulo",
-    }));
+      sourceLabel: nodeLabelById.get(edge.source) ?? edge.source,
+      targetLabel: nodeLabelById.get(edge.target) ?? edge.target,
+      }));
 
     return {
       incomingCount: incoming.length,
       outgoingCount: outgoing.length,
+      summaryChips: [],
       preview,
     };
-  }, [edges, inspectorMode, nodeLabelById, selectedNode]);
+  }, [
+    currentSupportedDiagramType,
+    edges,
+    inspectorMode,
+    nodeLabelById,
+    nodeRoleById,
+    processSelectedNodeRelations,
+    selectedNode,
+  ]);
+  const selectedNodeRoleLabel = selectedNode
+    ? getDiagramRoleLabel(nodeRoleById.get(selectedNode.id))
+    : null;
+  const selectedNodeStructureTips = useMemo(() => {
+    if (!selectedNode) {
+      return [] as string[];
+    }
+
+    return buildNodeStructureTips({
+      diagramType: currentSupportedDiagramType,
+      diagramRole: nodeRoleById.get(selectedNode.id),
+      nodeKind: selectedNode.data.kind,
+      nodeLabel: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+      incomingCount: selectedNodeRelations.incomingCount,
+      outgoingCount: selectedNodeRelations.outgoingCount,
+    });
+  }, [
+    currentSupportedDiagramType,
+    selectedNode,
+    selectedNodeRelations.incomingCount,
+    selectedNodeRelations.outgoingCount,
+  ]);
   const selectedEdgeSourceLabel = selectedEdge
     ? nodeLabelById.get(selectedEdge.source) ?? selectedEdge.source
     : null;
@@ -3171,11 +3874,126 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             selectedEdgeTargetLabel ?? selectedEdge.target
           }`
       : "Nenhum item selecionado";
-  const inspectorSelectionBadge = selectedNode
-    ? "No selecionado"
-    : selectedEdge
-      ? "Aresta selecionada"
-      : "Sem selecao";
+  const inspectorSelectionState = resolveInspectorSelectionState({
+    hasSelectedNode: Boolean(selectedNode),
+    hasSelectedEdge: Boolean(selectedEdge),
+  });
+  const isProcessDiagram = currentSupportedDiagramType === "flow";
+  const isGraphDiagram = currentSupportedDiagramType === "graph";
+  const processInspectorCopy = isProcessDiagram ? getProcessInspectorCopy() : null;
+  const processNodeInspectorModel =
+    isProcessDiagram && selectedNode && processSelectedNodeRelations
+      ? resolveProcessNodeInspectorViewModel({
+          diagramRole: nodeRoleById.get(selectedNode.id),
+          kind: selectedNode.data.kind,
+          label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+          relations: processSelectedNodeRelations,
+        })
+      : null;
+  const flowSelectionKindLabel =
+    processNodeInspectorModel?.selectionKindLabel ??
+    (isProcessDiagram && selectedNode
+      ? (() => {
+          const role = resolveProcessNodeRole({
+            diagramRole: nodeRoleById.get(selectedNode.id),
+            kind: selectedNode.data.kind,
+            label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+          });
+          const roleMeta = getProcessRoleMeta(role);
+
+          return role === "flow-step" ? roleMeta.kindLabel : roleMeta.badgeLabel;
+        })()
+      : null);
+  const flowSelectionChipLabel = isProcessDiagram
+    ? selectedNode
+      ? `${flowSelectionKindLabel ?? ""}${
+          inspectorMode === "technical" ? ` (kind: ${selectedNode.data.kind})` : ""
+        }`
+      : selectedEdge
+        ? `${getEdgeKindLabelForDiagram(
+            currentSupportedDiagramType,
+            selectedEdge.data?.kind ?? "flows-to",
+            "operational",
+          )}${
+            inspectorMode === "technical"
+              ? ` (kind: ${selectedEdge.data?.kind ?? "flows-to"})`
+              : ""
+          }`
+        : null
+    : null;
+  const processEdgeInspectorModel =
+    isProcessDiagram &&
+    selectedEdge &&
+    selectedEdgeSourceLabel &&
+    selectedEdgeTargetLabel
+      ? resolveProcessEdgeInspectorViewModel({
+          kind: selectedEdge.data?.kind ?? "flows-to",
+          label: selectedEdge.label ? String(selectedEdge.label) : undefined,
+          sourceLabel: selectedEdgeSourceLabel,
+          targetLabel: selectedEdgeTargetLabel,
+        })
+      : null;
+  const graphSelectedNodeSemantic =
+    isGraphDiagram && selectedNode
+      ? resolveGraphNodeSemantic({
+          diagramRole: selectedNode.data.diagramRole,
+          kind: selectedNode.data.kind,
+          label: selectedNode.data.label,
+          payload: selectedNode.data.payload,
+          incomingCount: selectedNodeRelations.incomingCount,
+          outgoingCount: selectedNodeRelations.outgoingCount,
+        })
+      : null;
+  const graphSelectedEdgeSemantic =
+    isGraphDiagram && selectedEdge
+      ? resolveGraphEdgeSemantic(selectedEdge.data?.kind ?? "flows-to")
+    : null;
+  const inspectorSelectionBadge =
+    graphSelectedNodeSemantic
+      ? graphSelectedNodeSemantic.selectionBadgeLabel
+      : isProcessDiagram
+        ? selectedEdge
+          ? "Transicao em foco"
+          : processInspectorCopy?.selectionBadgeLabel ?? inspectorSelectionState.badgeLabel
+        : inspectorSelectionState.badgeLabel;
+  const operationalNodeTitleLabel = isGraphDiagram ? "Nome do componente" : "Titulo";
+  const operationalNodeKindLabel = isGraphDiagram ? "Tipo estrutural" : "Tipo";
+  const operationalNodeDescriptionLabel = isGraphDiagram ? "Responsabilidade" : "Descricao";
+  const operationalNodeDescriptionPlaceholder = isGraphDiagram
+    ? "Descreva o papel deste item na rede, o que ele concentra e por que existe."
+    : "Opcional. Salvo em payload.description.";
+  const operationalNodeTagsLabel = isGraphDiagram ? "Contextos" : "Tags";
+  const operationalNodeTagsPlaceholder = isGraphDiagram
+    ? "Ex.: autenticacao, fila, observabilidade"
+    : "Ex.: onboarding, urgencia, aprovacao";
+  const operationalNodeTagsHelper = isGraphDiagram
+    ? "Use tags para dominios, capacidades transversais ou fronteiras da arquitetura."
+    : "Separadas por virgula. Salvas em payload.tags como lista.";
+  const operationalNodeContextTitle = isGraphDiagram
+    ? "Papel na rede"
+    : "Contexto da estrutura";
+  const operationalGeneralSectionTitle = isGraphDiagram ? "Edicao principal" : "Geral";
+  const operationalDetailsSectionTitle = isGraphDiagram
+    ? "Responsabilidade e contexto"
+    : "Detalhes";
+  const operationalRelationsSectionTitle = isGraphDiagram
+    ? "Conexoes na rede"
+    : "Relacoes";
+  const operationalEdgeLabelLabel = isGraphDiagram ? "Rotulo da conexao" : "Rotulo";
+  const operationalEdgeGeneralSectionTitle = isGraphDiagram
+    ? "Edicao da conexao"
+    : "Geral";
+  const operationalEdgeKindLabel = isGraphDiagram ? "Tipo de conexao" : "Relacao";
+  const operationalEdgeSourceLabel = isGraphDiagram ? "Sai de" : "Origem";
+  const operationalEdgeTargetLabel = isGraphDiagram ? "Chega em" : "Destino";
+  const graphSelectedNodeKindLabel =
+    graphSelectedNodeSemantic
+      ? graphSelectedNodeSemantic.kindLabel
+      : null;
+  const graphSelectedNodeKindDescription =
+    graphSelectedNodeSemantic
+      ? graphSelectedNodeSemantic.kindDescription
+      : null;
   const hasInspectorDirtyDraft = nodeInspectorDirty || edgeInspectorDirty;
   const isInspectorVisible = !isFocusInspectorCollapsed;
   const shouldShowMetadataPanel = !isCanvasFocusMode;
@@ -3194,10 +4012,26 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return contextualActions[0];
     }
 
-    return buildQuickActionFromDiagramType(currentSupportedDiagramType);
-  }, [contextualActions, currentSupportedDiagramType]);
+    const fallbackAction = buildQuickActionFromDiagramType(currentSupportedDiagramType);
+    return {
+      ...fallbackAction,
+      label: editorPersona.labels.addPrimary,
+      nodeKind: personaDefaultNodeKind,
+      edgeKind: editorPersona.quickAdd.defaultEdgeKind,
+    };
+  }, [
+    contextualActions,
+    currentSupportedDiagramType,
+    editorPersona.labels.addPrimary,
+    editorPersona.quickAdd.defaultEdgeKind,
+    personaDefaultNodeKind,
+  ]);
   const quickAddDefaultRelationLabel = selectedNode
-    ? getEdgeKindLabel(quickAction.edgeKind, "operational")
+    ? getEdgeKindLabelForDiagram(
+        currentSupportedDiagramType,
+        quickAction.edgeKind,
+        "operational",
+      )
     : null;
   const inlineRenameNode = useMemo(
     () =>
@@ -3220,15 +4054,63 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const selectionNodeKindPresentation = selectedNode
     ? getNodeKindPresentation(selectedNode.data.kind)
     : null;
+  const flowSelectionDismissKey = `${selectedNodeId ?? ""}:${selectedEdgeId ?? ""}:${inspectorMode}:${isCanvasFocusMode}`;
   const isSelectedTreeSubtreeCollapsed = selectedNode
     ? collapsedTreeNodeIdSet.has(selectedNode.id)
     : false;
   const inspectorToggleLabel = isInspectorVisible
     ? "Ocultar inspetor"
     : "Mostrar inspetor";
-  const diagramDefinitionLabel = isSupportedDiagramType(layoutMetadata.diagramType)
+  const inspectorSubtitle = useMemo(() => {
+    if (!selectedNode && !selectedEdge) {
+      return "Selecione um item no canvas para editar com contexto.";
+    }
+
+    if (selectedEdge) {
+      if (currentSupportedDiagramType === "graph") {
+        return "Edite dependencias, integracoes e conexoes de apoio entre componentes.";
+      }
+
+      if (currentSupportedDiagramType === "flow") {
+        return processInspectorCopy?.edgeSubtitle ?? "Leia a transicao selecionada antes de editar.";
+      }
+
+      return "Ajuste tipo, direcao e metadados da conexao selecionada.";
+    }
+
+    if (currentSupportedDiagramType === "graph") {
+      return "Edite papel, conexoes e vizinhanca do no dentro da rede.";
+    }
+
+    if (currentSupportedDiagramType === "flow") {
+      return processInspectorCopy?.nodeSubtitle ?? "Entenda este ponto no fluxo antes de editar.";
+    }
+
+    if (currentSupportedDiagramType === "sitemap") {
+      return "Edite navegacao, hierarquia e secoes do sitemap.";
+    }
+
+    if (currentSupportedDiagramType === "tree") {
+      return "Edite pai, filhos e profundidade da hierarquia.";
+    }
+
+    if (currentSupportedDiagramType === "erd") {
+      return "Edite campos, chaves e relacionamentos do modelo.";
+    }
+
+    if (currentSupportedDiagramType === "timeline") {
+      return "Edite marcos, sequencia e dependencias temporais.";
+    }
+
+    if (currentSupportedDiagramType === "mindmap") {
+      return "Edite tema central e ramificacoes associadas.";
+    }
+
+    return "Ajuste o item selecionado e aplique as alteracoes quando concluir.";
+  }, [currentSupportedDiagramType, selectedEdge, selectedNode]);
+  const diagramDefinitionLabel = layoutMetadata.diagramType
     ? `Diagrama atual: ${getDiagramTypeLabel(layoutMetadata.diagramType)}`
-    : "Diagrama: A definir no Wizard";
+    : "Diagrama: Definir durante a criacao";
   const hasDiagramRendererMismatch =
     isSupportedDiagramType(layoutMetadata.diagramType) &&
     renderer.key !== layoutMetadata.diagramType;
@@ -3302,7 +4184,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return;
     }
 
-    const defaultKind = getDefaultNodeKindForDiagram(currentSupportedDiagramType);
+    const defaultKind = personaDefaultNodeKind;
 
     setAddNodeDraft((current) => ({
       ...current,
@@ -3312,7 +4194,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         kind: defaultKind,
       }),
     }));
-  }, [currentSupportedDiagramType, isAddNodeDialogOpen]);
+  }, [currentSupportedDiagramType, isAddNodeDialogOpen, personaDefaultNodeKind]);
 
   function handleTogglePanel(panelKey: keyof EditorPanelState) {
     setPanelState((current) => ({
@@ -3429,8 +4311,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     });
   }
 
-  function handleFocusRelation(edgeId: string, relatedNodeId: string) {
-    selectItem({ nodeId: null, edgeId });
+  function handleOpenRelatedNodeFromRelation(_edgeId: string, relatedNodeId: string) {
+    selectItem({ nodeId: relatedNodeId, edgeId: null });
+    setIsFocusInspectorCollapsed(false);
 
     const relatedNode = nodesRef.current.find((node) => node.id === relatedNodeId);
     if (!relatedNode) {
@@ -3441,6 +4324,41 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       zoom: Math.max(viewportRef.current.zoom, 1.05),
       duration: 220,
     });
+  }
+
+  function handleOpenTransitionFromRelation(edgeId: string) {
+    const edge = edgesRef.current.find((candidate) => candidate.id === edgeId);
+    if (!edge) {
+      return;
+    }
+
+    selectItem({ nodeId: null, edgeId: edge.id });
+    setIsFocusInspectorCollapsed(false);
+    const sourceNode = nodesRef.current.find((node) => node.id === edge.source);
+    const targetNode = nodesRef.current.find((node) => node.id === edge.target);
+    if (!sourceNode || !targetNode) {
+      return;
+    }
+
+    reactFlowInstanceRef.current?.setCenter(
+      (sourceNode.position.x + targetNode.position.x) / 2,
+      (sourceNode.position.y + targetNode.position.y) / 2,
+      {
+        zoom: Math.max(viewportRef.current.zoom, 1),
+        duration: 220,
+      },
+    );
+  }
+
+  function handleRemoveRelation(edgeId: string) {
+    const removed = applyLocalCommandAndQueue({
+      type: "removeEdge",
+      edgeId,
+    });
+
+    if (removed) {
+      setQuerySyncMessage(isProcessDiagram ? "Transicao removida." : "Relacao removida.");
+    }
   }
 
   function handleFocusSemanticIssue(issue: SemanticIssueLike) {
@@ -3640,7 +4558,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         }
       }
 
-      setGlobalErrorMessage(formatErrorMessage(error, "Falha ao criar relacao no servidor."));
+      setGlobalErrorMessage(
+        formatErrorMessage(
+          error,
+          isProcessDiagram
+            ? "Falha ao criar a transicao no servidor."
+            : "Falha ao criar relacao no servidor.",
+        ),
+      );
       return false;
     }
   }
@@ -3709,7 +4634,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
       nextEdgeKind = validation.recommendedEdgeKind ?? validation.allowedEdgeKinds[0];
       setQuerySyncMessage(
-        `Relacao ajustada automaticamente para '${getEdgeKindLabel(nextEdgeKind, "operational")}'.`,
+        isProcessDiagram
+          ? `Transicao ajustada automaticamente para '${getEdgeKindLabel(nextEdgeKind, "operational")}'.`
+          : `Relacao ajustada automaticamente para '${getEdgeKindLabel(nextEdgeKind, "operational")}'.`,
       );
     } else if (
       !input.explicitKind &&
@@ -3819,12 +4746,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return inputNodes
       .filter((node) => !hiddenCanvasNodeIdSet.has(node.id) && node.hidden !== true)
       .map((node) => ({
-      id: node.id,
-      kind: node.data.kind,
-      position: {
-        x: node.position.x,
-        y: node.position.y,
-      },
+        id: node.id,
+        kind: node.data.kind,
+        diagramRole: node.data.diagramRole,
+        position: {
+          x: node.position.x,
+          y: node.position.y,
+        },
       }));
   }
 
@@ -3846,16 +4774,34 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   function resolveNodeInsertPosition(input: {
     referenceNode: RFNode | null;
     insertMode: ContextualInsertMode;
+    nodeKind?: NodeKind;
+    diagramRole?: DiagramRole;
   }) {
-    const { referenceNode, insertMode } = input;
+    const { referenceNode, insertMode, nodeKind, diagramRole } = input;
     const containerRect = canvasRegionRef.current?.getBoundingClientRect();
     const currentViewport = viewportRef.current;
+    const contextualLayoutOptions =
+      layoutMetadata.layoutOptions &&
+      typeof layoutMetadata.layoutOptions === "object" &&
+      !Array.isArray(layoutMetadata.layoutOptions)
+        ? {
+            ...layoutMetadata.layoutOptions,
+            insertMode,
+            insertNodeKind: nodeKind,
+            insertDiagramRole: diagramRole,
+          }
+        : {
+            insertMode,
+            insertNodeKind: nodeKind,
+            insertDiagramRole: diagramRole,
+          };
     const basePosition = computeInsertPosition(
       currentSupportedDiagramType,
       referenceNode
         ? {
             id: referenceNode.id,
             kind: referenceNode.data.kind,
+            diagramRole: referenceNode.data.diagramRole,
             position: {
               x: referenceNode.position.x,
               y: referenceNode.position.y,
@@ -3874,20 +4820,21 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
             }
           : {}),
       },
+      contextualLayoutOptions,
     );
 
     if (!referenceNode) {
       return basePosition;
     }
 
-    if (insertMode === "flow-branch") {
+    if (insertMode === "timeline-dependency") {
       return {
         x: basePosition.x,
-        y: basePosition.y + 170,
+        y: basePosition.y + 140,
       };
     }
 
-    if (insertMode === "tree-sibling") {
+    if (insertMode === "tree-sibling" || insertMode === "sitemap-sibling") {
       const siblingCount = edgesRef.current.filter(
         (edge) =>
           (edge.data?.kind ?? "flows-to") === "contains" &&
@@ -3907,6 +4854,20 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       };
     }
 
+    if (insertMode === "graph-dependency") {
+      return {
+        x: basePosition.x,
+        y: basePosition.y + 110,
+      };
+    }
+
+    if (insertMode === "graph-supporting") {
+      return {
+        x: basePosition.x - 84,
+        y: basePosition.y + 88,
+      };
+    }
+
     return basePosition;
   }
 
@@ -3921,6 +4882,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return "tree-sibling";
     }
 
+    if (actionId === "sitemap-add-page") {
+      return "sitemap-child";
+    }
+
+    if (actionId === "sitemap-add-subpage") {
+      return "sitemap-sibling";
+    }
+
     if (actionId === "flow-add-next-step") {
       return "flow-next-step";
     }
@@ -3929,12 +4898,36 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       return "flow-branch";
     }
 
+    if (actionId === "flow-add-note") {
+      return "flow-note";
+    }
+
     if (actionId === "mindmap-add-reference") {
       return "mindmap-reference";
     }
 
     if (actionId === "mindmap-add-branch") {
       return "mindmap-branch";
+    }
+
+    if (actionId === "graph-add-component") {
+      return "graph-neighbor";
+    }
+
+    if (actionId === "graph-add-dependency") {
+      return "graph-dependency";
+    }
+
+    if (actionId === "graph-add-supporting-service") {
+      return "graph-supporting";
+    }
+
+    if (actionId === "timeline-add-milestone") {
+      return "timeline-next";
+    }
+
+    if (actionId === "timeline-add-dependency") {
+      return "timeline-dependency";
     }
 
     if (actionId === "erd-add-relation") {
@@ -3950,6 +4943,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     if (action.id === "tree-add-sibling") {
+      const parentEdge = edgesRef.current.find(
+        (edge) =>
+          (edge.data?.kind ?? "flows-to") === "contains" &&
+          edge.target === selectedNode.id,
+      );
+
+      return parentEdge?.source ?? selectedNode.id;
+    }
+
+    if (action.id === "sitemap-add-subpage") {
       const parentEdge = edgesRef.current.find(
         (edge) =>
           (edge.data?.kind ?? "flows-to") === "contains" &&
@@ -3975,6 +4978,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       buildLayoutNodesFromFlowNodes(),
       buildLayoutEdgesFromFlowEdges(),
       input.rootId,
+      layoutMetadata.layoutOptions,
     );
 
     let movedNodes = 0;
@@ -4005,18 +5009,92 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     return movedNodes;
   }
 
-  function queueTreeReflowIfNeeded(insertMode: ContextualInsertMode) {
-    if (currentSupportedDiagramType !== "tree") {
+  function applyContextualLayoutAdjustmentsIfNeeded(input: {
+    insertMode: ContextualInsertMode;
+    insertedNodeId: string;
+    sourceNodeId?: string;
+  }) {
+    if (
+      currentSupportedDiagramType === "flow" &&
+      (
+        input.insertMode === "flow-next-step" ||
+        input.insertMode === "flow-branch" ||
+        input.insertMode === "flow-note"
+      )
+    ) {
+      const nextPositions = computeFlowContextualNudgePositions({
+        nodes: buildLayoutNodesFromFlowNodes(),
+        edges: buildLayoutEdgesFromFlowEdges(),
+        anchorNodeId: input.sourceNodeId,
+        insertedNodeId: input.insertedNodeId,
+        insertMode: input.insertMode,
+        layoutOptions: layoutMetadata.layoutOptions,
+      });
+
+      for (const node of nodesRef.current) {
+        const nextPosition = nextPositions[node.id];
+        if (!nextPosition) {
+          continue;
+        }
+
+        const hasPositionChanged =
+          Math.abs(node.position.x - nextPosition.x) > 0.5 ||
+          Math.abs(node.position.y - nextPosition.y) > 0.5;
+        if (!hasPositionChanged) {
+          continue;
+        }
+
+        applyLocalCommandAndQueue({
+          type: "moveNode",
+          nodeId: node.id,
+          position: nextPosition,
+        });
+      }
       return;
     }
 
-    if (insertMode !== "tree-child" && insertMode !== "tree-sibling") {
+    if (
+      currentSupportedDiagramType === "tree" &&
+      (input.insertMode === "tree-child" || input.insertMode === "tree-sibling")
+    ) {
+      applyDiagramReflow({
+        diagramType: "tree",
+      });
       return;
     }
 
-    applyDiagramReflow({
-      diagramType: "tree",
-    });
+    if (
+      currentSupportedDiagramType === "sitemap" &&
+      (input.insertMode === "sitemap-child" || input.insertMode === "sitemap-sibling")
+    ) {
+      applyDiagramReflow({
+        diagramType: "sitemap",
+      });
+      return;
+    }
+
+    if (
+      currentSupportedDiagramType === "timeline" &&
+      (input.insertMode === "timeline-next" || input.insertMode === "timeline-dependency")
+    ) {
+      applyDiagramReflow({
+        diagramType: "timeline",
+      });
+      return;
+    }
+
+    if (
+      currentSupportedDiagramType === "graph" &&
+      (
+        input.insertMode === "graph-neighbor" ||
+        input.insertMode === "graph-dependency" ||
+        input.insertMode === "graph-supporting"
+      )
+    ) {
+      applyDiagramReflow({
+        diagramType: "graph",
+      });
+    }
   }
 
   function buildAddNodePayloadFromDraft(draft: AddNodeDraft) {
@@ -4049,7 +5127,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       : null;
     const nextNodeId = crypto.randomUUID();
     const nextNodeIndex = nodesRef.current.length + 1;
-    const title = input.draft.title.trim() || buildDefaultNodeTitle(input.draft.kind, nextNodeIndex);
+    const title =
+      input.draft.title.trim() ||
+      buildDefaultNodeTitle(
+        input.draft.kind,
+        nextNodeIndex,
+        currentSupportedDiagramType,
+      );
     const basePayload =
       inspectorMode === "operational"
         ? buildAddNodePayloadFromDraft(input.draft)
@@ -4068,6 +5152,8 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         position: resolveNodeInsertPosition({
           referenceNode,
           insertMode: input.insertMode ?? "default",
+          nodeKind: input.draft.kind,
+          diagramRole: input.draft.diagramRole,
         }),
         data: payload,
       },
@@ -4089,7 +5175,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
     }
 
     if (input.insertMode) {
-      queueTreeReflowIfNeeded(input.insertMode);
+      applyContextualLayoutAdjustmentsIfNeeded({
+        insertMode: input.insertMode,
+        insertedNodeId: nextNodeId,
+        sourceNodeId: input.sourceNodeId,
+      });
     }
 
     selectItem({ nodeId: nextNodeId, edgeId: null });
@@ -4099,10 +5189,17 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   const handleOpenAddDialog = useCallback(() => {
     const defaultKind = selectedNodeId
       ? quickAction.nodeKind
-      : getDefaultNodeKindForDiagram(currentSupportedDiagramType);
+      : personaDefaultNodeKind;
     const defaultRole =
-      currentSupportedDiagramType === "flow" && selectedNodeId && quickAction.id === "flow-add-branch"
-        ? "flow-decision"
+      currentSupportedDiagramType === "flow" && selectedNodeId
+        ? quickAction.id === "flow-add-branch"
+          ? "flow-decision"
+          : quickAction.id === "flow-add-note"
+            ? "flow-note"
+            : resolveDefaultRoleForKind({
+                diagramType: currentSupportedDiagramType,
+                kind: defaultKind,
+              })
         : resolveDefaultRoleForKind({
             diagramType: currentSupportedDiagramType,
             kind: defaultKind,
@@ -4117,7 +5214,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       tagsText: "",
     });
     setIsAddNodeDialogOpen(true);
-  }, [currentSupportedDiagramType, quickAction.id, quickAction.nodeKind, selectedNodeId]);
+  }, [
+    currentSupportedDiagramType,
+    personaDefaultNodeKind,
+    quickAction.id,
+    quickAction.nodeKind,
+    selectedNodeId,
+  ]);
 
   function handleStartInlineRename(node: RFNode) {
     setInlineRenameNodeId(node.id);
@@ -4410,8 +5513,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     const nextNodeIndex = nodesRef.current.length + 1;
     const contextualRole =
-      currentSupportedDiagramType === "flow" && action.id === "flow-add-branch"
-        ? "flow-decision"
+      currentSupportedDiagramType === "flow"
+        ? action.id === "flow-add-branch"
+          ? "flow-decision"
+          : action.id === "flow-add-note"
+            ? "flow-note"
+            : resolveDefaultRoleForKind({
+                diagramType: currentSupportedDiagramType,
+                kind: action.nodeKind,
+              })
         : resolveDefaultRoleForKind({
             diagramType: currentSupportedDiagramType,
             kind: action.nodeKind,
@@ -4420,7 +5530,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       draft: {
         kind: action.nodeKind,
         diagramRole: contextualRole,
-        title: buildDefaultNodeTitle(action.nodeKind, nextNodeIndex),
+        title: buildDefaultNodeTitle(
+          action.nodeKind,
+          nextNodeIndex,
+          currentSupportedDiagramType,
+        ),
         description: "",
         tagsText: "",
       },
@@ -4429,6 +5543,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
       relationLabel: action.edgeLabel,
       insertMode: resolveInsertModeFromActionId(action.id),
     });
+  }
+
+  function handleOpenSelectedItemInInspector() {
+    setIsFocusInspectorCollapsed(false);
   }
 
   function updateEntityPayloadById(input: {
@@ -5738,7 +6856,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     if (currentSnapshot.allowReapplyLayout === false) {
       setGlobalErrorMessage(
-        "Layout bloqueado por politica definida no Wizard. Ajuste antes de tentar novamente.",
+        "Layout bloqueado pela configuracao do Assistente de criacao. Ajuste antes de tentar novamente.",
       );
       return;
     }
@@ -5750,7 +6868,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     if (!isDiagramLayoutType(layoutDiagramType)) {
       setGlobalErrorMessage(
-        "Organizacao automatica exige tipo de diagrama suportado (hierarquia, processo, mapa mental ou ERD).",
+        "Organizacao automatica exige tipo suportado (hierarquia, fluxo, mindmap, ERD, sitemap, grafo ou timeline).",
       );
       return;
     }
@@ -5776,7 +6894,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     if (currentSnapshot.allowReapplyLayout === false) {
       setGlobalErrorMessage(
-        "Layout bloqueado por politica definida no Wizard. Ajuste antes de tentar novamente.",
+        "Layout bloqueado pela configuracao do Assistente de criacao. Ajuste antes de tentar novamente.",
       );
       return;
     }
@@ -5806,7 +6924,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
     if (!isSupportedDiagramType(currentSnapshot.diagramType)) {
       setGlobalErrorMessage(
-        "Reaplicar layout automatico exige um tipo suportado (hierarquia, processo ou mapa mental).",
+        "Reaplicar layout automatico exige tipo suportado (hierarquia, fluxo ou mindmap).",
       );
       return;
     }
@@ -6275,12 +7393,16 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
   return (
     <div
       className={`editor-grid ${isCanvasFocusMode ? "editor-grid-focus" : ""} ${
+        isProcessDiagram ? "editor-grid-process" : ""
+      } ${
         isInspectorVisible ? "" : "editor-grid-inspector-hidden"
       }`}
     >
-      <div className="editor-main-column">
+      <div
+        className={`editor-main-column ${isProcessDiagram ? "editor-main-column-process" : ""}`}
+      >
         {shouldShowMetadataPanel ? (
-          <section className="panel">
+          <section className="panel editor-secondary-panel editor-panel-metadata">
             <header className="panel-header">
               <div>
                 <h3>{project.name}</h3>
@@ -6300,10 +7422,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                 </span>
                 <Link
                   className="btn btn-link"
-                  href={`/wizard?projectId=${project.id}`}
+                  href={`/create?fromProjectId=${project.id}`}
                   data-testid="layout-policy-open-wizard-link"
                 >
-                  Alterar no Wizard
+                  Alterar no Assistente
                 </Link>
                 <span
                   className={`badge ${isReapplyLayoutBlockedByPolicy ? "badge-warning" : ""}`}
@@ -6396,7 +7518,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                     disabled={saveState.status === "saving" || !canReapplyLayout}
                     title={
                       isReapplyLayoutBlockedByPolicy
-                        ? "Layout bloqueado no Wizard. Ajuste a politica para permitir reaplicacao."
+                        ? "Layout bloqueado no Assistente. Ajuste a politica para permitir reaplicacao."
                         : undefined
                     }
                     data-testid="reapply-layout-button"
@@ -6409,14 +7531,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                       data-testid="diagram-renderer-mismatch-warning"
                     >
                       O renderer atual nao corresponde ao tipo de diagrama salvo.
-                      Use Reaplicar layout ou ajuste no Wizard.
+                      Use Reaplicar layout ou ajuste no Assistente.
                     </span>
                   ) : null}
                   {isReapplyLayoutBlockedByPolicy ? (
                     <>
                       <span className="badge badge-warning">Layout bloqueado</span>
                       <span className="helper">
-                        A reaplicacao foi bloqueada para preservar o desenho definido no Wizard.
+                        A reaplicacao foi bloqueada para preservar o desenho definido no Assistente.
                       </span>
                     </>
                   ) : null}
@@ -6438,7 +7560,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         ) : null}
 
         {shouldShowPrismaPanel ? (
-          <section className="panel" aria-label="Importar schema Prisma">
+          <section
+            className="panel editor-secondary-panel editor-panel-prisma"
+            aria-label="Importar schema Prisma"
+          >
             <header className="panel-header">
               <div>
                 <h3>Importar schema Prisma</h3>
@@ -6502,7 +7627,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
         ) : null}
 
         {shouldShowVersionsPanel ? (
-          <section className="panel" aria-label="Versoes do snapshot" id="versoes">
+          <section
+            className="panel editor-secondary-panel editor-panel-versions"
+            aria-label="Versoes do snapshot"
+            id="versoes"
+          >
             <header className="panel-header">
               <div>
                 <h3>Versoes</h3>
@@ -6720,7 +7849,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
         <div
           ref={canvasRegionRef}
-          className={`${renderer.canvasClassName} ${
+          className={`editor-primary-canvas ${renderer.canvasClassName} ${
             isCanvasFocusMode ? "canvas-frame-focus" : ""
           }`}
           role="region"
@@ -6758,8 +7887,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                 disabled={saveState.status === "saving"}
                 data-testid="add-node-button"
               >
-                Adicionar
+                {editorPersona.labels.addPrimary}
               </button>
+              {editorPersona.labels.quickActionHint ? (
+                <span className="helper">{editorPersona.labels.quickActionHint}</span>
+              ) : null}
               <button
                 className="btn"
                 type="button"
@@ -6859,113 +7991,155 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           />
 
           {selectedNode || selectedEdge ? (
-            <div className="canvas-selection-hud" data-testid="canvas-selection-hud">
-              <div className="canvas-selection-hud-main">
-                <strong>{selectedItemLabel}</strong>
-                {selectedNode ? (
+            isProcessDiagram ? (
+              <FlowSelectionHud
+                dismissKey={flowSelectionDismissKey}
+                selectedItemLabel={selectedItemLabel}
+                kindChipLabel={flowSelectionChipLabel ?? ""}
+                kindChipTone={selectedNode ? selectionNodeKindPresentation?.tone ?? "slate" : null}
+                semanticStatusLabel={selectedSemanticStatusLabel}
+                semanticStatusSeverity={selectedSemanticSeverity}
+                openInspectorLabel={selectedEdge ? "Editar transicao" : "Editar no inspetor"}
+                primaryAction={
+                  selectedNode
+                    ? {
+                        id: quickAction.id,
+                        label: quickAction.label,
+                        onClick: () => handleAddContextualNode(),
+                      }
+                    : undefined
+                }
+                secondaryActions={
+                  selectedNode
+                    ? secondarySelectionActions.map((action) => ({
+                        id: action.id,
+                        label: action.label,
+                        onClick: () => handleAddContextualNode(action),
+                      }))
+                    : []
+                }
+                onOpenInspector={handleOpenSelectedItemInInspector}
+                onCenterView={handleCenterView}
+                onDuplicate={selectedNode ? handleDuplicateSelection : undefined}
+                onRemove={handleRemoveSelected}
+              />
+            ) : (
+              <div className="canvas-selection-hud" data-testid="canvas-selection-hud">
+                <div className="canvas-selection-hud-main">
+                  <strong>{selectedItemLabel}</strong>
+                  {selectedNode ? (
+                    <span
+                      className={`badge canvas-selection-kind-chip tone-${selectionNodeKindPresentation?.tone ?? "slate"}`}
+                      data-testid="canvas-selection-kind-chip"
+                    >
+                      {getNodeKindLabelForDiagram(
+                        currentSupportedDiagramType,
+                        selectedNode.data.kind,
+                        "operational",
+                      )}
+                      {inspectorMode === "technical"
+                        ? ` (kind: ${selectedNode.data.kind})`
+                        : ""}
+                    </span>
+                  ) : selectedEdge ? (
+                    <span className="badge canvas-selection-kind-chip" data-testid="canvas-selection-kind-chip">
+                      {getEdgeKindLabelForDiagram(
+                        currentSupportedDiagramType,
+                        selectedEdge.data?.kind ?? "flows-to",
+                        "operational",
+                      )}
+                      {inspectorMode === "technical"
+                        ? ` (kind: ${selectedEdge.data?.kind ?? "flows-to"})`
+                        : ""}
+                    </span>
+                  ) : null}
                   <span
-                    className={`badge canvas-selection-kind-chip tone-${selectionNodeKindPresentation?.tone ?? "slate"}`}
-                    data-testid="canvas-selection-kind-chip"
+                    className={`badge canvas-selection-semantic-status ${
+                      selectedSemanticSeverity
+                        ? `canvas-selection-semantic-status-${selectedSemanticSeverity}`
+                        : ""
+                    }`}
+                    data-testid="canvas-selection-semantic-status"
                   >
-                    {getNodeKindLabel(selectedNode.data.kind, "operational")}
-                    {inspectorMode === "technical"
-                      ? ` (kind: ${selectedNode.data.kind})`
-                      : ""}
+                    {selectedSemanticStatusLabel}
                   </span>
-                ) : selectedEdge ? (
-                  <span className="badge canvas-selection-kind-chip" data-testid="canvas-selection-kind-chip">
-                    {getEdgeKindLabel(selectedEdge.data?.kind ?? "flows-to", "operational")}
-                    {inspectorMode === "technical"
-                      ? ` (kind: ${selectedEdge.data?.kind ?? "flows-to"})`
-                      : ""}
-                  </span>
-                ) : null}
-                <span
-                  className={`badge canvas-selection-semantic-status ${
-                    selectedSemanticSeverity
-                      ? `canvas-selection-semantic-status-${selectedSemanticSeverity}`
-                      : ""
-                  }`}
-                  data-testid="canvas-selection-semantic-status"
-                >
-                  {selectedSemanticStatusLabel}
-                </span>
+                </div>
+                <div className="row-actions canvas-selection-hud-actions">
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => setIsFocusInspectorCollapsed(false)}
+                  >
+                    Editar
+                  </button>
+                  <button className="btn" type="button" onClick={handleCenterView}>
+                    Centralizar
+                  </button>
+                  {selectedNode ? (
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => {
+                        void handleDuplicateSelection();
+                      }}
+                      data-testid="selection-hud-duplicate-button"
+                    >
+                      Duplicar
+                    </button>
+                  ) : null}
+                  {selectedNode ? (
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => handleAddContextualNode()}
+                      data-testid="selection-hud-contextual-add-button"
+                    >
+                      {quickAction.label}
+                    </button>
+                  ) : null}
+                  {selectedNode
+                    ? secondarySelectionActions.map((action) => (
+                        <button
+                          key={action.id}
+                          className="btn"
+                          type="button"
+                          onClick={() => handleAddContextualNode(action)}
+                          data-testid={`selection-hud-contextual-secondary-${action.id}`}
+                        >
+                          {action.label}
+                        </button>
+                      ))
+                    : null}
+                  {selectedNode &&
+                  hasErdAddFieldAction &&
+                  selectedNode.data.kind === "entity" ? (
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={handleAddErdField}
+                      data-testid="selection-hud-erd-add-field-button"
+                    >
+                      Adicionar campo
+                    </button>
+                  ) : null}
+                  {selectedNode && renderer.key === "tree" ? (
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={handleToggleTreeSubtreeVisibility}
+                      data-testid="selection-hud-toggle-subtree-button"
+                    >
+                      {isSelectedTreeSubtreeCollapsed
+                        ? "Expandir subarvore"
+                        : "Colapsar subarvore"}
+                    </button>
+                  ) : null}
+                  <button className="btn" type="button" onClick={handleRemoveSelected}>
+                    Remover
+                  </button>
+                </div>
               </div>
-              <div className="row-actions canvas-selection-hud-actions">
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => setIsFocusInspectorCollapsed(false)}
-                >
-                  Editar
-                </button>
-                <button className="btn" type="button" onClick={handleCenterView}>
-                  Centralizar
-                </button>
-                {selectedNode ? (
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => {
-                      void handleDuplicateSelection();
-                    }}
-                    data-testid="selection-hud-duplicate-button"
-                  >
-                    Duplicar
-                  </button>
-                ) : null}
-                {selectedNode ? (
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => handleAddContextualNode()}
-                    data-testid="selection-hud-contextual-add-button"
-                  >
-                    {quickAction.label}
-                  </button>
-                ) : null}
-                {selectedNode
-                  ? secondarySelectionActions.map((action) => (
-                      <button
-                        key={action.id}
-                        className="btn"
-                        type="button"
-                        onClick={() => handleAddContextualNode(action)}
-                        data-testid={`selection-hud-contextual-secondary-${action.id}`}
-                      >
-                        {action.label}
-                      </button>
-                    ))
-                  : null}
-                {selectedNode &&
-                hasErdAddFieldAction &&
-                selectedNode.data.kind === "entity" ? (
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleAddErdField}
-                    data-testid="selection-hud-erd-add-field-button"
-                  >
-                    Adicionar campo
-                  </button>
-                ) : null}
-                {selectedNode && renderer.key === "tree" ? (
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleToggleTreeSubtreeVisibility}
-                    data-testid="selection-hud-toggle-subtree-button"
-                  >
-                    {isSelectedTreeSubtreeCollapsed
-                      ? "Expandir subarvore"
-                      : "Colapsar subarvore"}
-                  </button>
-                ) : null}
-                <button className="btn" type="button" onClick={handleRemoveSelected}>
-                  Remover
-                </button>
-              </div>
-            </div>
+            )
           ) : null}
 
           <ReactFlow<RFNode, RFEdge>
@@ -7119,7 +8293,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               className="add-node-dialog"
               role="dialog"
               aria-modal="true"
-              aria-label="QuickAdd"
+              aria-label={editorPersona.labels.addDialogTitle}
               data-testid="add-node-dialog"
               data-quick-add="true"
               onClick={(event) => event.stopPropagation()}
@@ -7129,13 +8303,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               }}
             >
               <header className="add-node-dialog-header">
-                <h3>QuickAdd</h3>
-                <p className="helper">
-                  Tipo + titulo rapido. Enter cria, Esc cancela.
-                </p>
+                <h3>{editorPersona.labels.addDialogTitle}</h3>
+                <p className="helper">{editorPersona.labels.addDialogHint}</p>
                 {selectedNode && quickAddDefaultRelationLabel ? (
                   <p className="helper" data-testid="quick-add-default-connection">
-                    Conexao padrao: {selectedNode.data.label} -[{quickAddDefaultRelationLabel}]- novo no.
+                    {isProcessDiagram
+                      ? `Ligacao inicial: ${selectedNode.data.label} ${quickAddDefaultRelationLabel.toLowerCase()} o novo ponto.`
+                      : `Conexao padrao: ${selectedNode.data.label} -[${quickAddDefaultRelationLabel}]- novo no.`}
                   </p>
                 ) : null}
               </header>
@@ -7166,9 +8340,18 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                         <svg viewBox={presentation.icon.viewBox} aria-hidden="true" focusable="false">
                           <path d={presentation.icon.path} fill="currentColor" />
                         </svg>
-                        {getNodeKindLabel(option.kind, "operational")}
+                        {getNodeKindLabelForDiagram(
+                          currentSupportedDiagramType,
+                          option.kind,
+                          "operational",
+                        )}
                       </span>
-                      <span className="helper">{getNodeKindDescription(option.kind)}</span>
+                      <span className="helper">
+                        {getNodeKindDescriptionForDiagram(
+                          currentSupportedDiagramType,
+                          option.kind,
+                        )}
+                      </span>
                     </button>
                   );
                 })}
@@ -7176,7 +8359,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
               {quickAddRoleOptions.length > 0 ? (
                 <div className="field">
-                  <label>Papel do no</label>
+                  <label>{isProcessDiagram ? "Papel no fluxo" : "Papel do no"}</label>
                   <div className="add-node-kind-grid">
                     {quickAddRoleOptions.map((roleOption) => {
                       const isSelected = addNodeDraft.diagramRole === roleOption.role;
@@ -7205,7 +8388,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               ) : null}
 
               <div className="field">
-                <label htmlFor="add-node-title-input">Titulo</label>
+                <label htmlFor="add-node-title-input">
+                  {isGraphDiagram
+                    ? "Nome do item"
+                    : isProcessDiagram
+                      ? "Nome visivel no fluxo"
+                      : "Titulo"}
+                </label>
                 <input
                   id="add-node-title-input"
                   value={addNodeDraft.title}
@@ -7215,7 +8404,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                       title: event.target.value,
                     }))
                   }
-                  placeholder={`Ex.: ${buildDefaultNodeTitle(addNodeDraft.kind, nodes.length + 1)}`}
+                  placeholder={`Ex.: ${buildDefaultNodeTitle(
+                    addNodeDraft.kind,
+                    nodes.length + 1,
+                    currentSupportedDiagramType,
+                  )}`}
                   required
                   autoFocus
                   data-testid="add-node-title-input"
@@ -7225,7 +8418,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               {inspectorMode === "operational" ? (
                 <>
                   <div className="field">
-                    <label htmlFor="add-node-description-input">Descricao (opcional)</label>
+                    <label htmlFor="add-node-description-input">
+                      {isProcessDiagram ? "Leitura operacional (opcional)" : "Descricao (opcional)"}
+                    </label>
                     <textarea
                       id="add-node-description-input"
                       rows={3}
@@ -7240,7 +8435,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                     />
                   </div>
                   <div className="field">
-                    <label htmlFor="add-node-tags-input">Tags (opcional)</label>
+                    <label htmlFor="add-node-tags-input">
+                      {isProcessDiagram ? "Marcadores operacionais (opcional)" : "Tags (opcional)"}
+                    </label>
                     <input
                       id="add-node-tags-input"
                       value={addNodeDraft.tagsText}
@@ -7273,7 +8470,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   Cancelar
                 </button>
                 <button className="btn btn-primary" type="submit" data-testid="add-node-confirm-button">
-                  Adicionar
+                  {editorPersona.labels.addConfirm}
                 </button>
               </div>
             </form>
@@ -7407,7 +8604,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
       {isInspectorVisible ? (
         <aside
-          className="inspector"
+          className={`inspector ${isProcessDiagram ? "inspector-process" : ""}`}
           aria-label="Inspetor"
           data-testid="inspector-panel"
         >
@@ -7424,7 +8621,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               {selectedItemLabel}
             </h3>
             <p className="helper inspector-subtitle">
-              Ajuste o item selecionado e aplique as alteracoes quando concluir.
+              {inspectorSubtitle}
             </p>
           </div>
 
@@ -7794,16 +8991,126 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           {selectedNode &&
           inspectorMode === "operational" &&
           operationalNodeDraft &&
-          (!isErdDiagram || selectedNode.data.kind !== "entity") ? (
-            <div className="stack-sm">
-              <div className="row-actions inspector-selection-row">
-                <span className="badge">No selecionado</span>
-                {nodeInspectorDirty ? (
-                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                    Rascunho nao aplicado
-                  </span>
-                ) : null}
-              </div>
+          (!isErdDiagram || selectedNode.data.kind !== "entity") &&
+          isProcessDiagram &&
+          processNodeInspectorModel &&
+          processSelectedNodeRelations ? (
+              <ProcessOperationalNodeInspector
+                copy={processNodeInspectorModel.copy}
+                overview={processNodeInspectorModel.overview}
+                relations={processSelectedNodeRelations}
+                draft={operationalNodeDraft}
+                nodeKindOptions={nodeKindOptions}
+                sections={{
+                  general: inspectorSections.general,
+                  details: inspectorSections.details,
+                  relations: inspectorSections.relations,
+                }}
+                tagPreview={operationalTagPreview}
+                nodeInspectorErrors={nodeInspectorErrors}
+                nodeInspectorMessage={nodeInspectorMessage}
+                nodeInspectorHasErrors={nodeInspectorHasErrors}
+                isSaving={saveState.status === "saving"}
+                primaryAction={{
+                  id: quickAction.id,
+                  label: quickAction.label,
+                  onClick: () => handleAddContextualNode(quickAction),
+                }}
+                secondaryActions={secondarySelectionActions.slice(0, 2).map((action) => ({
+                  id: action.id,
+                  label: action.label,
+                  onClick: () => handleAddContextualNode(action),
+                }))}
+                onToggleSection={handleToggleInspectorSection}
+                onLabelChange={(value) =>
+                  setOperationalNodeDraft((current) =>
+                    current ? { ...current, label: value } : current,
+                  )
+                }
+                onKindChange={(kind) =>
+                  setOperationalNodeDraft((current) =>
+                    current ? { ...current, kind } : current,
+                  )
+                }
+                onDescriptionChange={(value) =>
+                  setOperationalNodeDraft((current) =>
+                    current ? { ...current, description: value } : current,
+                  )
+                }
+                onTagsChange={(value) =>
+                  setOperationalNodeDraft((current) =>
+                    current ? { ...current, tagsText: value } : current,
+                  )
+                }
+                onOpenRelatedNode={handleOpenRelatedNodeFromRelation}
+                onOpenTransition={handleOpenTransitionFromRelation}
+                onRemoveRelation={handleRemoveRelation}
+                onApply={handleApplyNodeInspector}
+                onReset={handleNodeInspectorReset}
+              />
+          ) : null}
+
+          {selectedNode &&
+          inspectorMode === "operational" &&
+          operationalNodeDraft &&
+          (!isErdDiagram || selectedNode.data.kind !== "entity") &&
+          !isProcessDiagram ? (
+              <div className="stack-sm">
+                <div className="row-actions inspector-selection-row">
+                  <span className="badge">{inspectorSelectionBadge}</span>
+                  {nodeInspectorDirty ? (
+                    <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                      Rascunho nao aplicado
+                    </span>
+                  ) : null}
+                </div>
+
+              {graphSelectedNodeSemantic ? (
+                <div
+                  className="tile inspector-context-tile inspector-context-tile--graph"
+                  data-testid="graph-inspector-overview"
+                >
+                  <div className="row-actions">
+                    <span className="badge">{graphSelectedNodeSemantic.roleBadgeLabel}</span>
+                    <span className="badge">{graphSelectedNodeSemantic.kindLabel}</span>
+                  </div>
+                  <h4>Leitura da rede</h4>
+                  <p className="helper">{graphSelectedNodeSemantic.summary}</p>
+                  <dl className="inspector-meta-list">
+                    <div>
+                      <dt>Posicao na rede</dt>
+                      <dd>{graphSelectedNodeSemantic.footprintLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Vizinhanca</dt>
+                      <dd>{graphSelectedNodeSemantic.connectivityLabel}</dd>
+                    </div>
+                  </dl>
+                  <div
+                    className="row-actions"
+                    data-testid="graph-inspector-context-actions"
+                  >
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => handleAddContextualNode(quickAction)}
+                    >
+                      {quickAction.label}
+                    </button>
+                    {secondarySelectionActions.slice(0, 2).map((action) => (
+                      <button
+                        key={action.id}
+                        className="btn"
+                        type="button"
+                        onClick={() => handleAddContextualNode(action)}
+                        data-testid={`graph-inspector-action-${action.id}`}
+                      >
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="row-actions inspector-section-tabs">
                 <button
@@ -7813,7 +9120,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   aria-expanded={inspectorSections.general}
                   data-testid="inspector-section-general-toggle"
                 >
-                  Geral {inspectorSections.general ? "▾" : "▸"}
+                  {operationalGeneralSectionTitle} {inspectorSections.general ? "▾" : "▸"}
                 </button>
                 <button
                   className="btn inspector-section-toggle"
@@ -7822,7 +9129,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   aria-expanded={inspectorSections.details}
                   data-testid="inspector-section-details-toggle"
                 >
-                  Detalhes {inspectorSections.details ? "▾" : "▸"}
+                  {operationalDetailsSectionTitle} {inspectorSections.details ? "▾" : "▸"}
                 </button>
                 <button
                   className="btn inspector-section-toggle"
@@ -7831,14 +9138,14 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   aria-expanded={inspectorSections.relations}
                   data-testid="inspector-section-relations-toggle"
                 >
-                  Relacoes {inspectorSections.relations ? "▾" : "▸"}
+                  {operationalRelationsSectionTitle} {inspectorSections.relations ? "▾" : "▸"}
                 </button>
               </div>
 
               {inspectorSections.general ? (
                 <>
                   <div className="field">
-                    <label htmlFor="node-title-input">Titulo</label>
+                    <label htmlFor="node-title-input">{operationalNodeTitleLabel}</label>
                     <input
                       id="node-title-input"
                       data-testid="inspector-node-label"
@@ -7852,7 +9159,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   </div>
 
                   <div className="field">
-                    <label htmlFor="node-kind-operational-input">Tipo</label>
+                    <label htmlFor="node-kind-operational-input">
+                      {operationalNodeKindLabel}
+                    </label>
                     <select
                       id="node-kind-operational-input"
                       data-testid="inspector-node-kind"
@@ -7870,13 +9179,20 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                     >
                       {nodeKindOptions.map((option) => (
                         <option key={option.kind} value={option.kind}>
-                          {getFriendlyNodeKindLabel(option.kind)}
+                          {getNodeKindLabelForDiagram(
+                            currentSupportedDiagramType,
+                            option.kind,
+                            "operational",
+                          )}
                           {option.outOfProfile ? " (fora do perfil)" : ""}
                         </option>
                       ))}
                     </select>
                     <span className="helper">
-                      {getFriendlyNodeKindDescription(operationalNodeDraft.kind)}
+                      {getNodeKindDescriptionForDiagram(
+                        currentSupportedDiagramType,
+                        operationalNodeDraft.kind,
+                      )}
                     </span>
                   </div>
                 </>
@@ -7885,7 +9201,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               {inspectorSections.details ? (
                 <>
                   <div className="field">
-                    <label htmlFor="node-description-operational-input">Descricao</label>
+                    <label htmlFor="node-description-operational-input">
+                      {operationalNodeDescriptionLabel}
+                    </label>
                     <textarea
                       id="node-description-operational-input"
                       rows={3}
@@ -7897,12 +9215,15 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                             : current,
                         )
                       }
-                      placeholder="Opcional. Salvo em payload.description."
+                      placeholder={operationalNodeDescriptionPlaceholder}
+                      data-testid="inspector-node-description"
                     />
                   </div>
 
                   <div className="field">
-                    <label htmlFor="node-tags-operational-input">Tags</label>
+                    <label htmlFor="node-tags-operational-input">
+                      {operationalNodeTagsLabel}
+                    </label>
                     <input
                       id="node-tags-operational-input"
                       value={operationalNodeDraft.tagsText}
@@ -7911,11 +9232,10 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                           current ? { ...current, tagsText: event.target.value } : current,
                         )
                       }
-                      placeholder="Ex.: onboarding, urgencia, aprovacao"
+                      placeholder={operationalNodeTagsPlaceholder}
+                      data-testid="inspector-node-tags"
                     />
-                    <span className="helper">
-                      Separadas por virgula. Salvas em payload.tags como lista.
-                    </span>
+                    <span className="helper">{operationalNodeTagsHelper}</span>
                   </div>
 
                   {operationalTagPreview.length > 0 ? (
@@ -7927,6 +9247,41 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                       ))}
                     </div>
                   ) : null}
+
+                  <div
+                    className={`tile inspector-context-tile ${
+                      isGraphDiagram ? "inspector-context-tile--graph" : ""
+                    }`}
+                    data-testid={isGraphDiagram ? "graph-inspector-context" : undefined}
+                  >
+                    <h4>{operationalNodeContextTitle}</h4>
+                    <p className="helper">
+                      Papel atual: <strong>{selectedNodeRoleLabel ?? "Sem papel definido"}</strong>
+                    </p>
+                    {isGraphDiagram ? (
+                      <dl className="inspector-meta-list">
+                        <div>
+                          <dt>Leitura dominante</dt>
+                          <dd>{graphSelectedNodeKindLabel ?? "Componente"}</dd>
+                        </div>
+                        <div>
+                          <dt>Vizinhanca</dt>
+                          <dd>
+                            {selectedNodeRelations.incomingCount} entrada(s) e{" "}
+                            {selectedNodeRelations.outgoingCount} saida(s)
+                          </dd>
+                        </div>
+                      </dl>
+                    ) : null}
+                    {isGraphDiagram && graphSelectedNodeKindDescription ? (
+                      <p className="helper">{graphSelectedNodeKindDescription}</p>
+                    ) : null}
+                    <ul className="summary-list">
+                      {selectedNodeStructureTips.map((tip) => (
+                        <li key={tip}>{tip}</li>
+                      ))}
+                    </ul>
+                  </div>
                 </>
               ) : null}
 
@@ -7943,30 +9298,65 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
               {inspectorSections.relations ? (
                 <div className="tile">
-                  <h4>Relacoes</h4>
+                  <h4>{operationalRelationsSectionTitle}</h4>
                   <p className="helper">
-                    Entrada: {selectedNodeRelations.incomingCount} | Saida:{" "}
-                    {selectedNodeRelations.outgoingCount}
+                    {isGraphDiagram
+                      ? `Recebe ${selectedNodeRelations.incomingCount} conexao(oes) e envia ${selectedNodeRelations.outgoingCount}.`
+                      : `Entrada: ${selectedNodeRelations.incomingCount} | Saida: ${selectedNodeRelations.outgoingCount}`}
                   </p>
                   {selectedNodeRelations.preview.length > 0 ? (
-                    <ul className="summary-list">
+                    <ul className="summary-list inspector-relation-list">
                       {selectedNodeRelations.preview.map((relation) => (
-                        <li key={relation.id}>
-                          <button
-                            className="btn btn-link"
-                            type="button"
-                            onClick={() =>
-                              handleFocusRelation(relation.id, relation.otherNodeId)
-                            }
-                          >
-                            {relation.direction === "incoming" ? "Entrada" : "Saida"}:{" "}
-                            {relation.relation} - {relation.otherLabel}
-                          </button>
+                        <li
+                          key={relation.id}
+                          className={`inspector-relation-item ${
+                            relation.lane ? `inspector-relation-item--${relation.lane}` : ""
+                          }`}
+                        >
+                          <div className="inspector-relation-item__head">
+                            <span className="badge">{relation.directionLabel}</span>
+                          </div>
+                          <p className="inspector-relation-item__peer">{relation.otherLabel}</p>
+                          <p className="helper inspector-relation-item__path">
+                            {`${relation.sourceLabel} -> ${relation.targetLabel}`}
+                          </p>
+                          <div className="row-actions inspector-relation-item__actions">
+                            <button
+                              className="btn btn-link"
+                              type="button"
+                              onClick={() =>
+                                handleOpenRelatedNodeFromRelation(
+                                  relation.id,
+                                  relation.otherNodeId,
+                                )
+                              }
+                            >
+                              {isGraphDiagram ? "Ir para componente" : "Ir para no relacionado"}
+                            </button>
+                            <button
+                              className="btn btn-link"
+                              type="button"
+                              onClick={() => handleOpenTransitionFromRelation(relation.id)}
+                            >
+                              Editar conexao
+                            </button>
+                            <button
+                              className="btn btn-link btn-danger"
+                              type="button"
+                              onClick={() => handleRemoveRelation(relation.id)}
+                            >
+                              Remover
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="helper">Sem relacoes conectadas.</p>
+                    <p className="helper">
+                      {isGraphDiagram
+                        ? "Sem conexoes registradas para este item."
+                        : "Sem relacoes conectadas."}
+                    </p>
                   )}
                 </div>
               ) : null}
@@ -8000,13 +9390,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   Reverter
                 </button>
               </div>
-            </div>
+              </div>
           ) : null}
 
           {selectedNode && inspectorMode === "technical" && nodeInspectorDraft ? (
           <div className="stack-sm">
             <div className="row-actions inspector-selection-row">
-              <span className="badge">Nó selecionado</span>
+              <span className="badge">{inspectorSelectionBadge}</span>
               {nodeInspectorDirty ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
                   Rascunho nao aplicado
@@ -8676,16 +10066,62 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
           {selectedEdge &&
           inspectorMode === "operational" &&
           operationalEdgeDraft &&
-          (!isErdDiagram || (selectedEdge.data?.kind ?? "flows-to") !== "references") ? (
-            <div className="stack-sm">
-              <div className="row-actions inspector-selection-row">
-                <span className="badge">Aresta selecionada</span>
-                {edgeInspectorDirty ? (
-                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                    Rascunho nao aplicado
+          (!isErdDiagram || (selectedEdge.data?.kind ?? "flows-to") !== "references") &&
+          isProcessDiagram &&
+          processEdgeInspectorModel &&
+          selectedEdgeSourceLabel &&
+          selectedEdgeTargetLabel ? (
+              <ProcessOperationalEdgeInspector
+                copy={processEdgeInspectorModel.copy}
+                overview={processEdgeInspectorModel.overview}
+                draft={operationalEdgeDraft}
+                edgeKindOptions={edgeKindOptions}
+                sections={{
+                  general: inspectorSections.general,
+                  relations: inspectorSections.relations,
+                }}
+                sourceLabel={selectedEdgeSourceLabel}
+                targetLabel={selectedEdgeTargetLabel}
+                edgeReadingKind={selectedEdge.data?.kind ?? "flows-to"}
+                edgeInspectorErrors={edgeInspectorErrors}
+                edgeInspectorMessage={edgeInspectorMessage}
+                edgeInspectorHasErrors={edgeInspectorHasErrors}
+                isSaving={saveState.status === "saving"}
+                onToggleSection={handleToggleInspectorSection}
+                onLabelChange={(value) =>
+                  setOperationalEdgeDraft((current) =>
+                    current ? { ...current, label: value } : current,
+                  )
+                }
+                onKindChange={(kind) =>
+                  setOperationalEdgeDraft((current) =>
+                    current ? { ...current, kind } : current,
+                  )
+                }
+                onApply={handleApplyEdgeInspector}
+                onReset={handleEdgeInspectorReset}
+                onRemove={handleRemoveSelected}
+              />
+          ) : null}
+
+          {selectedEdge &&
+          inspectorMode === "operational" &&
+          operationalEdgeDraft &&
+          (!isErdDiagram || (selectedEdge.data?.kind ?? "flows-to") !== "references") &&
+          !isProcessDiagram ? (
+              <div className="stack-sm">
+                <div className="row-actions inspector-selection-row">
+                  <span className="badge">
+                    {inspectorSelectionState.edgeSelected
+                      ? inspectorSelectionState.badgeLabel
+                      : "Conexao em foco"}
                   </span>
-                ) : null}
-              </div>
+                  {edgeInspectorDirty ? (
+                    <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
+                      Rascunho nao aplicado
+                    </span>
+                  ) : null}
+                </div>
 
               <div className="row-actions inspector-section-tabs">
                 <button
@@ -8695,7 +10131,7 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   aria-expanded={inspectorSections.general}
                   data-testid="inspector-section-general-toggle"
                 >
-                  Geral {inspectorSections.general ? "▾" : "▸"}
+                  {operationalEdgeGeneralSectionTitle} {inspectorSections.general ? "▾" : "▸"}
                 </button>
                 <button
                   className="btn inspector-section-toggle"
@@ -8704,14 +10140,33 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   aria-expanded={inspectorSections.relations}
                   data-testid="inspector-section-relations-toggle"
                 >
-                  Relacoes {inspectorSections.relations ? "▾" : "▸"}
+                  {operationalRelationsSectionTitle} {inspectorSections.relations ? "▾" : "▸"}
                 </button>
               </div>
+
+              {graphSelectedEdgeSemantic ? (
+                <div
+                  className="tile inspector-context-tile inspector-context-tile--graph"
+                  data-testid="graph-edge-overview"
+                >
+                  <div className="row-actions">
+                    <span className="badge">{graphSelectedEdgeSemantic.labelOperational}</span>
+                    <span className="badge">{graphSelectedEdgeSemantic.defaultVerbLabel}</span>
+                  </div>
+                  <h4>Leitura da conexao</h4>
+                  <p className="helper">
+                    {selectedEdgeSourceLabel} {" -> "} {selectedEdgeTargetLabel}
+                  </p>
+                  <p className="helper">{graphSelectedEdgeSemantic.description}</p>
+                </div>
+              ) : null}
 
               {inspectorSections.general ? (
                 <>
                   <div className="field">
-                    <label htmlFor="edge-label-operational-input">Rotulo</label>
+                    <label htmlFor="edge-label-operational-input">
+                      {operationalEdgeLabelLabel}
+                    </label>
                     <input
                       id="edge-label-operational-input"
                       value={operationalEdgeDraft.label}
@@ -8724,7 +10179,9 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   </div>
 
                   <div className="field">
-                    <label htmlFor="edge-kind-operational-input">Relacao</label>
+                    <label htmlFor="edge-kind-operational-input">
+                      {operationalEdgeKindLabel}
+                    </label>
                     <select
                       id="edge-kind-operational-input"
                       value={operationalEdgeDraft.kind}
@@ -8741,12 +10198,19 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                     >
                       {edgeKindOptions.map((kind) => (
                         <option key={kind} value={kind}>
-                          {getFriendlyEdgeKindLabel(kind)}
+                          {getEdgeKindLabelForDiagram(
+                            currentSupportedDiagramType,
+                            kind,
+                            "operational",
+                          )}
                         </option>
                       ))}
                     </select>
                     <span className="helper">
-                      {getFriendlyEdgeKindDescription(operationalEdgeDraft.kind)}
+                      {getEdgeKindDescriptionForDiagram(
+                        currentSupportedDiagramType,
+                        operationalEdgeDraft.kind,
+                      )}
                     </span>
                   </div>
                 </>
@@ -8755,11 +10219,11 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
               {inspectorSections.relations ? (
                 <dl className="inspector-meta-list">
                   <div>
-                    <dt>Origem</dt>
+                    <dt>{operationalEdgeSourceLabel}</dt>
                     <dd>{selectedEdgeSourceLabel}</dd>
                   </div>
                   <div>
-                    <dt>Destino</dt>
+                    <dt>{operationalEdgeTargetLabel}</dt>
                     <dd>{selectedEdgeTargetLabel}</dd>
                   </div>
                 </dl>
@@ -8807,13 +10271,13 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
                   Remover aresta
                 </button>
               </div>
-            </div>
+              </div>
           ) : null}
 
           {selectedEdge && inspectorMode === "technical" && edgeInspectorDraft ? (
           <div className="stack-sm">
             <div className="row-actions inspector-selection-row">
-              <span className="badge">Aresta selecionada</span>
+              <span className="badge">{inspectorSelectionState.edgeSelected ? inspectorSelectionState.badgeLabel : "Conexao em foco"}</span>
               {edgeInspectorDirty ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
                   Rascunho nao aplicado
@@ -8993,13 +10457,20 @@ export function EditorShell({ project, initialSnapshot }: EditorShellProps) {
 
         {!selectedNode && !selectedEdge ? (
           <div className="inspector-empty-state" data-testid="inspector-empty-state">
-            <p className="helper">Nenhum item selecionado no canvas.</p>
             <p className="helper">
-              Selecione um no ou aresta para revisar titulos, relacoes e detalhes.
+              {isProcessDiagram
+                ? processInspectorCopy?.emptyTitle
+                : "Nenhum item selecionado no canvas."}
             </p>
             <p className="helper">
-              Para iniciar ajustes: selecione um elemento no diagrama ou adicione
-              um novo nó na barra superior.
+              {isProcessDiagram
+                ? processInspectorCopy?.emptySummary
+                : "Selecione um no ou aresta para revisar titulos, relacoes e detalhes."}
+            </p>
+            <p className="helper">
+              {isProcessDiagram
+                ? processInspectorCopy?.emptyGuidance
+                : "Para iniciar ajustes: selecione um elemento no diagrama ou adicione um novo nó na barra superior."}
             </p>
             <dl className="inspector-meta-list">
               <div>

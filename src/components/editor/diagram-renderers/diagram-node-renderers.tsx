@@ -1,5 +1,10 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { resolveGraphNodeSemantic } from "@/src/modules/diagrams/domain";
 import type { EditorNodeData } from "../editor-graph-mappers";
+import {
+  resolveFlowHandlePosition,
+  resolveFlowNodePresentation,
+} from "./flow-presentation";
 import { getNodeKindPresentation } from "../presentation/kinds";
 
 function toEditorNodeData(data: unknown): EditorNodeData {
@@ -136,48 +141,6 @@ function resolveTreeRole(nodeData: EditorNodeData) {
   return "tree-node";
 }
 
-function resolveFlowRole(nodeData: EditorNodeData) {
-  if (nodeData.diagramRole === "flow-start" || nodeData.kind === "project") {
-    return "flow-start";
-  }
-
-  if (nodeData.diagramRole === "flow-end") {
-    return "flow-end";
-  }
-
-  if (nodeData.diagramRole === "flow-note" || nodeData.kind === "note") {
-    return "flow-note";
-  }
-
-  if (nodeData.diagramRole === "flow-decision") {
-    return "flow-decision";
-  }
-
-  return "flow-step";
-}
-
-function resolveFlowBadgeLabel(nodeData: EditorNodeData) {
-  const flowRole = resolveFlowRole(nodeData);
-
-  if (flowRole === "flow-start") {
-    return "Inicio";
-  }
-
-  if (flowRole === "flow-end") {
-    return "Fim";
-  }
-
-  if (flowRole === "flow-note") {
-    return "Nota";
-  }
-
-  if (flowRole === "flow-decision") {
-    return "Decisao";
-  }
-
-  return "Etapa";
-}
-
 function resolveMindmapRole(nodeData: EditorNodeData) {
   if (nodeData.diagramRole === "mindmap-reference") {
     return "mindmap-reference";
@@ -210,6 +173,44 @@ function resolveErdRole(nodeData: EditorNodeData) {
   }
 
   return "erd-entity";
+}
+
+function resolveSitemapRole(nodeData: EditorNodeData) {
+  if (
+    nodeData.diagramRole === "sitemap-home" ||
+    resolveDisplayLabel(nodeData).trim().toLowerCase() === "home"
+  ) {
+    return "sitemap-home";
+  }
+
+  return "sitemap-section";
+}
+
+function GraphKindChip({
+  nodeData,
+  kindLabel,
+}: {
+  nodeData: EditorNodeData;
+  kindLabel: string;
+}) {
+  const kindPresentation = getNodeKindPresentation(nodeData.kind);
+
+  return (
+    <span
+      className={`diagram-node-graph__kind-chip tone-${kindPresentation.tone}`}
+      data-testid="graph-node-kind-chip"
+    >
+      {kindLabel}
+    </span>
+  );
+}
+
+function resolveTimelineRole(nodeData: EditorNodeData) {
+  if (nodeData.diagramRole === "timeline-milestone") {
+    return "timeline-milestone";
+  }
+
+  return "timeline-milestone";
 }
 
 function NodeTypeChip({ nodeData }: { nodeData: EditorNodeData }) {
@@ -321,12 +322,14 @@ export function TreeNodeRenderer({ data }: NodeProps) {
 
 export function FlowNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
+  const positions = resolveFlowHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
-  const flowRole = resolveFlowRole(nodeData);
-  const showTargetHandle =
-    flowRole === "flow-end" || flowRole === "flow-step" || flowRole === "flow-note" || flowRole === "flow-decision";
-  const showSourceHandle =
-    flowRole === "flow-start" || flowRole === "flow-step" || flowRole === "flow-note" || flowRole === "flow-decision";
+  const displayLabel = resolveDisplayLabel(nodeData);
+  const flowPresentation = resolveFlowNodePresentation({
+    diagramRole: nodeData.diagramRole,
+    kind: nodeData.kind,
+    label: displayLabel,
+  });
 
   return (
     <div
@@ -334,23 +337,35 @@ export function FlowNodeRenderer({ data }: NodeProps) {
       data-testid="flow-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
-      data-diagram-role={flowRole}
+      data-diagram-role={flowPresentation.variant}
+      data-flow-variant={flowPresentation.variant}
+      data-flow-weight={flowPresentation.visualWeight}
     >
-      {showTargetHandle ? (
-        <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
+      {flowPresentation.showTargetHandle ? (
+        <Handle
+          type="target"
+          position={positions.target}
+          className="diagram-port diagram-port-target"
+        />
       ) : null}
       <div className="diagram-node-flow__body">
-        <div className="diagram-node-flow__header">
-          <span className="diagram-node-flow__badge">{resolveFlowBadgeLabel(nodeData)}</span>
+        <div className="diagram-node-flow__eyebrow">
+          <span className="diagram-node-flow__badge">{flowPresentation.badgeLabel}</span>
         </div>
-        <NodeContent nodeData={nodeData} />
-        <div className="diagram-node-flow__ports-hint" aria-hidden="true">
-          <span>Entrada</span>
-          <span>Saida</span>
+        <div className="diagram-node-flow__content">
+          <strong className="diagram-node__title diagram-node-flow__title">
+            {displayLabel}
+          </strong>
+          <p className="diagram-node-flow__summary">{flowPresentation.summary}</p>
+          <NodeTechnicalMeta nodeData={nodeData} />
         </div>
       </div>
-      {showSourceHandle ? (
-        <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
+      {flowPresentation.showSourceHandle ? (
+        <Handle
+          type="source"
+          position={positions.source}
+          className="diagram-port diagram-port-source"
+        />
       ) : null}
     </div>
   );
@@ -463,7 +478,9 @@ export function ErdNodeRenderer({ data }: NodeProps) {
 
 export function SitemapNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
+  const positions = resolveTreeHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
+  const sitemapRole = resolveSitemapRole(nodeData);
 
   return (
     <div
@@ -471,10 +488,22 @@ export function SitemapNodeRenderer({ data }: NodeProps) {
       data-testid="sitemap-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={sitemapRole}
     >
-      <Handle type="target" position={Position.Top} className="diagram-port diagram-port-target" />
+      <Handle
+        type="target"
+        position={positions.target}
+        className="diagram-port diagram-port-target"
+      />
+      <div className="diagram-node-sitemap__role">
+        {sitemapRole === "sitemap-home" ? "Home" : "Secao"}
+      </div>
       <NodeContent nodeData={nodeData} />
-      <Handle type="source" position={Position.Bottom} className="diagram-port diagram-port-source" />
+      <Handle
+        type="source"
+        position={positions.source}
+        className="diagram-port diagram-port-source"
+      />
     </div>
   );
 }
@@ -482,17 +511,91 @@ export function SitemapNodeRenderer({ data }: NodeProps) {
 export function GraphNodeRenderer({ data }: NodeProps) {
   const nodeData = toEditorNodeData(data);
   const visual = useNodeVisualTokens(nodeData);
+  const graphSemantic = resolveGraphNodeSemantic({
+    diagramRole: nodeData.diagramRole,
+    kind: nodeData.kind,
+    label: resolveDisplayLabel(nodeData),
+    payload: nodeData.payload,
+  });
 
   return (
     <div
-      className={`diagram-node diagram-node-graph ${visual.className}`}
+      className={`diagram-node diagram-node-graph diagram-node-graph--${graphSemantic.variant} ${visual.className}`}
       data-testid="graph-node-renderer"
       data-node-kind={nodeData.kind}
       data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={graphSemantic.role}
+      data-graph-variant={graphSemantic.variant}
     >
-      <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="diagram-port diagram-port-target diagram-port-graph diagram-port-graph-target"
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        className="diagram-port diagram-port-target diagram-port-graph diagram-port-graph-target"
+      />
+      <div className="diagram-node-graph__surface" data-testid="graph-node-click-surface">
+        <div className="diagram-node-graph__header">
+          <div className="diagram-node-graph__header-copy">
+            <span
+              className="diagram-node-graph__role-badge"
+              data-testid="graph-node-role-badge"
+            >
+              {graphSemantic.roleBadgeLabel}
+            </span>
+            <GraphKindChip nodeData={nodeData} kindLabel={graphSemantic.kindLabel} />
+          </div>
+          <span className="diagram-node-graph__glyph" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+        </div>
+        <strong className="diagram-node-graph__title">{resolveDisplayLabel(nodeData)}</strong>
+        <p className="diagram-node-graph__summary" data-testid="graph-node-summary">
+          {graphSemantic.summary}
+        </p>
+        <div className="diagram-node-graph__footer">
+          <span className="diagram-node-graph__footprint">{graphSemantic.footprintLabel}</span>
+          <NodeTechnicalMeta nodeData={nodeData} />
+        </div>
+      </div>
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="diagram-port diagram-port-source diagram-port-graph diagram-port-graph-source"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="diagram-port diagram-port-source diagram-port-graph diagram-port-graph-source"
+      />
+    </div>
+  );
+}
+
+export function TimelineNodeRenderer({ data }: NodeProps) {
+  const nodeData = toEditorNodeData(data);
+  const visual = useNodeVisualTokens(nodeData);
+  const positions = resolveFlowHandlePosition(nodeData.rendererDirection);
+  const role = resolveTimelineRole(nodeData);
+
+  return (
+    <div
+      className={`diagram-node diagram-node-timeline ${visual.className}`}
+      data-testid="timeline-node-renderer"
+      data-node-kind={nodeData.kind}
+      data-node-tone={visual.kindPresentation.tone}
+      data-diagram-role={role}
+    >
+      <Handle type="target" position={positions.target} className="diagram-port diagram-port-target" />
+      <div className="diagram-node-timeline__marker" aria-hidden="true" />
+      <div className="diagram-node-timeline__role">Marco</div>
       <NodeContent nodeData={nodeData} />
-      <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
+      <Handle type="source" position={positions.source} className="diagram-port diagram-port-source" />
     </div>
   );
 }

@@ -496,6 +496,10 @@ select {
   gap: 0.46rem;
 }
 
+.field--process {
+  gap: 0.52rem;
+}
+
 .field label {
   font-size: 0.95rem;
   color: var(--muted-strong);
@@ -534,6 +538,18 @@ select {
     border-color 120ms ease,
     background-color 120ms ease,
     box-shadow 120ms ease;
+}
+
+.inspector-process .field--process input,
+.inspector-process .field--process textarea,
+.inspector-process .field--process select {
+  min-height: 3.1rem;
+  padding: 0.9rem 0.94rem;
+  font-size: 0.98rem;
+}
+
+.inspector-process .field--process textarea {
+  min-height: 11rem;
 }
 
 .field input:hover,
@@ -1099,11 +1115,36 @@ select {
   padding: 0.7rem;
 }
 
+.creation-progress-track {
+  margin-top: 0.35rem;
+  height: 0.55rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-elevation-2) 88%, transparent);
+  overflow: hidden;
+}
+
+.creation-progress-fill {
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-primary) 86%, #ffffff 14%),
+    color-mix(in srgb, var(--color-accent) 68%, var(--color-primary))
+  );
+  transition: width 180ms ease;
+}
+
 .editor-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
   gap: 1rem;
   min-height: 65vh;
+}
+
+.editor-grid.editor-grid-process {
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 1.15rem;
 }
 
 .editor-grid.editor-grid-focus {
@@ -1118,6 +1159,50 @@ select {
   display: grid;
   gap: 1rem;
   align-content: start;
+}
+
+.editor-main-column-process {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.editor-main-column-process .editor-primary-canvas {
+  order: 1;
+}
+
+.editor-main-column-process .editor-panel-metadata {
+  order: 2;
+}
+
+.editor-main-column-process .editor-panel-prisma {
+  order: 3;
+}
+
+.editor-main-column-process .editor-panel-versions {
+  order: 4;
+}
+
+.editor-main-column-process .editor-secondary-panel {
+  border-color: color-mix(in srgb, var(--color-border) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-elevation-1) 90%, transparent);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
+}
+
+.editor-main-column-process .editor-secondary-panel .panel-header {
+  padding: 0.8rem 0.95rem;
+}
+
+.editor-main-column-process .editor-secondary-panel .panel-body {
+  padding: 0.85rem 0.95rem;
+}
+
+.editor-main-column-process .editor-secondary-panel .panel-header h3 {
+  font-size: 1.02rem;
+}
+
+.editor-main-column-process .editor-secondary-panel .panel-header p {
+  font-size: 0.88rem;
 }
 
 .editor-grid.editor-grid-focus .editor-main-column {
@@ -1234,7 +1319,7 @@ select {
 
 .canvas-selection-hud {
   position: absolute;
-  z-index: 4;
+  z-index: 6;
   top: 4.05rem;
   left: 0.7rem;
   right: 4.15rem;
@@ -1244,6 +1329,20 @@ select {
   padding: 0.5rem 0.58rem;
   display: grid;
   gap: 0.52rem;
+}
+
+.editor-grid-process .canvas-selection-hud {
+  top: 6.25rem;
+}
+
+.canvas-selection-hud-flow {
+  right: auto;
+  width: min(430px, calc(100% - 5.2rem));
+  padding: 0.44rem 0.5rem;
+  border-radius: 0.82rem;
+  background: color-mix(in srgb, var(--surface-elevation-2) 92%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .canvas-selection-hud-main {
@@ -1257,9 +1356,22 @@ select {
   line-height: 1.2;
 }
 
+.canvas-selection-hud-flow .canvas-selection-hud-main {
+  gap: 0.34rem;
+}
+
+.canvas-selection-hud-flow .canvas-selection-hud-main strong {
+  font-size: 0.94rem;
+}
+
 .canvas-selection-kind-chip {
   font-size: 0.78rem;
   border-style: dashed;
+}
+
+.canvas-selection-hud-flow .canvas-selection-kind-chip {
+  font-size: 0.72rem;
+  border-style: solid;
 }
 
 .canvas-selection-semantic-status {
@@ -1279,6 +1391,75 @@ select {
 .canvas-selection-hud-actions {
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.canvas-selection-hud-actions-flow {
+  align-items: center;
+  gap: 0.38rem;
+}
+
+.flow-selection-hud {
+  isolation: isolate;
+}
+
+.flow-selection-hud__actions {
+  justify-content: flex-start;
+}
+
+.canvas-selection-hud-actions-flow .btn {
+  min-height: 2.2rem;
+  padding: 0.42rem 0.62rem;
+}
+
+.flow-selection-hud__actions .btn {
+  min-height: 2.2rem;
+  padding: 0.42rem 0.62rem;
+}
+
+.canvas-selection-hud-actions-flow .btn-primary {
+  min-width: 9.8rem;
+}
+
+.flow-selection-hud__actions .btn-primary {
+  min-width: 9.8rem;
+}
+
+.canvas-selection-hud-more {
+  position: relative;
+}
+
+.flow-selection-hud__menu {
+  position: relative;
+}
+
+.canvas-selection-hud-more-menu {
+  position: absolute;
+  top: calc(100% + 0.34rem);
+  right: 0;
+  min-width: 220px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: 0.82rem;
+  background: color-mix(in srgb, var(--surface-elevation-2) 98%, transparent);
+  box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+  padding: 0.36rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.flow-selection-hud__menu-panel {
+  z-index: 1;
+}
+
+.canvas-selection-hud-more-menu .btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.flow-selection-hud__menu-panel .btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .command-palette-backdrop {
@@ -1662,13 +1843,34 @@ select {
   align-content: start;
 }
 
+.inspector-process {
+  padding: 1.05rem;
+  gap: 1rem;
+}
+
 .inspector-header {
   display: grid;
   gap: 0.3rem;
 }
 
+.inspector-process .inspector-header {
+  gap: 0.42rem;
+  padding: 0.92rem 0.96rem;
+  border: 1px solid color-mix(in srgb, #14532d 16%, var(--editor-meta-border));
+  border-radius: 0.92rem;
+  background:
+    linear-gradient(180deg, rgba(21, 128, 61, 0.05), transparent 58%),
+    linear-gradient(135deg, rgba(245, 158, 11, 0.05), transparent 42%),
+    var(--editor-meta-bg);
+}
+
 .inspector-subtitle {
   max-width: 32ch;
+}
+
+.inspector-process .inspector-subtitle {
+  max-width: none;
+  font-size: 0.92rem;
 }
 
 .inspector-selection-title {
@@ -1680,6 +1882,11 @@ select {
   overflow: hidden;
 }
 
+.inspector-process .inspector-selection-title {
+  font-size: 1.08rem;
+  line-height: 1.28;
+}
+
 .inspector-selection-row {
   gap: 0.45rem;
   margin-bottom: 0.1rem;
@@ -1687,6 +1894,14 @@ select {
 
 .inspector-actions {
   margin-top: 0.15rem;
+}
+
+.inspector-process .inspector-actions {
+  gap: 0.55rem;
+}
+
+.inspector-process .inspector-actions .btn {
+  min-height: 2.8rem;
 }
 
 .inspector-section-body {
@@ -1700,6 +1915,21 @@ select {
   margin-top: 0.1rem;
 }
 
+.inspector-section-tabs--process {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.inspector-section-tabs--process .inspector-section-toggle {
+  width: 100%;
+  justify-content: space-between;
+  padding: 0.72rem 0.82rem;
+  border-radius: 0.82rem;
+  border-color: color-mix(in srgb, #14532d 14%, var(--editor-meta-border));
+  background: color-mix(in srgb, var(--surface-elevation-1) 94%, transparent);
+}
+
 .inspector-section-toggle {
   border-style: dashed;
 }
@@ -1709,6 +1939,17 @@ select {
   border-radius: var(--radius-md);
   padding: 0.5rem;
   background: var(--editor-meta-bg);
+}
+
+.inspector-process .inspector-mode-toggle {
+  padding: 0.6rem;
+  border-radius: 0.85rem;
+}
+
+.inspector-process .inspector-mode-toggle .btn {
+  flex: 1 1 0;
+  min-height: 2.72rem;
+  justify-content: center;
 }
 
 .inspector-feedback {
@@ -1727,6 +1968,10 @@ select {
   color: var(--danger);
 }
 
+.inspector-process .helper {
+  line-height: 1.55;
+}
+
 .inspector-empty-state {
   display: grid;
   gap: 0.55rem;
@@ -1740,6 +1985,12 @@ select {
 
 .inspector-meta-list {
   margin-top: 0.15rem;
+}
+
+.inspector-meta-list--process {
+  margin-top: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.56rem;
 }
 
 .inspector-meta-list > div {
@@ -1798,6 +2049,10 @@ select {
   width: 100%;
   resize: vertical;
   min-height: 8rem;
+}
+
+.inspector-process textarea {
+  min-height: 11rem;
 }
 
 .editor-toolbar {
@@ -1942,8 +2197,81 @@ select {
 }
 
 .canvas-frame-flow {
-  --canvas-grid-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
-  --canvas-edge-color: color-mix(in srgb, var(--color-accent) 56%, var(--color-text));
+  --flow-canvas-base: color-mix(in srgb, #f8fafc 98%, var(--surface-elevation-2));
+  --flow-grid-color: color-mix(in srgb, #14532d 7%, transparent);
+  --flow-edge-main: color-mix(in srgb, #14532d 74%, #1f2937);
+  --flow-edge-main-width: 2.72px;
+  --flow-edge-main-opacity: 0.96;
+  --flow-edge-branch: color-mix(in srgb, #b45309 76%, #1f2937);
+  --flow-edge-branch-width: 2.28px;
+  --flow-edge-branch-opacity: 0.84;
+  --flow-edge-branch-dash: 10 8;
+  --flow-edge-note: color-mix(in srgb, #6d28d9 62%, #475569);
+  --flow-edge-note-width: 1.78px;
+  --flow-edge-note-opacity: 0.58;
+  --flow-edge-note-dash: 3 9;
+  --flow-step-accent: #0f766e;
+  --flow-terminal-start-accent: #166534;
+  --flow-terminal-end-accent: #0f766e;
+  --flow-decision-accent: #b45309;
+  --flow-note-accent: #6d28d9;
+  --flow-step-shell:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.9),
+      rgba(255, 255, 255, 0.72) 34%,
+      color-mix(in srgb, #f8fafc 98%, var(--diagram-node-bg)) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--flow-step-accent) 7%, transparent),
+      transparent 62%
+    ),
+    var(--diagram-node-bg);
+  --flow-start-shell:
+    linear-gradient(135deg, rgba(21, 128, 61, 0.12), rgba(240, 253, 244, 0.98)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), transparent 44%),
+    var(--diagram-node-bg);
+  --flow-end-shell:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.03) 52%,
+      rgba(240, 253, 250, 0.82) 82%,
+      rgba(226, 252, 246, 0.98) 100%
+    ),
+    radial-gradient(circle at 88% 50%, rgba(15, 118, 110, 0.1), transparent 18%),
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(240, 253, 250, 0.98) 58%, rgba(236, 253, 250, 0.9) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.82), transparent 44%),
+    var(--diagram-node-bg);
+  --flow-decision-shell:
+    linear-gradient(135deg, rgba(251, 146, 60, 0.14), rgba(255, 247, 237, 0.99)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.76), transparent 48%),
+    var(--diagram-node-bg);
+  --flow-note-shell:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(248, 245, 255, 0.97)),
+    linear-gradient(180deg, rgba(124, 58, 237, 0.05), transparent 60%),
+    var(--diagram-node-bg);
+  --flow-decision-shadow:
+    inset 0 0 0 1px rgba(194, 65, 12, 0.08),
+    0 14px 28px rgba(194, 65, 12, 0.1),
+    0 4px 10px rgba(15, 23, 42, 0.04);
+  --flow-note-summary-color: color-mix(in srgb, var(--color-muted) 82%, #5b21b6);
+  --canvas-grid-color: var(--flow-grid-color);
+  --canvas-edge-color: var(--flow-edge-main);
+  background:
+    radial-gradient(circle at 14% 18%, rgba(15, 118, 110, 0.035), transparent 28%),
+    radial-gradient(circle at 86% 12%, rgba(180, 83, 9, 0.04), transparent 24%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--surface-elevation-2) 96%, #ffffff) 0%,
+      var(--flow-canvas-base) 100%
+    );
+}
+
+.editor-main-column-process .canvas-frame-flow {
+  height: clamp(560px, 74vh, 920px);
+  min-height: 560px;
 }
 
 .canvas-frame-mindmap {
@@ -1966,8 +2294,17 @@ select {
   --canvas-edge-color: color-mix(in srgb, var(--canvas-edge-color) 92%, var(--color-text));
 }
 
+.canvas-frame-timeline {
+  --canvas-grid-color: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  --canvas-edge-color: color-mix(in srgb, var(--color-warning) 58%, var(--color-text));
+}
+
 .editor-canvas-background {
   opacity: 0.62;
+}
+
+.editor-canvas-background-flow {
+  opacity: 0.18;
 }
 
 .editor-minimap-tree,
@@ -1975,7 +2312,8 @@ select {
 .editor-minimap-mindmap,
 .editor-minimap-erd,
 .editor-minimap-sitemap,
-.editor-minimap-graph {
+.editor-minimap-graph,
+.editor-minimap-timeline {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-border) 90%, transparent);
 }
 
@@ -2044,7 +2382,31 @@ select {
 }
 
 .react-flow__edge-path.editor-edge-flow {
-  stroke-width: 2.3px;
+  stroke: var(--flow-edge-main);
+  stroke-width: 2.35px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-opacity: 0.9;
+}
+
+.react-flow__edge-path.editor-edge-flow.editor-edge-kind-flows-to {
+  stroke: var(--flow-edge-main);
+  stroke-width: var(--flow-edge-main-width);
+  stroke-opacity: var(--flow-edge-main-opacity);
+}
+
+.react-flow__edge-path.editor-edge-flow.editor-edge-kind-depends-on {
+  stroke: var(--flow-edge-branch);
+  stroke-dasharray: var(--flow-edge-branch-dash);
+  stroke-width: var(--flow-edge-branch-width);
+  stroke-opacity: var(--flow-edge-branch-opacity);
+}
+
+.react-flow__edge-path.editor-edge-flow.editor-edge-kind-references {
+  stroke: var(--flow-edge-note);
+  stroke-dasharray: var(--flow-edge-note-dash);
+  stroke-width: var(--flow-edge-note-width);
+  stroke-opacity: var(--flow-edge-note-opacity);
 }
 
 .react-flow__edge-path.editor-edge-mindmap {
@@ -2082,7 +2444,33 @@ select {
 }
 
 .react-flow__edge-path.editor-edge-graph {
-  stroke: color-mix(in srgb, var(--canvas-edge-color) 90%, var(--color-text));
+  stroke: color-mix(in srgb, var(--canvas-edge-color) 82%, var(--color-text));
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.react-flow__edge-path.editor-edge-graph.editor-edge-kind-depends-on {
+  stroke: color-mix(in srgb, #b45309 72%, var(--canvas-edge-color));
+  stroke-width: 2.35px;
+  stroke-opacity: 0.96;
+}
+
+.react-flow__edge-path.editor-edge-graph.editor-edge-kind-relates-to {
+  stroke: color-mix(in srgb, #2563eb 68%, var(--canvas-edge-color));
+  stroke-width: 2px;
+  stroke-opacity: 0.92;
+}
+
+.react-flow__edge-path.editor-edge-graph.editor-edge-kind-references {
+  stroke: color-mix(in srgb, #475569 72%, var(--canvas-edge-color));
+  stroke-width: 1.65px;
+  stroke-opacity: 0.7;
+}
+
+.react-flow__edge-path.editor-edge-timeline {
+  stroke-dasharray: 0;
+  stroke-width: 2.2px;
 }
 
 .react-flow__edge-textbg {
@@ -2274,40 +2662,282 @@ select {
 }
 
 .diagram-node-flow {
-  min-width: 190px;
+  --flow-node-accent: var(--flow-step-accent);
+  --flow-node-min-width: 236px;
+  --flow-node-radius: 1.08rem;
+  --flow-node-padding: 0.84rem 0.9rem 0.88rem;
+  --flow-node-body-gap: 0.42rem;
+  --flow-node-body-padding-left: 0;
+  --flow-node-body-padding-right: 0;
+  --flow-node-title-size: 1rem;
+  --flow-node-summary-max-width: 26ch;
+  --flow-node-border: color-mix(in srgb, var(--flow-node-accent) 24%, rgba(15, 23, 42, 0.16));
+  --flow-node-shell: var(--flow-step-shell);
+  --flow-node-shadow:
+    0 16px 34px rgba(15, 23, 42, 0.08),
+    0 4px 10px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  --flow-node-cap-color: color-mix(in srgb, var(--flow-node-accent) 68%, transparent);
+  --flow-node-badge-bg: color-mix(in srgb, var(--flow-node-accent) 9%, transparent);
+  --flow-node-badge-border: color-mix(in srgb, var(--flow-node-accent) 24%, transparent);
+  --flow-node-badge-fg: color-mix(in srgb, var(--flow-node-accent) 78%, var(--color-text));
+  --flow-node-summary-color: color-mix(
+    in srgb,
+    var(--color-muted-strong) 88%,
+    var(--color-text)
+  );
+  --flow-node-cap-top: 0.78rem;
+  --flow-node-cap-left: 0.9rem;
+  --flow-node-cap-right: auto;
+  --flow-node-cap-width: 2.5rem;
+  --flow-node-cap-height: 2px;
+  --flow-node-cap-radius: 999px;
+  --flow-node-cap-transform: none;
+  --flow-node-cap-background: var(--flow-node-cap-color);
+  --flow-node-cap-border: none;
+  --flow-node-cap-box-shadow: none;
+  --flow-node-cap-opacity: 0.74;
+  min-width: var(--flow-node-min-width);
   display: grid;
-  gap: 0.24rem;
-  border-left-width: 5px;
+  gap: 0.42rem;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--flow-node-border);
+  border-left-width: 1px;
+  border-radius: var(--flow-node-radius);
+  padding: var(--flow-node-padding);
+  background: var(--flow-node-shell);
+  box-shadow: var(--flow-node-shadow);
+}
+
+.diagram-node-flow::before {
+  content: "";
+  position: absolute;
+  top: var(--flow-node-cap-top);
+  left: var(--flow-node-cap-left);
+  right: var(--flow-node-cap-right);
+  width: var(--flow-node-cap-width);
+  height: var(--flow-node-cap-height);
+  transform: var(--flow-node-cap-transform);
+  border-radius: var(--flow-node-cap-radius);
+  background: var(--flow-node-cap-background);
+  border: var(--flow-node-cap-border);
+  box-shadow: var(--flow-node-cap-box-shadow);
+  opacity: var(--flow-node-cap-opacity);
 }
 
 .diagram-node-flow__body {
   display: grid;
-  gap: 0.2rem;
+  gap: var(--flow-node-body-gap);
+  padding-left: var(--flow-node-body-padding-left);
+  padding-right: var(--flow-node-body-padding-right);
+  position: relative;
+  z-index: 1;
 }
 
-.diagram-node-flow__header {
+.diagram-node-flow__eyebrow {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  gap: 0.42rem;
+  min-height: 1.2rem;
 }
 
 .diagram-node-flow__badge {
   border-radius: 999px;
-  background: color-mix(in srgb, var(--diagram-node-tone) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--diagram-node-tone) 42%, transparent);
-  color: color-mix(in srgb, var(--diagram-node-tone) 84%, var(--color-text));
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 0.08rem 0.48rem;
+  background: var(--flow-node-badge-bg);
+  border: 1px solid var(--flow-node-badge-border);
+  color: var(--flow-node-badge-fg);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 0.14rem 0.56rem;
   text-transform: uppercase;
 }
 
-.diagram-node-flow__ports-hint {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.66rem;
-  color: var(--color-muted);
+.diagram-node-flow__content {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.diagram-node-flow__title {
+  font-size: var(--flow-node-title-size);
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+  max-width: 22ch;
+}
+
+.diagram-node-flow__summary {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.38;
+  color: var(--flow-node-summary-color);
+  max-width: var(--flow-node-summary-max-width);
+}
+
+.diagram-node-flow[data-flow-weight="supporting"] {
+  --flow-node-shadow:
+    0 10px 24px rgba(76, 29, 149, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.diagram-node-flow[data-flow-weight="terminal"] {
+  --flow-node-summary-max-width: 22ch;
+}
+
+.diagram-node-flow[data-flow-variant="flow-step"] {
+  --flow-node-accent: var(--flow-step-accent);
+}
+
+.diagram-node-flow[data-flow-variant="flow-start"],
+.diagram-node-flow[data-flow-variant="flow-end"] {
+  --flow-node-min-width: 214px;
+  --flow-node-radius: 999px;
+  --flow-node-body-gap: 0.28rem;
+}
+
+.diagram-node-flow[data-flow-variant="flow-start"] {
+  --flow-node-accent: var(--flow-terminal-start-accent);
+  --flow-node-shell: var(--flow-start-shell);
+  --flow-node-padding: 0.88rem 1.14rem 0.9rem 1.3rem;
+  --flow-node-body-padding-left: 0.64rem;
+  --flow-node-cap-top: 50%;
+  --flow-node-cap-width: 0.72rem;
+  --flow-node-cap-height: 0.72rem;
+  --flow-node-cap-transform: translateY(-50%);
+  --flow-node-cap-background: color-mix(
+    in srgb,
+    var(--flow-terminal-start-accent) 92%,
+    #0f172a
+  );
+  --flow-node-cap-box-shadow: 0 0 0 6px rgba(21, 128, 61, 0.12);
+}
+
+.diagram-node-flow[data-flow-variant="flow-end"] {
+  --flow-node-accent: var(--flow-terminal-end-accent);
+  --flow-node-shell: var(--flow-end-shell);
+  --flow-node-border: color-mix(
+    in srgb,
+    var(--flow-terminal-end-accent) 26%,
+    rgba(15, 23, 42, 0.14)
+  );
+  --flow-node-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset -34px 0 36px rgba(255, 255, 255, 0.28),
+    0 18px 36px rgba(15, 23, 42, 0.07),
+    0 8px 18px rgba(15, 118, 110, 0.08);
+  --flow-node-badge-bg: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.82),
+    rgba(15, 118, 110, 0.08)
+  );
+  --flow-node-badge-border: color-mix(
+    in srgb,
+    var(--flow-terminal-end-accent) 28%,
+    rgba(15, 23, 42, 0.08)
+  );
+  --flow-node-badge-fg: color-mix(in srgb, var(--flow-terminal-end-accent) 88%, #0f172a);
+  --flow-node-summary-color: color-mix(in srgb, var(--color-muted-strong) 84%, #0f766e);
+  --flow-node-padding: 0.92rem 1.78rem 0.96rem 1rem;
+  --flow-node-body-padding-right: 1.92rem;
+  --flow-node-summary-max-width: 23ch;
+  --flow-node-cap-top: 50%;
+  --flow-node-cap-left: auto;
+  --flow-node-cap-right: 0.82rem;
+  --flow-node-cap-width: 1.18rem;
+  --flow-node-cap-height: 1.2rem;
+  --flow-node-cap-radius: 999px;
+  --flow-node-cap-transform: translateY(-50%);
+  --flow-node-cap-background:
+    linear-gradient(
+      90deg,
+      transparent 0.2rem,
+      color-mix(in srgb, var(--flow-terminal-end-accent) 62%, transparent) 0.2rem,
+      color-mix(in srgb, var(--flow-terminal-end-accent) 62%, transparent) 0.31rem,
+      transparent 0.31rem,
+      transparent 0.83rem,
+      color-mix(in srgb, var(--flow-terminal-end-accent) 62%, transparent) 0.83rem,
+      color-mix(in srgb, var(--flow-terminal-end-accent) 62%, transparent) 0.94rem,
+      transparent 0.94rem
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(15, 118, 110, 0.08));
+  --flow-node-cap-border: 1px solid
+    color-mix(in srgb, var(--flow-terminal-end-accent) 20%, rgba(15, 23, 42, 0.08));
+  --flow-node-cap-box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.64),
+    0 0 0 6px rgba(15, 118, 110, 0.08);
+  --flow-node-cap-opacity: 1;
+}
+
+.diagram-node-flow[data-flow-variant="flow-end"]::after {
+  content: "";
+  position: absolute;
+  top: 0.66rem;
+  bottom: 0.66rem;
+  right: 2.34rem;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--flow-terminal-end-accent) 16%, transparent) 18%,
+    color-mix(in srgb, var(--flow-terminal-end-accent) 26%, transparent) 50%,
+    color-mix(in srgb, var(--flow-terminal-end-accent) 16%, transparent) 82%,
+    transparent
+  );
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.diagram-node-flow[data-flow-variant="flow-decision"] {
+  --flow-node-accent: var(--flow-decision-accent);
+  --flow-node-shell: var(--flow-decision-shell);
+  --flow-node-shadow: var(--flow-decision-shadow);
+}
+
+.diagram-node-flow[data-flow-variant="flow-decision"]::before {
+  top: 0.82rem;
+  left: 0.96rem;
+  width: 0.82rem;
+  height: 0.82rem;
+  border-radius: 0.18rem;
+  transform: rotate(45deg);
+  background: rgba(251, 146, 60, 0.18);
+  border: 1px solid rgba(194, 65, 12, 0.22);
+  box-shadow: none;
+}
+
+.diagram-node-flow[data-flow-variant="flow-note"] {
+  --flow-node-accent: var(--flow-note-accent);
+  --flow-node-shell: var(--flow-note-shell);
+  --flow-node-summary-color: var(--flow-note-summary-color);
+  --flow-node-min-width: 210px;
+  --flow-node-radius: 1rem 1rem 1rem 0.56rem;
+  --flow-node-padding: 0.74rem 0.8rem 0.78rem;
+  --flow-node-title-size: 0.92rem;
+  --flow-node-summary-max-width: 24ch;
+}
+
+.diagram-node-flow[data-flow-variant="flow-note"]::before {
+  top: 0.76rem;
+  left: 0.82rem;
+  width: 1.88rem;
+  height: 2px;
+  opacity: 0.68;
+}
+
+.diagram-node-flow[data-flow-variant="flow-note"]::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1.28rem;
+  height: 1.28rem;
+  background: linear-gradient(
+    225deg,
+    rgba(109, 40, 217, 0.18),
+    rgba(109, 40, 217, 0.04) 54%,
+    transparent 54%
+  );
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
 }
 
 .diagram-node-mindmap {
@@ -2415,21 +3045,480 @@ select {
 }
 
 .diagram-node-sitemap {
-  min-width: 160px;
-  padding: 0.58rem 0.64rem 0.62rem;
-  text-align: center;
+  min-width: 186px;
+  padding: 0.58rem 0.64rem 0.7rem;
+  text-align: left;
   border-color: color-mix(in srgb, var(--canvas-edge-color) 42%, transparent);
+  border-left-width: 5px;
 }
 
-.diagram-node-sitemap__icon {
-  font-size: 1rem;
-  color: color-mix(in srgb, var(--canvas-edge-color) 82%, var(--color-text));
-  margin-bottom: 0.2rem;
+.diagram-node-sitemap__role {
+  margin-bottom: 0.24rem;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--diagram-node-tone) 76%, var(--color-text));
 }
 
 .diagram-node-graph {
-  min-width: 154px;
-  padding: 0.56rem 0.64rem;
+  position: relative;
+  min-width: 232px;
+  border-left-width: 0;
+  border-radius: 1.1rem;
+  padding: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--diagram-node-tone) 10%, transparent),
+      transparent 46%
+    ),
+    radial-gradient(
+      circle at 85% 10%,
+      color-mix(in srgb, var(--diagram-node-tone) 16%, transparent),
+      transparent 58%
+    ),
+    var(--diagram-node-bg);
+}
+
+.diagram-node-graph::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--diagram-node-tone) 18%, transparent);
+}
+
+.diagram-node-graph__surface {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.54rem;
+  padding: 0.82rem 0.9rem 0.88rem;
+  cursor: pointer;
+}
+
+.diagram-node-graph__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.diagram-node-graph__header-copy {
+  display: grid;
+  gap: 0.32rem;
+}
+
+.diagram-node-graph__role-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.18rem 0.52rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--diagram-node-tone) 16%, transparent);
+  color: color-mix(in srgb, var(--diagram-node-tone) 78%, var(--color-text));
+  border: 1px solid color-mix(in srgb, var(--diagram-node-tone) 32%, transparent);
+}
+
+.diagram-node-graph__kind-chip {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  border-radius: 999px;
+  padding: 0.15rem 0.46rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--diagram-node-tone));
+  color: color-mix(in srgb, var(--color-text) 82%, var(--diagram-node-tone));
+  border: 1px solid color-mix(in srgb, var(--diagram-node-tone) 18%, transparent);
+}
+
+.diagram-node-graph__glyph {
+  position: relative;
+  width: 2.25rem;
+  height: 1.12rem;
+  flex: 0 0 auto;
+}
+
+.diagram-node-graph__glyph::before {
+  content: "";
+  position: absolute;
+  inset: 0.38rem 0.28rem;
+  border-top: 1px solid color-mix(in srgb, var(--diagram-node-tone) 38%, transparent);
+}
+
+.diagram-node-graph__glyph span {
+  position: absolute;
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--diagram-node-tone) 42%, transparent);
+  background: color-mix(in srgb, var(--diagram-node-tone) 22%, var(--color-surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--diagram-node-tone) 8%, transparent);
+}
+
+.diagram-node-graph__glyph span:nth-child(1) {
+  left: 0.16rem;
+  top: 0.34rem;
+}
+
+.diagram-node-graph__glyph span:nth-child(2) {
+  left: 0.92rem;
+  top: 0.06rem;
+}
+
+.diagram-node-graph__glyph span:nth-child(3) {
+  right: 0.16rem;
+  top: 0.46rem;
+}
+
+.diagram-node-graph__title {
+  display: block;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+}
+
+.diagram-node-graph__summary {
+  margin: 0;
+  font-size: 0.77rem;
+  line-height: 1.46;
+  color: color-mix(in srgb, var(--color-text) 74%, transparent);
+}
+
+.diagram-node-graph__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.42rem;
+  border-top: 1px solid color-mix(in srgb, var(--diagram-node-tone) 12%, transparent);
+}
+
+.diagram-node-graph__footprint {
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--diagram-node-tone) 74%, var(--color-text));
+}
+
+.diagram-node-graph--core {
+  border-color: color-mix(in srgb, var(--diagram-node-tone) 64%, var(--color-text));
+  box-shadow:
+    0 20px 44px color-mix(in srgb, var(--diagram-node-tone) 16%, transparent),
+    var(--diagram-node-shadow);
+}
+
+.diagram-node-graph--core .diagram-node-graph__surface {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--diagram-node-tone) 10%, transparent),
+      transparent 38%
+    ),
+    transparent;
+}
+
+.diagram-node-graph--core .diagram-node-graph__title {
+  font-size: 1.04rem;
+}
+
+.diagram-node-graph--core .diagram-node-graph__role-badge {
+  background: color-mix(in srgb, var(--diagram-node-tone) 22%, transparent);
+}
+
+.diagram-node-graph--component {
+  border-color: color-mix(in srgb, var(--diagram-node-tone) 42%, var(--color-border));
+}
+
+.diagram-node-graph--supporting {
+  min-width: 208px;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--diagram-node-tone) 34%, var(--color-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--diagram-node-tone) 8%, transparent),
+      transparent 46%
+    ),
+    var(--diagram-node-bg);
+}
+
+.diagram-node-graph--supporting .diagram-node-graph__role-badge {
+  background: color-mix(in srgb, var(--diagram-node-tone) 10%, transparent);
+}
+
+.diagram-node-graph--supporting .diagram-node-graph__surface {
+  gap: 0.42rem;
+  padding: 0.72rem 0.82rem 0.78rem;
+}
+
+.diagram-node-graph--supporting .diagram-node-graph__summary {
+  color: color-mix(in srgb, var(--color-text) 68%, transparent);
+}
+
+.diagram-node-graph .diagram-port-graph {
+  width: 8px;
+  height: 8px;
+  z-index: 0;
+  border-width: 1px;
+  opacity: 0.9;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--diagram-node-bg) 90%, transparent);
+}
+
+.diagram-node-graph .react-flow__handle-left.diagram-port-graph {
+  left: -6px;
+}
+
+.diagram-node-graph .react-flow__handle-right.diagram-port-graph {
+  right: -6px;
+}
+
+.diagram-node-graph .react-flow__handle-top.diagram-port-graph {
+  top: -6px;
+}
+
+.diagram-node-graph .react-flow__handle-bottom.diagram-port-graph {
+  bottom: -6px;
+}
+
+.diagram-node-timeline {
+  min-width: 172px;
+  border-left-width: 4px;
+  border-radius: 0.92rem;
+  padding: 0.52rem 0.68rem 0.6rem;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--diagram-node-tone) 12%, transparent),
+      transparent 42%
+    ),
+    var(--diagram-node-bg);
+}
+
+.diagram-node-timeline__marker {
+  width: 0.68rem;
+  height: 0.68rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--diagram-node-tone) 58%, transparent);
+  background: color-mix(in srgb, var(--diagram-node-tone) 36%, transparent);
+  margin-bottom: 0.2rem;
+}
+
+.diagram-node-timeline__role {
+  margin-bottom: 0.18rem;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--diagram-node-tone) 76%, var(--color-text));
+}
+
+.inspector-context-tile {
+  margin-top: 0.2rem;
+}
+
+.inspector-process-stack {
+  gap: 0.95rem;
+}
+
+.inspector-process-node,
+.inspector-process-edge {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.inspector-process-overview {
+  padding: 0.92rem;
+  display: grid;
+  gap: 0.82rem;
+}
+
+.inspector-process-overview__badges {
+  gap: 0.36rem 0.34rem;
+}
+
+.inspector-process-overview__body {
+  display: grid;
+  gap: 0.76rem;
+}
+
+.inspector-process-overview__copy {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.inspector-process-overview__summary {
+  margin: 0;
+}
+
+.inspector-process-overview__guidance {
+  padding-left: 0;
+  list-style: none;
+  gap: 0.48rem;
+}
+
+.inspector-process-overview__guidance li {
+  padding: 0.58rem 0.64rem;
+  border: 1px solid color-mix(in srgb, #14532d 12%, var(--editor-meta-border));
+  border-radius: 0.76rem;
+  background: color-mix(in srgb, #f8fafc 92%, var(--editor-meta-bg));
+}
+
+.inspector-process-overview__actions {
+  gap: 0.48rem;
+}
+
+.inspector-process-overview__actions .btn {
+  flex: 1 1 calc(50% - 0.48rem);
+  min-height: 2.72rem;
+  justify-content: center;
+}
+
+.inspector-process-overview__actions .btn:first-child {
+  flex-basis: 100%;
+}
+
+.inspector-process-section {
+  padding: 0.92rem;
+  display: grid;
+  gap: 0.82rem;
+}
+
+.inspector-process-section__header {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.inspector-process-section__header h4 {
+  font-size: 0.98rem;
+}
+
+.inspector-process-tags-preview {
+  gap: 0.36rem;
+}
+
+.inspector-relation-list {
+  padding-left: 0;
+  list-style: none;
+}
+
+.inspector-relation-item {
+  border: 1px solid var(--editor-meta-border);
+  border-radius: 0.7rem;
+  background: var(--editor-meta-bg);
+  padding: 0.72rem 0.78rem;
+  display: grid;
+  gap: 0.46rem;
+}
+
+.inspector-relation-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.inspector-relation-item__path {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+  align-items: center;
+}
+
+.inspector-relation-item__peer {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.28;
+}
+
+.inspector-relation-item__path strong {
+  color: var(--color-text);
+  font-size: 0.84rem;
+}
+
+.inspector-relation-item__support {
+  margin: 0;
+  font-size: 0.84rem;
+}
+
+.inspector-relation-item__actions .btn {
+  min-height: 2.28rem;
+  padding: 0.42rem 0.62rem;
+  font-size: 0.79rem;
+}
+
+.inspector-process .inspector-relation-item__actions {
+  gap: 0.34rem;
+}
+
+.inspector-process .inspector-relation-item__actions .btn:first-child {
+  border-style: solid;
+  background: color-mix(in srgb, var(--surface-elevation-2) 96%, transparent);
+}
+
+.canvas-selection-hud-actions-flow .selection-hud-open-inspector-button {
+  border-style: dashed;
+}
+
+.inspector-context-tile--graph {
+  border-color: color-mix(in srgb, var(--color-primary) 18%, var(--editor-meta-border));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-primary) 5%, transparent),
+      transparent 48%
+    ),
+    var(--editor-meta-bg);
+}
+
+.inspector-context-tile--process {
+  border-color: color-mix(in srgb, #15803d 22%, var(--editor-meta-border));
+  background:
+    linear-gradient(180deg, rgba(21, 128, 61, 0.05), transparent 48%),
+    linear-gradient(135deg, rgba(245, 158, 11, 0.04), transparent 42%),
+    var(--editor-meta-bg);
+}
+
+.inspector-relations-tile--process {
+  border-color: color-mix(in srgb, #14532d 16%, var(--editor-meta-border));
+  gap: 0.82rem;
+}
+
+.inspector-relation-summary {
+  margin-top: 0.1rem;
+  gap: 0.34rem;
+}
+
+.inspector-relation-item--before {
+  border-color: color-mix(in srgb, #14532d 18%, var(--editor-meta-border));
+}
+
+.inspector-relation-item--after {
+  border-color: color-mix(in srgb, #15803d 24%, var(--editor-meta-border));
+  background: color-mix(in srgb, #15803d 4%, var(--editor-meta-bg));
+}
+
+.inspector-relation-item--branch {
+  border-color: color-mix(in srgb, #c2410c 24%, var(--editor-meta-border));
+  background: color-mix(in srgb, #f97316 5%, var(--editor-meta-bg));
+}
+
+.inspector-relation-item--note {
+  border-color: color-mix(in srgb, #7c3aed 22%, var(--editor-meta-border));
+  background: color-mix(in srgb, #8b5cf6 5%, var(--editor-meta-bg));
+}
+
+@media (max-width: 640px) {
+  .inspector-meta-list--process {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sr-only {
@@ -2481,6 +3570,16 @@ select {
     bottom: 3.35rem;
     right: 0.65rem;
     left: 0.65rem;
+  }
+
+  .canvas-selection-hud-flow {
+    width: auto;
+  }
+
+  .canvas-selection-hud-more-menu {
+    right: auto;
+    left: 0;
+    min-width: min(220px, calc(100vw - 2rem));
   }
 
   .version-diff-cards {

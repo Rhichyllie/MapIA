@@ -18,10 +18,13 @@ function toNumberOrFallback(value: unknown, fallback: number) {
 export function ParallelBezierEdge(props: EdgeProps) {
   const data = props.data as ParallelMeta | undefined;
   const edgeClassName = (props as EdgeProps & { className?: string }).className;
+  const isBranchEdge = edgeClassName?.includes("editor-edge-kind-depends-on") ?? false;
+  const isReferenceEdge = edgeClassName?.includes("editor-edge-kind-references") ?? false;
   const parallelIndex = toNumberOrFallback(data?.parallelIndex, 0);
   const parallelTotal = Math.max(1, toNumberOrFallback(data?.parallelTotal, 1));
   const centeredIndex = parallelIndex - (parallelTotal - 1) / 2;
-  const offset = centeredIndex * PARALLEL_EDGE_OFFSET;
+  const semanticOffset = isBranchEdge ? 44 : isReferenceEdge ? -34 : 0;
+  const offset = centeredIndex * PARALLEL_EDGE_OFFSET + semanticOffset;
 
   const deltaX = props.targetX - props.sourceX;
   const deltaY = props.targetY - props.sourceY;

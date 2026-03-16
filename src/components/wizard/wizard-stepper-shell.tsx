@@ -7,6 +7,7 @@ import {
   resolveDiagramLayoutOptions,
 } from "@/src/modules/graph/domain";
 import {
+  DEFAULT_WIZARD_ROOT_NODE_NAME,
   type WizardDraftPayload,
   type WizardDraftStatus,
   type WizardStep,
@@ -46,28 +47,28 @@ type StepMeta = {
 const steps: StepMeta[] = [
   {
     id: "template",
-    title: "1. Tipo",
-    description: "Escolha o tipo do diagrama e ajuste o layout inicial.",
+    title: "1. Tipo de diagrama",
+    description: "Defina a estrutura base que guiara o snapshot inicial.",
   },
   {
     id: "diagram_type",
-    title: "2. Origem",
-    description: "Defina de onde os dados iniciais virao.",
+    title: "2. Origem dos dados",
+    description: "Escolha se o ponto de partida sera manual ou por importacao.",
   },
   {
     id: "data_source",
     title: "3. Configuracao",
-    description: "Ajuste nome, no raiz e politicas de edicao.",
+    description: "Configure titulo principal, layout e parametros de edicao.",
   },
   {
     id: "config",
     title: "4. Revisao",
-    description: "Confira tudo o que sera criado antes da geracao.",
+    description: "Valide um resumo executivo antes da geracao.",
   },
   {
     id: "review",
-    title: "5. Gerar",
-    description: "Crie o snapshot inicial e siga para o editor.",
+    title: "5. Gerar e abrir editor",
+    description: "Gere o snapshot inicial e siga para o trabalho diario no Editor.",
   },
 ];
 
@@ -80,18 +81,18 @@ const diagramTypeOptions: Array<{
 }> = [
   {
     value: "tree",
-    label: "Tree",
-    description: "Estrutura hierarquica em niveis com uma raiz principal.",
+    label: "Hierarquia",
+    description: "Organiza conteudo em niveis com uma raiz principal.",
   },
   {
     value: "flow",
-    label: "Flow",
-    description: "Fluxo orientado por etapas para processos e pipelines.",
+    label: "Processo",
+    description: "Modela etapas sequenciais de processos e fluxos operacionais.",
   },
   {
     value: "mindmap",
-    label: "Mindmap",
-    description: "Mapa radial para explorar ideias e relacionamentos.",
+    label: "Mapa mental",
+    description: "Explora temas em formato radial para descoberta e planejamento.",
   },
 ];
 
@@ -126,31 +127,49 @@ function getStepState(
 
 function formatLayoutOptionsSummary(layoutOptions: DiagramLayoutOptions | undefined) {
   if (!layoutOptions) {
-    return "Padrao";
+    return "Padrao do sistema";
   }
 
   if (layoutOptions.type === "tree") {
-    return `Tree: direcao ${layoutOptions.direction === "top-down" ? "vertical" : "horizontal"}, espacamento H ${layoutOptions.nodeSpacingX}px, V ${layoutOptions.nodeSpacingY}px`;
+    return `Hierarquia: direcao ${layoutOptions.direction === "top-down" ? "vertical" : "horizontal"}, espacamento horizontal ${layoutOptions.nodeSpacingX}px e vertical ${layoutOptions.nodeSpacingY}px`;
   }
 
   if (layoutOptions.type === "flow") {
-    return `Flow: espacamento H ${layoutOptions.nodeSpacingX}px, V ${layoutOptions.nodeSpacingY}px`;
+    return `Processo: espacamento horizontal ${layoutOptions.nodeSpacingX}px e vertical ${layoutOptions.nodeSpacingY}px`;
   }
 
-  return `Mindmap: distancia radial ${layoutOptions.radialSpacing}px`;
+  return `Mapa mental: distancia radial ${layoutOptions.radialSpacing}px`;
+}
+
+function formatDiagramTypeSummary(
+  diagramType: WizardSupportedDiagramType | undefined,
+) {
+  if (diagramType === "tree") {
+    return "Hierarquia";
+  }
+
+  if (diagramType === "flow") {
+    return "Processo";
+  }
+
+  if (diagramType === "mindmap") {
+    return "Mapa mental";
+  }
+
+  return "-";
 }
 
 function buildDiagramPreview(diagramType: WizardSupportedDiagramType) {
   if (diagramType === "tree") {
     return (
       <svg width="100%" viewBox="0 0 180 78" role="img" aria-label="Preview tree">
-        <line x1="90" y1="18" x2="45" y2="48" stroke="rgba(21,26,32,0.4)" />
-        <line x1="90" y1="18" x2="90" y2="48" stroke="rgba(21,26,32,0.4)" />
-        <line x1="90" y1="18" x2="135" y2="48" stroke="rgba(21,26,32,0.4)" />
-        <rect x="75" y="8" width="30" height="18" rx="5" fill="rgba(15,118,110,0.18)" />
-        <rect x="30" y="48" width="30" height="18" rx="5" fill="rgba(15,118,110,0.12)" />
-        <rect x="75" y="48" width="30" height="18" rx="5" fill="rgba(15,118,110,0.12)" />
-        <rect x="120" y="48" width="30" height="18" rx="5" fill="rgba(15,118,110,0.12)" />
+        <line x1="90" y1="18" x2="45" y2="48" stroke="rgba(31,41,55,0.4)" />
+        <line x1="90" y1="18" x2="90" y2="48" stroke="rgba(31,41,55,0.4)" />
+        <line x1="90" y1="18" x2="135" y2="48" stroke="rgba(31,41,55,0.4)" />
+        <rect x="75" y="8" width="30" height="18" rx="5" fill="rgba(100,116,139,0.2)" />
+        <rect x="30" y="48" width="30" height="18" rx="5" fill="rgba(148,163,184,0.2)" />
+        <rect x="75" y="48" width="30" height="18" rx="5" fill="rgba(148,163,184,0.2)" />
+        <rect x="120" y="48" width="30" height="18" rx="5" fill="rgba(148,163,184,0.2)" />
       </svg>
     );
   }
@@ -158,26 +177,26 @@ function buildDiagramPreview(diagramType: WizardSupportedDiagramType) {
   if (diagramType === "flow") {
     return (
       <svg width="100%" viewBox="0 0 180 78" role="img" aria-label="Preview flow">
-        <rect x="10" y="30" width="34" height="18" rx="5" fill="rgba(15,118,110,0.12)" />
-        <rect x="73" y="30" width="34" height="18" rx="5" fill="rgba(15,118,110,0.16)" />
-        <rect x="136" y="30" width="34" height="18" rx="5" fill="rgba(15,118,110,0.12)" />
-        <line x1="44" y1="39" x2="73" y2="39" stroke="rgba(21,26,32,0.45)" />
-        <line x1="107" y1="39" x2="136" y2="39" stroke="rgba(21,26,32,0.45)" />
+        <rect x="10" y="30" width="34" height="18" rx="5" fill="rgba(148,163,184,0.2)" />
+        <rect x="73" y="30" width="34" height="18" rx="5" fill="rgba(100,116,139,0.2)" />
+        <rect x="136" y="30" width="34" height="18" rx="5" fill="rgba(148,163,184,0.2)" />
+        <line x1="44" y1="39" x2="73" y2="39" stroke="rgba(31,41,55,0.45)" />
+        <line x1="107" y1="39" x2="136" y2="39" stroke="rgba(31,41,55,0.45)" />
       </svg>
     );
   }
 
   return (
     <svg width="100%" viewBox="0 0 180 78" role="img" aria-label="Preview mindmap">
-      <circle cx="90" cy="39" r="12" fill="rgba(15,118,110,0.2)" />
-      <circle cx="35" cy="39" r="8" fill="rgba(15,118,110,0.12)" />
-      <circle cx="145" cy="39" r="8" fill="rgba(15,118,110,0.12)" />
-      <circle cx="90" cy="10" r="8" fill="rgba(15,118,110,0.12)" />
-      <circle cx="90" cy="68" r="8" fill="rgba(15,118,110,0.12)" />
-      <line x1="78" y1="39" x2="43" y2="39" stroke="rgba(21,26,32,0.45)" />
-      <line x1="102" y1="39" x2="137" y2="39" stroke="rgba(21,26,32,0.45)" />
-      <line x1="90" y1="27" x2="90" y2="18" stroke="rgba(21,26,32,0.45)" />
-      <line x1="90" y1="51" x2="90" y2="60" stroke="rgba(21,26,32,0.45)" />
+      <circle cx="90" cy="39" r="12" fill="rgba(100,116,139,0.26)" />
+      <circle cx="35" cy="39" r="8" fill="rgba(148,163,184,0.22)" />
+      <circle cx="145" cy="39" r="8" fill="rgba(148,163,184,0.22)" />
+      <circle cx="90" cy="10" r="8" fill="rgba(148,163,184,0.22)" />
+      <circle cx="90" cy="68" r="8" fill="rgba(148,163,184,0.22)" />
+      <line x1="78" y1="39" x2="43" y2="39" stroke="rgba(31,41,55,0.45)" />
+      <line x1="102" y1="39" x2="137" y2="39" stroke="rgba(31,41,55,0.45)" />
+      <line x1="90" y1="27" x2="90" y2="18" stroke="rgba(31,41,55,0.45)" />
+      <line x1="90" y1="51" x2="90" y2="60" stroke="rgba(31,41,55,0.45)" />
     </svg>
   );
 }
@@ -185,7 +204,6 @@ function buildDiagramPreview(diagramType: WizardSupportedDiagramType) {
 function getValidationMessage(
   step: WizardStep,
   payload: WizardDraftPayload,
-  rootNodeName: string,
 ) {
   switch (step) {
     case "template":
@@ -195,36 +213,46 @@ function getValidationMessage(
       return payload.template ? null : "Selecione um template legado.";
     case "diagram_type":
       if (!payload.dataSource) {
-        return "Selecione a origem de dados.";
+        return "Selecione a origem dos dados.";
       }
       if (payload.dataSource === "import" && !payload.importKind) {
-        return "Selecione o tipo de importacao.";
+        return "Selecione a fonte da importacao.";
       }
       return null;
     case "data_source":
       if (!payload.config?.name?.trim()) {
-        return "Informe o nome do projeto/diagrama.";
+        return "Informe o nome do diagrama.";
       }
-      if (payload.config.generateRootNode !== false && !rootNodeName.trim()) {
-        return "Defina o nome do no raiz inicial.";
+      if (
+        payload.config.generateRootNode !== false &&
+        !payload.config.rootNodeName?.trim()
+      ) {
+        return "Informe o titulo principal (no raiz).";
       }
       return null;
     case "config":
     case "review":
       try {
-        WizardReadyPayloadSchema.parse(payload);
+        WizardReadyPayloadSchema.parse({
+          ...payload,
+          config: {
+            ...payload.config,
+            rootNodeName: payload.config?.rootNodeName?.trim() || undefined,
+            allowReapplyLayout: payload.config?.allowReapplyLayout ?? true,
+          },
+        });
         return null;
       } catch {
-        return "Revise os campos obrigatorios antes de gerar o snapshot.";
+        return "Revise os campos obrigatorios antes de gerar o snapshot inicial.";
       }
   }
 }
 
-function getMaxUnlockedIndex(payload: WizardDraftPayload, rootNodeName: string) {
+function getMaxUnlockedIndex(payload: WizardDraftPayload) {
   let maxIndex = 0;
 
   for (let index = 0; index < steps.length; index += 1) {
-    const message = getValidationMessage(steps[index].id, payload, rootNodeName);
+    const message = getValidationMessage(steps[index].id, payload);
     if (message) {
       return maxIndex;
     }
@@ -238,6 +266,11 @@ function getPredictedNodesCount(payload: WizardDraftPayload) {
   const includeGeneratedRoot = payload.config?.generateRootNode !== false;
   const includeNotesNode = Boolean(payload.config?.notes?.trim());
   return 2 + (includeGeneratedRoot ? 1 : 0) + (includeNotesNode ? 1 : 0);
+}
+
+function getResolvedRootNodeName(payload: WizardDraftPayload) {
+  const trimmed = payload.config?.rootNodeName?.trim();
+  return trimmed || DEFAULT_WIZARD_ROOT_NODE_NAME;
 }
 
 export function WizardStepperShell({
@@ -266,14 +299,17 @@ export function WizardStepperShell({
       description:
         initialDraft.payload.config?.description ?? project.description ?? undefined,
       generateRootNode: initialDraft.payload.config?.generateRootNode ?? true,
+      rootNodeName:
+        initialDraft.payload.config?.rootNodeName?.trim() ||
+        DEFAULT_WIZARD_ROOT_NODE_NAME,
+      allowReapplyLayout:
+        initialDraft.payload.config?.allowReapplyLayout ?? true,
     },
   }));
   const [currentStep, setCurrentStep] = useState<WizardStep>(
     initialDraft.currentStep,
   );
   const [status, setStatus] = useState<WizardDraftStatus>(initialDraft.status);
-  const [rootNodeName, setRootNodeName] = useState("No raiz");
-  const [allowReapplyLayout, setAllowReapplyLayout] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(
     initialDraft.lastError ?? null,
   );
@@ -282,17 +318,10 @@ export function WizardStepperShell({
 
   const currentIndex = getStepIndex(currentStep);
   const currentMeta = steps[currentIndex];
-  const maxUnlockedIndex = useMemo(
-    () => getMaxUnlockedIndex(payload, rootNodeName),
-    [payload, rootNodeName],
-  );
-  const currentValidationMessage = getValidationMessage(
-    currentStep,
-    payload,
-    rootNodeName,
-  );
+  const maxUnlockedIndex = useMemo(() => getMaxUnlockedIndex(payload), [payload]);
+  const currentValidationMessage = getValidationMessage(currentStep, payload);
   const canGoNext = currentIndex < steps.length - 1 && !currentValidationMessage;
-  const canGenerate = !getValidationMessage("review", payload, rootNodeName);
+  const canGenerate = !getValidationMessage("review", payload);
   const selectedDiagramType = isSupportedDiagramType(payload.diagramType)
     ? payload.diagramType
     : undefined;
@@ -567,14 +596,14 @@ export function WizardStepperShell({
                   ))}
                 </div>
                 <p className="helper">
-                  Selecione o tipo principal para calcular o layout inicial.
+                  Defina a estrutura principal para calcular o layout inicial.
                 </p>
               </div>
 
               {selectedDiagramType === "tree" && selectedLayoutOptions?.type === "tree" ? (
                 <div className="dashboard-form">
                   <div className="field">
-                    <label htmlFor="wizard-tree-direction">Direcao</label>
+                    <label htmlFor="wizard-tree-direction">Direcao do layout</label>
                     <select
                       id="wizard-tree-direction"
                       data-testid="wizard-tree-direction-select"
@@ -594,7 +623,7 @@ export function WizardStepperShell({
                   </div>
                   <div className="field">
                     <label htmlFor="wizard-tree-spacing-x">
-                      Espacamento horizontal
+                      Espacamento horizontal (px)
                     </label>
                     <input
                       id="wizard-tree-spacing-x"
@@ -613,10 +642,13 @@ export function WizardStepperShell({
                         );
                       }}
                     />
+                    <p className="helper">
+                      Distancia minima entre nos no eixo horizontal.
+                    </p>
                   </div>
                   <div className="field">
                     <label htmlFor="wizard-tree-spacing-y">
-                      Espacamento vertical
+                      Espacamento vertical (px)
                     </label>
                     <input
                       id="wizard-tree-spacing-y"
@@ -635,6 +667,9 @@ export function WizardStepperShell({
                         );
                       }}
                     />
+                    <p className="helper">
+                      Distancia minima entre niveis no eixo vertical.
+                    </p>
                   </div>
                 </div>
               ) : null}
@@ -643,7 +678,7 @@ export function WizardStepperShell({
                 <div className="dashboard-form">
                   <div className="field">
                     <label htmlFor="wizard-flow-spacing-x">
-                      Espacamento horizontal
+                      Espacamento horizontal (px)
                     </label>
                     <input
                       id="wizard-flow-spacing-x"
@@ -662,10 +697,13 @@ export function WizardStepperShell({
                         );
                       }}
                     />
+                    <p className="helper">
+                      Distancia minima entre etapas no eixo horizontal.
+                    </p>
                   </div>
                   <div className="field">
                     <label htmlFor="wizard-flow-spacing-y">
-                      Espacamento vertical
+                      Espacamento vertical (px)
                     </label>
                     <input
                       id="wizard-flow-spacing-y"
@@ -684,6 +722,9 @@ export function WizardStepperShell({
                         );
                       }}
                     />
+                    <p className="helper">
+                      Distancia minima entre etapas no eixo vertical.
+                    </p>
                   </div>
                 </div>
               ) : null}
@@ -692,7 +733,7 @@ export function WizardStepperShell({
               selectedLayoutOptions?.type === "mindmap" ? (
                 <div className="field">
                   <label htmlFor="wizard-mindmap-radial-spacing">
-                    Distancia radial
+                    Distancia radial (px)
                   </label>
                   <input
                     id="wizard-mindmap-radial-spacing"
@@ -710,6 +751,9 @@ export function WizardStepperShell({
                       );
                     }}
                   />
+                  <p className="helper">
+                    Distancia entre o centro e os ramos do mapa mental.
+                  </p>
                 </div>
               ) : null}
 
@@ -747,7 +791,7 @@ export function WizardStepperShell({
           {currentStep === "diagram_type" ? (
             <div className="stack-sm">
               <div className="field">
-                <label htmlFor="wizard-data-source">Origem de dados</label>
+                <label htmlFor="wizard-data-source">Origem dos dados</label>
                 <select
                   id="wizard-data-source"
                   data-testid="wizard-data-source-select"
@@ -773,7 +817,7 @@ export function WizardStepperShell({
                   <option value="import">Importacao</option>
                 </select>
                 <p className="helper">
-                  Voce pode iniciar manualmente ou trazer uma base existente.
+                  Escolha se o ponto de partida sera manual ou uma importacao.
                 </p>
               </div>
 
@@ -810,6 +854,7 @@ export function WizardStepperShell({
                   id="wizard-config-name"
                   data-testid="wizard-config-name-input"
                   value={payload.config?.name ?? ""}
+                  placeholder="Ex.: Arquitetura de onboarding corporativo"
                   onChange={(event) =>
                     setPayload((current) => ({
                       ...current,
@@ -852,25 +897,43 @@ export function WizardStepperShell({
                       config: {
                         ...current.config,
                         generateRootNode: event.target.checked,
+                        rootNodeName: event.target.checked
+                          ? current.config?.rootNodeName?.trim() ||
+                            DEFAULT_WIZARD_ROOT_NODE_NAME
+                          : current.config?.rootNodeName,
                       },
                     }))
                   }
                 />
                 Gerar no raiz inicial
               </label>
+              <p className="helper">
+                O no raiz representa o titulo principal do diagrama e organiza a leitura.
+              </p>
 
               {payload.config?.generateRootNode !== false ? (
                 <div className="field">
                   <label htmlFor="wizard-config-root-node-name">
-                    Nome do no raiz
+                    No raiz (titulo principal)
                   </label>
                   <input
                     id="wizard-config-root-node-name"
                     data-testid="wizard-config-root-node-name-input"
-                    value={rootNodeName}
-                    onChange={(event) => setRootNodeName(event.target.value)}
-                    placeholder="Ex.: Visao geral do projeto"
+                    value={payload.config?.rootNodeName ?? ""}
+                    onChange={(event) =>
+                      setPayload((current) => ({
+                        ...current,
+                        config: {
+                          ...current.config,
+                          rootNodeName: event.target.value,
+                        },
+                      }))
+                    }
+                    placeholder={`Ex.: ${DEFAULT_WIZARD_ROOT_NODE_NAME}`}
                   />
+                  <p className="helper">
+                    Use um titulo executivo que descreva o escopo do diagrama.
+                  </p>
                 </div>
               ) : null}
 
@@ -878,11 +941,22 @@ export function WizardStepperShell({
                 <input
                   type="checkbox"
                   data-testid="wizard-config-allow-relayout-checkbox"
-                  checked={allowReapplyLayout}
-                  onChange={(event) => setAllowReapplyLayout(event.target.checked)}
+                  checked={payload.config?.allowReapplyLayout ?? true}
+                  onChange={(event) =>
+                    setPayload((current) => ({
+                      ...current,
+                      config: {
+                        ...current.config,
+                        allowReapplyLayout: event.target.checked,
+                      },
+                    }))
+                  }
                 />
-                Permitir reaplicar layout depois no editor
+                Permitir reaplicar layout no editor
               </label>
+              <p className="helper">
+                Desative quando o posicionamento inicial precisa permanecer fixo para auditoria.
+              </p>
 
               <div className="field">
                 <label htmlFor="wizard-config-notes">Notas (opcional)</label>
@@ -910,37 +984,43 @@ export function WizardStepperShell({
             <div className="stack-sm">
               <div className="tile">
                 <h3>Resumo da geracao</h3>
-                <p>
-                  <strong>Projeto:</strong> {payload.config?.name ?? "-"}
-                </p>
-                <p>
-                  <strong>Tipo:</strong> {selectedDiagramType ?? "-"}
-                </p>
-                <p>
-                  <strong>Layout:</strong>{" "}
-                  {formatLayoutOptionsSummary(selectedLayoutOptions)}
-                </p>
-                <p>
-                  <strong>Origem:</strong>{" "}
-                  {payload.dataSource === "manual"
-                    ? "Manual"
-                    : payload.dataSource === "import"
-                      ? `Importacao (${payload.importKind ?? "a definir"})`
-                      : "-"}
-                </p>
-                <p>
-                  <strong>No raiz:</strong>{" "}
-                  {payload.config?.generateRootNode !== false
-                    ? rootNodeName || "No raiz"
-                    : "Nao sera gerado"}
-                </p>
-                <p>
-                  <strong>Auto-layout no editor:</strong>{" "}
-                  {allowReapplyLayout ? "Permitido" : "Nao permitido"}
-                </p>
-                <p>
-                  <strong>Nos iniciais previstos:</strong> {predictedNodesCount}
-                </p>
+                <ul className="summary-list">
+                  <li>
+                    <strong>Tipo:</strong> {formatDiagramTypeSummary(selectedDiagramType)}
+                  </li>
+                  <li>
+                    <strong>Layout:</strong> {formatLayoutOptionsSummary(selectedLayoutOptions)}
+                  </li>
+                  <li>
+                    <strong>Origem:</strong>{" "}
+                    {payload.dataSource === "manual"
+                      ? "Manual"
+                      : payload.dataSource === "import"
+                        ? `Importacao (${payload.importKind ?? "a definir"})`
+                        : "-"}
+                  </li>
+                  <li>
+                    <strong>Titulo principal (no raiz):</strong>{" "}
+                    {payload.config?.generateRootNode !== false
+                      ? getResolvedRootNodeName(payload)
+                      : "Nao sera gerado"}
+                  </li>
+                  <li>
+                    <strong>Politica de layout no editor:</strong>{" "}
+                    {(payload.config?.allowReapplyLayout ?? true)
+                      ? "Reaplicacao permitida"
+                      : "Layout bloqueado"}
+                  </li>
+                  <li>
+                    <strong>Contagem prevista:</strong> {predictedNodesCount} no(s) iniciais
+                  </li>
+                </ul>
+                {payload.dataSource === "import" ? (
+                  <div className="helper warning-text">
+                    Importacao selecionada: nesta fase, o fluxo importa para um
+                    snapshot inicial padrao e pode exigir ajustes no Editor.
+                  </div>
+                ) : null}
               </div>
               <p className="helper">
                 Ao confirmar, o MapIA cria o snapshot inicial persistido deste
@@ -977,7 +1057,7 @@ export function WizardStepperShell({
           ) : null}
 
           {currentValidationMessage ? (
-            <p className="helper" style={{ marginTop: "0.85rem" }}>
+            <p className="helper helper-spaced">
               {currentValidationMessage}
             </p>
           ) : null}
@@ -1020,10 +1100,10 @@ export function WizardStepperShell({
             type="button"
             disabled={!canGoNext || isPending}
             onClick={handleNext}
-            data-testid="wizard-next-button"
-          >
-            Proximo
-          </button>
+          data-testid="wizard-next-button"
+        >
+          Proximo passo
+        </button>
         ) : (
           <button
             className="btn btn-primary"

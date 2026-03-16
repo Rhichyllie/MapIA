@@ -33,8 +33,13 @@ export function Stepper({ items, ariaLabel }: StepperProps) {
             type="button"
             disabled={step.disabled}
             onClick={step.onSelect}
+            aria-label={
+              step.state === "current"
+                ? `Passo atual: ${step.title}`
+                : `Ir para passo: ${step.title}`
+            }
           >
-            {step.state === "current" ? "Atual" : "Ir"}
+            {step.state === "current" ? "Atual" : "Ir para passo"}
           </button>
         </li>
       ))}

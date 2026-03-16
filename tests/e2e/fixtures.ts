@@ -97,16 +97,19 @@ async function readVisibleErrorBoxMessage(page: Page) {
 
 export async function ensureLoggedIn(page: Page, credentials: DevCredentials) {
   await page.goto("/dashboard");
+  await page.waitForLoadState("domcontentloaded");
 
   if (page.url().includes("/login")) {
     await expect(page.getByTestId("login-form")).toBeVisible();
     await page.getByTestId("login-email-input").fill(credentials.email);
     await page.getByTestId("login-password-input").fill(credentials.password);
     await page.getByTestId("login-submit-button").click();
+    await page.waitForURL(/\/dashboard/, { timeout: 60_000 });
   }
 
   try {
     await expect(page).toHaveURL(/\/dashboard/);
+    await page.waitForLoadState("networkidle");
   } catch (error) {
     const loginErrorMessage = await readVisibleErrorBoxMessage(page);
     const extraMessage = loginErrorMessage
@@ -119,7 +122,8 @@ export async function ensureLoggedIn(page: Page, credentials: DevCredentials) {
     );
   }
 
-  await expect(page.getByTestId("dashboard-create-project-form")).toBeVisible();
+  await expect(page.getByTestId("workspace-toolbar")).toBeVisible();
+  await expect(page.getByTestId("new-project-button")).toBeVisible();
 }
 
 export const test = base.extend<AppFixtures>({

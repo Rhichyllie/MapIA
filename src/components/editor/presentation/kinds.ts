@@ -1,8 +1,24 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
+import {
+  resolveGraphActionEdgeVerb,
+  resolveGraphEdgeSemantic,
+  resolveGraphNodeKindCopy,
+} from "@/src/modules/diagrams/domain/graph-semantics";
+import {
+  getProcessEdgeCopy,
+  getProcessNodeKindCopy,
+  getProcessQuickActions,
+} from "./process-semantics";
 
 export type PresentationMode = "operational" | "technical";
-export type ContextualDiagramType = DiagramType | "erd" | undefined;
+export type ContextualDiagramType =
+  | DiagramType
+  | "erd"
+  | "sitemap"
+  | "graph"
+  | "timeline"
+  | undefined;
 
 export type KindIconDefinition = {
   viewBox: string;
@@ -37,10 +53,18 @@ export type DiagramContextualAction = {
   id:
     | "tree-add-child"
     | "tree-add-sibling"
+    | "sitemap-add-page"
+    | "sitemap-add-subpage"
     | "flow-add-next-step"
     | "flow-add-branch"
+    | "flow-add-note"
     | "mindmap-add-branch"
     | "mindmap-add-reference"
+    | "graph-add-component"
+    | "graph-add-dependency"
+    | "graph-add-supporting-service"
+    | "timeline-add-milestone"
+    | "timeline-add-dependency"
     | "erd-add-relation"
     | "erd-add-field";
   type: "add-connected-node" | "add-field";
@@ -178,6 +202,25 @@ export function getNodeKindLabel(kind: NodeKind, mode: PresentationMode) {
     : presentation.labelOperational;
 }
 
+export function getNodeKindLabelForDiagram(
+  diagramType: ContextualDiagramType,
+  kind: NodeKind,
+  mode: PresentationMode,
+) {
+  if (diagramType === "flow" && mode === "operational") {
+    const processCopy = getProcessNodeKindCopy(kind);
+    if (processCopy) {
+      return processCopy.labelOperational;
+    }
+  }
+
+  if (diagramType === "graph" && mode === "operational") {
+    return resolveGraphNodeKindCopy(kind).labelOperational;
+  }
+
+  return getNodeKindLabel(kind, mode);
+}
+
 export function getEdgeKindLabel(kind: EdgeKind, mode: PresentationMode) {
   const presentation = getEdgeKindPresentation(kind);
   return mode === "technical"
@@ -185,12 +228,61 @@ export function getEdgeKindLabel(kind: EdgeKind, mode: PresentationMode) {
     : presentation.labelOperational;
 }
 
+export function getEdgeKindLabelForDiagram(
+  diagramType: ContextualDiagramType,
+  kind: EdgeKind,
+  mode: PresentationMode,
+) {
+  if (diagramType === "flow" && mode === "operational") {
+    return getProcessEdgeCopy(kind).labelOperational;
+  }
+
+  if (diagramType === "graph" && mode === "operational") {
+    return resolveGraphEdgeSemantic(kind).labelOperational;
+  }
+
+  return getEdgeKindLabel(kind, mode);
+}
+
 export function getNodeKindDescription(kind: NodeKind) {
   return getNodeKindPresentation(kind).description;
 }
 
+export function getNodeKindDescriptionForDiagram(
+  diagramType: ContextualDiagramType,
+  kind: NodeKind,
+) {
+  if (diagramType === "flow") {
+    const processCopy = getProcessNodeKindCopy(kind);
+    if (processCopy) {
+      return processCopy.description;
+    }
+  }
+
+  if (diagramType === "graph") {
+    return resolveGraphNodeKindCopy(kind).description;
+  }
+
+  return getNodeKindDescription(kind);
+}
+
 export function getEdgeKindDescription(kind: EdgeKind) {
   return getEdgeKindPresentation(kind).description;
+}
+
+export function getEdgeKindDescriptionForDiagram(
+  diagramType: ContextualDiagramType,
+  kind: EdgeKind,
+) {
+  if (diagramType === "flow") {
+    return getProcessEdgeCopy(kind).description;
+  }
+
+  if (diagramType === "graph") {
+    return resolveGraphEdgeSemantic(kind).description;
+  }
+
+  return getEdgeKindDescription(kind);
 }
 
 export function getNodeKindOptions(mode: PresentationMode) {
@@ -208,6 +300,10 @@ export function getDefaultNodeKindForDiagram(
     return "page";
   }
 
+  if (diagramType === "sitemap") {
+    return "page";
+  }
+
   if (diagramType === "flow") {
     return "flow-step";
   }
@@ -220,6 +316,14 @@ export function getDefaultNodeKindForDiagram(
     return "entity";
   }
 
+  if (diagramType === "graph") {
+    return "entity";
+  }
+
+  if (diagramType === "timeline") {
+    return "note";
+  }
+
   return "note";
 }
 
@@ -227,6 +331,10 @@ export function getDefaultEdgeKindForDiagram(
   diagramType: ContextualDiagramType,
 ): EdgeKind {
   if (diagramType === "tree") {
+    return "contains";
+  }
+
+  if (diagramType === "sitemap") {
     return "contains";
   }
 
@@ -240,6 +348,14 @@ export function getDefaultEdgeKindForDiagram(
 
   if (diagramType === "erd") {
     return "references";
+  }
+
+  if (diagramType === "graph") {
+    return "depends-on";
+  }
+
+  if (diagramType === "timeline") {
+    return "flows-to";
   }
 
   return "relates-to";
@@ -268,21 +384,27 @@ export function getContextualActionsForDiagram(
   }
 
   if (diagramType === "flow") {
+    return getProcessQuickActions().map((action) => ({
+      ...action,
+      type: "add-connected-node" as const,
+    }));
+  }
+
+  if (diagramType === "sitemap") {
     return [
       {
-        id: "flow-add-next-step",
+        id: "sitemap-add-page",
         type: "add-connected-node",
-        label: "Adicionar proxima etapa",
-        nodeKind: "flow-step",
-        edgeKind: "flows-to",
+        label: "Adicionar pagina",
+        nodeKind: "page",
+        edgeKind: "contains",
       },
       {
-        id: "flow-add-branch",
+        id: "sitemap-add-subpage",
         type: "add-connected-node",
-        label: "Adicionar ramificacao",
-        nodeKind: "flow-step",
-        edgeKind: "depends-on",
-        edgeLabel: "Decisao",
+        label: "Adicionar subpagina",
+        nodeKind: "page",
+        edgeKind: "contains",
       },
     ];
   }
@@ -319,6 +441,56 @@ export function getContextualActionsForDiagram(
         id: "erd-add-field",
         type: "add-field",
         label: "Adicionar campo",
+      },
+    ];
+  }
+
+  if (diagramType === "graph") {
+    return [
+      {
+        id: "graph-add-component",
+        type: "add-connected-node",
+        label: "Adicionar componente",
+        nodeKind: "entity",
+        edgeKind: "relates-to",
+        edgeLabel: resolveGraphActionEdgeVerb("graph-add-component"),
+      },
+      {
+        id: "graph-add-dependency",
+        type: "add-connected-node",
+        label: "Adicionar dependencia",
+        nodeKind: "entity",
+        edgeKind: "depends-on",
+        edgeLabel: resolveGraphActionEdgeVerb("graph-add-dependency"),
+      },
+      {
+        id: "graph-add-supporting-service",
+        type: "add-connected-node",
+        label: "Adicionar servico auxiliar",
+        nodeKind: "page",
+        edgeKind: "references",
+        edgeLabel: resolveGraphActionEdgeVerb("graph-add-supporting-service"),
+      },
+    ];
+  }
+
+  if (diagramType === "timeline") {
+    return [
+      {
+        id: "timeline-add-milestone",
+        type: "add-connected-node",
+        label: "Adicionar marco",
+        nodeKind: "note",
+        edgeKind: "flows-to",
+        edgeLabel: "Proximo",
+      },
+      {
+        id: "timeline-add-dependency",
+        type: "add-connected-node",
+        label: "Adicionar dependencia temporal",
+        nodeKind: "note",
+        edgeKind: "depends-on",
+        edgeLabel: "Dependencia",
       },
     ];
   }

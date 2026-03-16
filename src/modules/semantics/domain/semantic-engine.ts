@@ -493,7 +493,7 @@ export function getSemanticProfile(
 
   return {
     diagramType: undefined,
-    label: "A definir no Wizard",
+    label: "Definir durante a criacao",
     strictRulesEnabled: false,
     allowedNodeKinds: [...ALL_NODE_KINDS],
     allowedEdgeKinds: [...ALL_EDGE_KINDS],
@@ -702,7 +702,7 @@ export function validateNodeKindChange(
       message: `Tipo '${ctx.nextKind}' nao recomendado para o diagrama ${profile.label}.`,
       details:
         ctx.mode === "operational"
-          ? "Escolha um tipo compativel ou ajuste o diagrama no Wizard."
+          ? "Escolha um tipo compativel ou ajuste o diagrama no Assistente de criacao."
           : "No modo tecnico voce pode aplicar com consciencia, mas o audit indicara inconsistencias.",
       suggestedFixes: profile.allowedNodeKinds.map((kind) => `Usar '${kind}'`),
     });
@@ -904,7 +904,7 @@ export function runGraphAudit(
       id: buildIssueId("DIAGRAM_TYPE_UNDEFINED", "graph", undefined, issues.length),
       code: "DIAGRAM_TYPE_UNDEFINED",
       severity: "warning",
-      message: "Defina o tipo no Wizard para aplicar semantica forte.",
+      message: "Defina o tipo no Assistente de criacao para aplicar semantica forte.",
       details: "Enquanto isso, o editor opera com validacao flexivel.",
       targetType: "graph",
     });

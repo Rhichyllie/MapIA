@@ -1,0 +1,603 @@
+{
+  "version": 1,
+  "phase": "4E.9",
+  "environment_scope": "dev_local",
+  "status": "dev_local_real_evidence_partial",
+  "collected_at": "2026-03-02T18:15:02Z",
+  "collector": {
+    "script": "infra/observability/scripts/collect-observability-evidence.py",
+    "profile_requested": null,
+    "environment_scope": "dev_local",
+    "environments": [
+      "dev_local"
+    ],
+    "http_timeout_seconds": 15,
+    "windows": {
+      "alert": "15m",
+      "operational": "7d",
+      "trend": "30d"
+    },
+    "env_file": {
+      "enabled": false,
+      "mode": "merge",
+      "priority": "envfile",
+      "path": null,
+      "selected_keys_count": 0,
+      "applied_keys_count": 0,
+      "conflict_keys_count": 0
+    },
+    "endpoints_source": {
+      "grafana_url": "env",
+      "prometheus_url": "env",
+      "loki_url": "env"
+    }
+  },
+  "environment_access": {
+    "grafana": {
+      "available": true,
+      "reason": null
+    },
+    "prometheus": {
+      "available": true,
+      "reason": null
+    },
+    "loki": {
+      "available": true,
+      "reason": null
+    }
+  },
+  "remote_smoke": {
+    "grafana": {
+      "executed": true,
+      "token_env": "GRAFANA_API_TOKEN",
+      "health": {
+        "commit": "701c851be7a930e04fbc6ebb1cd4254da80edd4c",
+        "database": "ok",
+        "version": "10.4.2"
+      },
+      "dashboards": [
+        {
+          "uid": "mapia-importing-health",
+          "status": "ok"
+        },
+        {
+          "uid": "mapia-importing-performance",
+          "status": "ok"
+        },
+        {
+          "uid": "mapia-otel-runtime-warnings",
+          "status": "ok"
+        },
+        {
+          "uid": "mapia-http-platform-overview",
+          "status": "ok"
+        }
+      ],
+      "status": "ok"
+    },
+    "prometheus": {
+      "executed": true,
+      "status": "partial"
+    },
+    "loki": {
+      "executed": true,
+      "status": "ok"
+    }
+  },
+  "naming_observed": {
+    "status": "collected",
+    "profile_candidates": {
+      "otel_collector_prometheus_tempo_latency": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": false,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 0
+      },
+      "resource_labels_mixed_duration_ms": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 1
+      },
+      "resource_labels_short": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 1
+      },
+      "tempo_spanmetrics_duration_ms": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": false,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 0
+      }
+    },
+    "final_profile": null,
+    "prometheus": {
+      "labels_present": [
+        "__name__",
+        "branch",
+        "call",
+        "code",
+        "config",
+        "dialer_name",
+        "endpoint",
+        "event",
+        "goarch",
+        "goos",
+        "goversion",
+        "handler",
+        "instance",
+        "interval",
+        "job",
+        "le",
+        "listener_name",
+        "name",
+        "quantile",
+        "reason",
+        "revision",
+        "role",
+        "scrape_job",
+        "slice",
+        "tags",
+        "type",
+        "version"
+      ],
+      "metrics_present": {}
+    },
+    "loki": {
+      "labels_present": []
+    }
+  },
+  "signals": {
+    "dev_local": {
+      "importing_failure_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_run_duration_p95": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_adapter_warning_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_adapter_late_drops": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_error_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_slow_query_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_query_duration_p95": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "http_spanmetrics_volume": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "runtime_warnings_recurrence": {
+        "windows": {
+          "alert_15m": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [15m]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [15m]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [15m]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [15m]))"
+            }
+          },
+          "operational_7d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [7d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [7d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [7d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [7d]))"
+            }
+          },
+          "trend_30d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [30d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [30d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [30d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [30d]))"
+            }
+          }
+        },
+        "status": "no_data_or_query_error"
+      }
+    }
+  },
+  "threshold_decisions": {
+    "dev_local": {}
+  },
+  "notes": [
+    "Preencher via coleta automatizada ou export agregado seguro.",
+    "Thresholds finais nao devem ser promovidos sem evidencias reais 15m/7d/30d.",
+    "Escopo dev_local coleta apenas localhost/dev e nao representa staging/producao."
+  ],
+  "prometheus": {
+    "executed": true,
+    "status": "partial",
+    "environment_scope": "dev_local",
+    "environments": [
+      "dev_local"
+    ],
+    "naming_file": "calibration/naming-compatibility.4e9.yaml",
+    "rules_api": {
+      "status": "ok"
+    },
+    "labels": {
+      "status": "ok",
+      "values": [
+        "__name__",
+        "branch",
+        "call",
+        "code",
+        "config",
+        "dialer_name",
+        "endpoint",
+        "event",
+        "goarch",
+        "goos",
+        "goversion",
+        "handler",
+        "instance",
+        "interval",
+        "job",
+        "le",
+        "listener_name",
+        "name",
+        "quantile",
+        "reason",
+        "revision",
+        "role",
+        "scrape_job",
+        "slice",
+        "tags",
+        "type",
+        "version"
+      ]
+    },
+    "metrics_catalog": {
+      "status": "ok",
+      "count": 227
+    },
+    "profile_candidates": {
+      "otel_collector_prometheus_tempo_latency": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": false,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 0
+      },
+      "resource_labels_mixed_duration_ms": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 1
+      },
+      "resource_labels_short": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": true,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 1
+      },
+      "tempo_spanmetrics_duration_ms": {
+        "labels": {
+          "deployment_environment": false,
+          "service_name": false,
+          "service_version": false,
+          "span_name": false,
+          "status_code": false
+        },
+        "metrics": {
+          "importing_runs_finalized_total": false,
+          "importing_adapter_warnings_total": false,
+          "importing_adapter_late_drops_total": false,
+          "importing_run_duration_bucket_ms": false,
+          "importing_step_duration_bucket_ms": false,
+          "prisma_operations_total": false,
+          "prisma_errors_total": false,
+          "prisma_slow_queries_total": false,
+          "prisma_query_duration_bucket_ms": false,
+          "spanmetrics_calls_total": false,
+          "spanmetrics_latency_bucket_ms": false
+        },
+        "score": 0
+      }
+    },
+    "best_profile_by_presence_score": null,
+    "profile_detection": {
+      "status": "ambiguous_tie",
+      "best_score": 1,
+      "tied_candidates": [
+        "resource_labels_mixed_duration_ms",
+        "resource_labels_short"
+      ]
+    },
+    "profile_used_for_queries": null,
+    "signals": {
+      "dev_local": {}
+    }
+  },
+  "loki": {
+    "executed": true,
+    "status": "ok",
+    "environment_scope": "dev_local",
+    "environments": [
+      "dev_local"
+    ],
+    "labels_api": {
+      "status": "ok",
+      "labels": []
+    },
+    "runtime_warning_counts": {
+      "env_label_used": null,
+      "by_environment": {
+        "dev_local": {
+          "alert_15m": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [15m]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [15m]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [15m]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [15m]))"
+            }
+          },
+          "operational_7d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [7d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [7d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [7d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B7d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [7d]))"
+            }
+          },
+          "trend_30d": {
+            "BOOTSTRAP_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [30d]))"
+            },
+            "BOOTSTRAP_DISABLED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [30d]))"
+            },
+            "INSTRUMENTATION_INIT_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+INSTRUMENTATION_INIT_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] INSTRUMENTATION_INIT_FAILED\" [30d]))"
+            },
+            "SHUTDOWN_FAILED": {
+              "status": "http_error",
+              "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B30d%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+              "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [30d]))"
+            }
+          }
+        }
+      }
+    }
+  },
+  "grafana": {
+    "executed": true,
+    "token_env": "GRAFANA_API_TOKEN",
+    "health": {
+      "commit": "701c851be7a930e04fbc6ebb1cd4254da80edd4c",
+      "database": "ok",
+      "version": "10.4.2"
+    },
+    "dashboards": [
+      {
+        "uid": "mapia-importing-health",
+        "status": "ok"
+      },
+      {
+        "uid": "mapia-importing-performance",
+        "status": "ok"
+      },
+      {
+        "uid": "mapia-otel-runtime-warnings",
+        "status": "ok"
+      },
+      {
+        "uid": "mapia-http-platform-overview",
+        "status": "ok"
+      }
+    ],
+    "status": "ok"
+  }
+}

@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "phase": "4E.9R",
+  "kind": "run_orchestrator",
+  "status": "completed_success",
+  "started_at": "2026-03-03T17:58:39Z",
+  "finished_at": "2026-03-03T17:59:28Z",
+  "require_ready_env": true,
+  "environment_scope": "dev_local",
+  "toolchain": {
+    "pnpm_cmd": ".\\pnpm.cmd",
+    "platform": "win32"
+  },
+  "strict_ready": {
+    "mode": "skip_in_dev_local",
+    "effective_behavior": "skipped",
+    "status": "skipped",
+    "reason": "disabled_in_dev_local"
+  },
+  "env_file": {
+    "enabled": false,
+    "mode": "merge",
+    "priority": "envfile",
+    "path": null
+  },
+  "outputs": {
+    "preconditions_report": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\4e9r-preconditions.20260303-175839.report.json",
+    "evidence_output": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\observability-evidence.4e9r.20260303-175839.json",
+    "smoke_report": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\post-apply-smoke.4e9r.20260303-175839.report.json",
+    "baseline_output": "C:\\Projetos\\MapIA\\infra\\observability\\calibration\\baseline-thresholds.4e9.yaml",
+    "naming_output": "C:\\Projetos\\MapIA\\infra\\observability\\calibration\\naming-compatibility.4e9.yaml",
+    "readiness_output": "C:\\Projetos\\MapIA\\infra\\observability\\calibration\\finalization-readiness.4e10.yaml",
+    "run_report": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\run-4e9r-real.20260303-175839.report.json"
+  },
+  "steps": [
+    {
+      "id": "A_gate_preconditions",
+      "description": "Gate de precondicoes 4E.9R",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:58:39Z",
+      "finished_at": "2026-03-03T17:58:39Z"
+    },
+    {
+      "id": "B_observability_validate",
+      "description": ".\\pnpm.cmd observability:validate",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:58:39Z",
+      "finished_at": "2026-03-03T17:58:53Z"
+    },
+    {
+      "id": "C_lint",
+      "description": ".\\pnpm.cmd lint",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:58:53Z",
+      "finished_at": "2026-03-03T17:58:59Z"
+    },
+    {
+      "id": "C_typecheck",
+      "description": ".\\pnpm.cmd typecheck",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:58:59Z",
+      "finished_at": "2026-03-03T17:59:02Z"
+    },
+    {
+      "id": "C_test",
+      "description": ".\\pnpm.cmd test",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:02Z",
+      "finished_at": "2026-03-03T17:59:07Z"
+    },
+    {
+      "id": "C_build",
+      "description": ".\\pnpm.cmd build",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:07Z",
+      "finished_at": "2026-03-03T17:59:25Z"
+    },
+    {
+      "id": "D_collect_real_evidence",
+      "description": "Coleta de evidencias reais 15m/7d/30d",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:25Z",
+      "finished_at": "2026-03-03T17:59:26Z"
+    },
+    {
+      "id": "E_promote_baseline",
+      "description": "Promocao baseline/naming 4E.9",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:26Z",
+      "finished_at": "2026-03-03T17:59:26Z"
+    },
+    {
+      "id": "F_apply_real",
+      "description": "Apply real de dashboards/provisioning/rules",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:26Z",
+      "finished_at": "2026-03-03T17:59:27Z"
+    },
+    {
+      "id": "G_post_apply_smoke",
+      "description": "Smoke remoto pos-apply",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:27Z",
+      "finished_at": "2026-03-03T17:59:27Z"
+    },
+    {
+      "id": "H_generate_readiness",
+      "description": "Geracao do readiness 4E.10",
+      "status": "ok",
+      "exit_code": 0,
+      "started_at": "2026-03-03T17:59:27Z",
+      "finished_at": "2026-03-03T17:59:28Z"
+    },
+    {
+      "id": "H_strict_ready",
+      "description": "Validacao strict-ready 4E.10",
+      "status": "skipped",
+      "started_at": "2026-03-03T17:59:28Z",
+      "finished_at": "2026-03-03T17:59:28Z",
+      "blocking": false,
+      "reason": "disabled_in_dev_local"
+    }
+  ],
+  "profile_resolution": {
+    "status": "validated_unique_best_candidate",
+    "selected_profile": "otel_collector_prometheus_tempo_latency",
+    "best_score": 16
+  },
+  "uid_autodiscovery": {
+    "attempted": false,
+    "resolved_by_autodiscovery": false,
+    "prometheus_resolved_by_autodiscovery": false,
+    "loki_resolved_by_autodiscovery": false,
+    "all_required_uids_available_after_autodiscovery": true,
+    "reason": null,
+    "error": null,
+    "provided_via_args": false
+  },
+  "stop_condition_triggered": false
+}

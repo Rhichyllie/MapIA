@@ -10,9 +10,9 @@ import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 const CreateProjectRequestSchema = z.object({
   workspaceId: z.string().uuid(),
   name: z.string().min(1).max(120),
-  description: z.string().max(500).optional(),
+  description: z.string().max(500).optional().or(z.literal("")),
   template: z.enum(["sitemap", "flowchart", "erd", "graph"]),
-  slug: z.string().min(2).max(80).optional(),
+  slug: z.string().min(2).max(80).optional().or(z.literal("")),
 });
 
 export async function POST(request: Request) {

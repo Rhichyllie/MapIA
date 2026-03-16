@@ -1,5 +1,6 @@
 import { AppError } from "@/src/lib/app-error";
 import { GraphSnapshotSchema, type GraphSnapshot } from "@/src/domain";
+import { applyDiagramLayoutToSnapshot } from "@/src/modules/graph/domain";
 import type {
   WorkingSnapshotRepository,
   WorkingSnapshotRecord,
@@ -10,6 +11,7 @@ import type {
 } from "@/src/modules/projects/application";
 import type { WorkspaceRepository } from "@/src/modules/workspaces/application";
 import {
+  DEFAULT_WIZARD_ROOT_NODE_NAME,
   type WizardDraft,
   type WizardDraftPayload,
   type WizardGenerateInput,
@@ -40,6 +42,8 @@ function defaultWizardPayload(input?: {
       name: input?.name,
       description: input?.description,
       generateRootNode: true,
+      rootNodeName: DEFAULT_WIZARD_ROOT_NODE_NAME,
+      allowReapplyLayout: true,
     },
   });
 }
@@ -66,6 +70,8 @@ function buildInitialSnapshot(projectId: string, payload: WizardReadyPayload) {
   const edges: GraphSnapshot["edges"] = [];
 
   const rootNodeId = nodes[0].id;
+  const resolvedRootNodeName =
+    payload.config.rootNodeName?.trim() || DEFAULT_WIZARD_ROOT_NODE_NAME;
 
   if (payload.config.generateRootNode !== false) {
     const diagramNodeId = crypto.randomUUID();
@@ -73,7 +79,7 @@ function buildInitialSnapshot(projectId: string, payload: WizardReadyPayload) {
       id: diagramNodeId,
       projectId,
       kind: "note",
-      label: `View: ${payload.diagramType}`,
+      label: resolvedRootNodeName,
       position: { x: rootX + 260, y: rootY - 20 },
       data: { role: "diagram-type" },
       externalRefs: [],
@@ -140,7 +146,7 @@ function buildInitialSnapshot(projectId: string, payload: WizardReadyPayload) {
     });
   }
 
-  return GraphSnapshotSchema.parse({
+  const baseSnapshot = GraphSnapshotSchema.parse({
     nodes,
     edges,
     viewport: {
@@ -148,7 +154,18 @@ function buildInitialSnapshot(projectId: string, payload: WizardReadyPayload) {
       y: 0,
       zoom: 1,
     },
+    diagramType: payload.diagramType,
+    layoutOptions: payload.layoutOptions,
+    rootNodeName:
+      payload.config.generateRootNode !== false ? resolvedRootNodeName : undefined,
+    allowReapplyLayout: payload.config.allowReapplyLayout,
   });
+
+  return applyDiagramLayoutToSnapshot(
+    baseSnapshot,
+    payload.diagramType,
+    payload.layoutOptions,
+  );
 }
 
 async function assertProjectOwnership(
@@ -264,7 +281,23 @@ export class GenerateInitialSnapshotFromWizardUseCase {
     });
 
     try {
-      const readyPayload = WizardReadyPayloadSchema.parse(currentDraft.payload);
+      const shouldGenerateRootNode =
+        currentDraft.payload.config?.generateRootNode !== false;
+      const rawRootNodeName = currentDraft.payload.config?.rootNodeName;
+      const normalizedRootNodeName = rawRootNodeName?.trim() ?? "";
+      const readyPayload = WizardReadyPayloadSchema.parse({
+        ...currentDraft.payload,
+        config: {
+          ...currentDraft.payload.config,
+          rootNodeName: shouldGenerateRootNode
+            ? rawRootNodeName === undefined
+              ? DEFAULT_WIZARD_ROOT_NODE_NAME
+              : normalizedRootNodeName
+            : normalizedRootNodeName || undefined,
+          allowReapplyLayout:
+            currentDraft.payload.config?.allowReapplyLayout ?? true,
+        },
+      });
 
       await this.deps.wizardDraftRepository.save({
         projectId: project.id,

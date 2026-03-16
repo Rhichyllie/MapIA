@@ -1,0 +1,516 @@
+groups:
+  - name: mapia-observability-importing
+    interval: 30s
+    rules:
+      - alert: importing_failure_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(importing_telemetry_runs_finalized_total{deployment_environment="staging", importing_outcome="failure"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(importing_telemetry_runs_finalized_total{deployment_environment="staging"}[15m])
+              ),
+              1
+            )
+          ) > 0.05
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="staging"}[15m])
+          ) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: staging
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Importing failure rate alto (staging)"
+          description: "Failure rate > 5% por 15m em staging com gate >= 20 runs. Threshold herdado da baseline 4E.7 e marcado como provisório na calibracao 4E.8."
+
+      - alert: importing_failure_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(importing_telemetry_runs_finalized_total{deployment_environment="production", importing_outcome="failure"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+              ),
+              1
+            )
+          ) > 0.01
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+          ) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Importing failure rate alto (production)"
+          description: "Failure rate > 1% por 15m em production com gate >= 20 runs. Threshold aguarda recalibracao com baseline real 7d/30d."
+
+      - alert: importing_failure_rate_critical
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(importing_telemetry_runs_finalized_total{deployment_environment="production", importing_outcome="failure"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+              ),
+              1
+            )
+          ) > 0.03
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+          ) >= 50
+        for: 10m
+        labels:
+          severity: critical
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Importing failure rate critico (production)"
+          description: "Failure rate > 3% por 15m em production com gate >= 50 runs. Escalonar incidente e validar regressao por release/input."
+
+      - alert: importing_run_duration_p95_high
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (deployment_environment, service_name, le) (
+              rate(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="staging"}[5m])
+            )
+          ) > 15000
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="staging"}[15m])
+          ) >= 20
+        for: 15m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: staging
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Importing run duration p95 alto (staging)"
+          description: "p95 > 15s por 15m em staging com gate de volume. Nome do histograma ajustado para suffix `_milliseconds_bucket`."
+
+      - alert: importing_run_duration_p95_high
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (deployment_environment, service_name, le) (
+              rate(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="production"}[5m])
+            )
+          ) > 10000
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+          ) >= 20
+        for: 15m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Importing run duration p95 alto (production)"
+          description: "p95 > 10s por 15m em production com gate de volume. Threshold permanece provisório até baseline real 7d/30d."
+
+      - alert: importing_adapter_warning_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(importing_telemetry_adapter_warnings_total{deployment_environment="staging"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(importing_telemetry_runs_finalized_total{deployment_environment="staging"}[15m])
+              ),
+              1
+            )
+          ) > 0.02
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="staging"}[15m])
+          ) >= 20
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_adapter_warnings_total{deployment_environment="staging"}[15m])
+          ) >= 2
+        for: 10m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: staging
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Adapter warning rate alto (staging)"
+          description: "Warning rate > 2% em staging com gate de runs e ocorrencias minimas (>=2 warnings) para reduzir ruido."
+
+      - alert: importing_adapter_warning_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(importing_telemetry_adapter_warnings_total{deployment_environment="production"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+              ),
+              1
+            )
+          ) > 0.005
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total{deployment_environment="production"}[15m])
+          ) >= 20
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_adapter_warnings_total{deployment_environment="production"}[15m])
+          ) >= 2
+        for: 10m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Adapter warning rate alto (production)"
+          description: "Warning rate > 0.5% em production com gate de volume e ocorrencias minimas (>=2 warnings) para reduzir falso positivo."
+
+      - alert: importing_adapter_late_drops_detected
+        expr: |
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_adapter_late_drops_total[15m])
+          ) >= 1
+          and
+          sum by (deployment_environment, service_name) (
+            increase(importing_telemetry_runs_finalized_total[15m])
+          ) >= 20
+        for: 5m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Late drops detectados no adapter de importing"
+          description: "Late drops >= 1 em 15m com gate de volume. Manter correlacao com importing_drop_kind e releases recentes."
+
+  - name: mapia-observability-prisma
+    interval: 30s
+    rules:
+      - alert: prisma_error_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(prisma_telemetry_errors_total{deployment_environment="staging"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(prisma_telemetry_operations_total{deployment_environment="staging"}[15m])
+              ),
+              1
+            )
+          ) > 0.02
+          and
+          sum by (deployment_environment, service_name) (
+            increase(prisma_telemetry_operations_total{deployment_environment="staging"}[15m])
+          ) >= 100
+        for: 10m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: staging
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Prisma error rate alto (staging)"
+          description: "Error rate > 2% por 15m com gate >= 100 operacoes. Threshold 4E.7 mantido até baseline real."
+
+      - alert: prisma_error_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(prisma_telemetry_errors_total{deployment_environment="production"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(prisma_telemetry_operations_total{deployment_environment="production"}[15m])
+              ),
+              1
+            )
+          ) > 0.01
+          and
+          sum by (deployment_environment, service_name) (
+            increase(prisma_telemetry_operations_total{deployment_environment="production"}[15m])
+          ) >= 100
+        for: 10m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Prisma error rate alto (production)"
+          description: "Error rate > 1% por 15m com gate >= 100 operacoes. Revisar por `prisma.action`/`prisma.model`."
+
+      - alert: prisma_error_rate_critical
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(prisma_telemetry_errors_total{deployment_environment="production"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(prisma_telemetry_operations_total{deployment_environment="production"}[15m])
+              ),
+              1
+            )
+          ) > 0.02
+          and
+          sum by (deployment_environment, service_name) (
+            increase(prisma_telemetry_operations_total{deployment_environment="production"}[15m])
+          ) >= 300
+        for: 10m
+        labels:
+          severity: critical
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Prisma error rate critico (production)"
+          description: "Error rate > 2% por 15m com gate >= 300 operacoes. Escalonar incidente e correlacionar com degradacao HTTP/importing."
+
+      - alert: prisma_slow_query_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(prisma_telemetry_slow_queries_total{deployment_environment="staging"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(prisma_telemetry_operations_total{deployment_environment="staging"}[15m])
+              ),
+              1
+            )
+          ) > 0.05
+          and
+          sum by (deployment_environment, service_name) (
+            increase(prisma_telemetry_operations_total{deployment_environment="staging"}[15m])
+          ) >= 100
+        for: 15m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: staging
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Prisma slow query rate alto (staging)"
+          description: "Slow query rate > 5% (threshold de slow query no runtime) por 15m em staging."
+
+      - alert: prisma_slow_query_rate_high
+        expr: |
+          (
+            sum by (deployment_environment, service_name) (
+              increase(prisma_telemetry_slow_queries_total{deployment_environment="production"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (deployment_environment, service_name) (
+                increase(prisma_telemetry_operations_total{deployment_environment="production"}[15m])
+              ),
+              1
+            )
+          ) > 0.02
+          and
+          sum by (deployment_environment, service_name) (
+            increase(prisma_telemetry_operations_total{deployment_environment="production"}[15m])
+          ) >= 100
+        for: 15m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Prisma slow query rate alto (production)"
+          description: "Slow query rate > 2% por 15m com gate >= 100 operacoes. Ajustar após baseline real por modelo/acao."
+
+      - alert: prisma_query_duration_p95_high
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (deployment_environment, service_name, le) (
+              rate(prisma_telemetry_query_duration_milliseconds_bucket[5m])
+            )
+          ) > 300
+          and
+          sum by (deployment_environment, service_name) (
+            increase(prisma_telemetry_operations_total[15m])
+          ) >= 100
+        for: 15m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: metric
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Prisma query duration p95 alto"
+          description: "p95 Prisma > 300ms com gate >= 100 operacoes. Use breakdown por `prisma.action`/`prisma.model` para triagem."
+
+  - name: mapia-observability-spanmetrics
+    interval: 30s
+    rules:
+      - alert: otel_expected_span_volume_anomalous
+        expr: |
+          (
+            (
+              sum by (deployment_environment, service_name) (
+                rate(traces_spanmetrics_calls_total{deployment_environment="staging", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+              )
+              >
+              3 * clamp_min(
+                avg_over_time(
+                  (
+                    sum by (deployment_environment, service_name) (
+                      rate(traces_spanmetrics_calls_total{deployment_environment="staging", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+                    )
+                  )[7d:5m]
+                ),
+                1e-9
+              )
+            )
+            or
+            (
+              sum by (deployment_environment, service_name) (
+                rate(traces_spanmetrics_calls_total{deployment_environment="staging", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+              )
+              <
+              0.3 * clamp_min(
+                avg_over_time(
+                  (
+                    sum by (deployment_environment, service_name) (
+                      rate(traces_spanmetrics_calls_total{deployment_environment="staging", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+                    )
+                  )[7d:5m]
+                ),
+                1e-9
+              )
+            )
+          )
+          and
+          sum by (deployment_environment, service_name) (
+            increase(traces_spanmetrics_calls_total{deployment_environment="staging", span_name=~"HTTP.*|importing\\.pipeline"}[15m])
+          ) >= 200
+          and
+          avg_over_time(
+            (
+              sum by (deployment_environment, service_name) (
+                rate(traces_spanmetrics_calls_total{deployment_environment="staging", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+              )
+            )[7d:5m]
+          ) > 0
+        for: 20m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: spanmetrics
+          prerequisite: spanmetrics_enabled
+          target_environment: staging
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Volume de spans esperado anomalo (staging)"
+          description: "Comparacao curta (5m) vs baseline 7d, com gate >= 200 spans/15m. Requer pipeline de spanmetrics ativo."
+
+      - alert: otel_expected_span_volume_anomalous
+        expr: |
+          (
+            (
+              sum by (deployment_environment, service_name) (
+                rate(traces_spanmetrics_calls_total{deployment_environment="production", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+              )
+              >
+              2 * clamp_min(
+                avg_over_time(
+                  (
+                    sum by (deployment_environment, service_name) (
+                      rate(traces_spanmetrics_calls_total{deployment_environment="production", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+                    )
+                  )[7d:5m]
+                ),
+                1e-9
+              )
+            )
+            or
+            (
+              sum by (deployment_environment, service_name) (
+                rate(traces_spanmetrics_calls_total{deployment_environment="production", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+              )
+              <
+              0.5 * clamp_min(
+                avg_over_time(
+                  (
+                    sum by (deployment_environment, service_name) (
+                      rate(traces_spanmetrics_calls_total{deployment_environment="production", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+                    )
+                  )[7d:5m]
+                ),
+                1e-9
+              )
+            )
+          )
+          and
+          sum by (deployment_environment, service_name) (
+            increase(traces_spanmetrics_calls_total{deployment_environment="production", span_name=~"HTTP.*|importing\\.pipeline"}[15m])
+          ) >= 400
+          and
+          avg_over_time(
+            (
+              sum by (deployment_environment, service_name) (
+                rate(traces_spanmetrics_calls_total{deployment_environment="production", span_name=~"HTTP.*|importing\\.pipeline"}[5m])
+              )
+            )[7d:5m]
+          ) > 0
+        for: 20m
+        labels:
+          severity: warning
+          telemetry_phase: 4e9
+          signal_class: spanmetrics
+          prerequisite: spanmetrics_enabled
+          target_environment: production
+          calibration_state: provisional_pending_real_data
+        annotations:
+          summary: "Volume de spans esperado anomalo (production)"
+          description: "Comparacao curta vs baseline 7d com gates mais estritos em producao. Requer spanmetrics e threshold final depende de baseline real 4E.8."

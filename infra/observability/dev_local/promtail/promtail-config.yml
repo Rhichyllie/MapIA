@@ -1,0 +1,21 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/promtail-positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: "mapia-dev-local-seed"
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: mapia-dev-local-seed
+          deployment_environment: dev_local
+          service_name: mapia-dev-local-seed
+          service_version: 0.0.0-dev
+          __path__: /var/log/mapia/*.log

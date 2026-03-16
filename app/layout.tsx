@@ -1,24 +1,60 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import "@xyflow/react/dist/style.css";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
-const manrope = Manrope({
+const THEME_INIT_SCRIPT = `
+(() => {
+  const storageKey = "mapia-theme";
+  const root = document.documentElement;
+  const isValidTheme = (value) => value === "dark" || value === "light";
+
+  try {
+    const storedTheme = window.localStorage.getItem(storageKey);
+    const preferredTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+    const resolvedTheme = isValidTheme(storedTheme) ? storedTheme : preferredTheme;
+    root.dataset.theme = resolvedTheme;
+  } catch {
+    root.dataset.theme = "light";
+  }
+})();
+`;
+
+const manrope = localFont({
+  src: [
+    {
+      path: "../public/fonts/manrope-variable.woff2",
+      style: "normal",
+    },
+  ],
   variable: "--font-sans",
-  subsets: ["latin"],
+  display: "swap",
 });
 
-const ibmPlexMono = IBM_Plex_Mono({
+const ibmPlexMono = localFont({
+  src: [
+    {
+      path: "../public/fonts/ibm-plex-mono-400.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/fonts/ibm-plex-mono-500.woff2",
+      weight: "500",
+      style: "normal",
+    },
+  ],
   variable: "--font-mono",
-  weight: ["400", "500"],
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "MapIA",
   description:
-    "Mapeamento de arquitetura da informacao com wizard e editor nodal",
+    "Mapeamento de arquitetura da informacao com assistente de criacao e editor nodal",
 };
 
 export default function RootLayout({
@@ -27,7 +63,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-theme="light" suppressHydrationWarning>
+      <head>
+        <script
+          id="mapia-theme-init"
+          dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }}
+        />
+      </head>
       <body className={`${manrope.variable} ${ibmPlexMono.variable}`}>
         <AppProviders>{children}</AppProviders>
       </body>

@@ -46,6 +46,14 @@ export type EditorSnapshotLayoutMetadata = Pick<
   "diagramType" | "layoutOptions" | "rootNodeName" | "allowReapplyLayout"
 >;
 
+type DiagramTypeEffective =
+  | DiagramType
+  | "erd"
+  | "sitemap"
+  | "graph"
+  | "timeline"
+  | undefined;
+
 function buildNodeTestDomAttributes(nodeId: string): RFNode["domAttributes"] {
   // React's HTMLAttributes typing does not include data-* keys explicitly,
   // but React Flow forwards them to the node wrapper at runtime.
@@ -62,13 +70,17 @@ function buildEdgeTestDomAttributes(edgeId: string): RFEdge["domAttributes"] {
 
 function resolveDiagramTypeEffective(
   diagramType: string | undefined,
-): DiagramType | "erd" | undefined {
-  if (diagramType === "tree" || diagramType === "flow" || diagramType === "mindmap") {
+): DiagramTypeEffective {
+  if (
+    diagramType === "tree" ||
+    diagramType === "flow" ||
+    diagramType === "mindmap" ||
+    diagramType === "erd" ||
+    diagramType === "sitemap" ||
+    diagramType === "graph" ||
+    diagramType === "timeline"
+  ) {
     return diagramType;
-  }
-
-  if (diagramType === "erd") {
-    return "erd";
   }
 
   return undefined;
@@ -78,7 +90,7 @@ export function toFlowNodes(
   snapshot: GraphSnapshot,
   options?: {
     hiddenNodeIds?: Set<string>;
-    diagramTypeEffective?: DiagramType | "erd" | undefined;
+    diagramTypeEffective?: DiagramTypeEffective;
     rootNodeName?: string;
   },
 ): RFNode[] {

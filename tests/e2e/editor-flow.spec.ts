@@ -9,6 +9,13 @@ type CreatedProject = {
 
 const DASHBOARD_HYDRATION_SETTLE_MS = 300;
 const E2E_API_TIMEOUT_MS = 20_000;
+const BASE_ASSISTANT_AUTOMATION = {
+  inferRelations: true,
+  createLinkFields: true,
+  applySuggestedNames: true,
+  autoOrganizeOnCreate: true,
+  detectInconsistenciesEarly: true,
+};
 
 type ApiWaitOptions = {
   page: Page;
@@ -203,10 +210,31 @@ async function runActionAndWaitForSaveCycle({
 }
 
 async function waitForDashboardCreateFormReady(page: Page) {
+  if (!page.url().includes("/dashboard")) {
+    await page.goto("/dashboard");
+  }
+
   await expect(page.getByTestId("workspace-toolbar")).toBeVisible();
-  await expect(page.getByTestId("new-project-button")).toBeVisible();
-  await page.getByTestId("new-project-button").click();
-  await expect(page.getByTestId("new-project-drawer")).toBeVisible();
+  const newProjectButton = page.getByTestId("new-project-button");
+  const newProjectDrawer = page.getByTestId("new-project-drawer");
+
+  await expect(newProjectButton).toBeVisible();
+
+  let drawerVisible = false;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await newProjectButton.click();
+    try {
+      await expect(newProjectDrawer).toBeVisible({ timeout: 3_000 });
+      drawerVisible = true;
+      break;
+    } catch (error) {
+      if (attempt === 2) {
+        throw error;
+      }
+    }
+  }
+
+  expect(drawerVisible).toBe(true);
   await expect(page.getByTestId("dashboard-create-project-form")).toBeVisible();
   // Intentional fixed wait: Next.js dev mode can render client markup before
   // React event handlers hydrate. This is the only fixed delay kept in the spec.
@@ -363,6 +391,132 @@ async function waitForEditorReady(page: Page) {
 
   const nodeLocator = page.locator('[data-testid^="editor-node-"]');
   await expect.poll(async () => nodeLocator.count()).toBeGreaterThan(0);
+}
+
+async function dispatchClickOnCanvasNode(page: Page, nodeId: string) {
+  await page.evaluate((targetNodeId) => {
+    const element = document.querySelector<HTMLElement>(
+      `[data-testid="editor-node-${targetNodeId}"]`,
+    );
+    if (!element) {
+      return;
+    }
+
+    element.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+    );
+  }, nodeId);
+}
+
+async function resolveVisibleFlowSourceNodeId(
+  page: Page,
+  preferredRoles: string[] = ["flow-step", "flow-start"],
+) {
+  return page.evaluate((roles) => {
+    const wrappers = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-testid^="editor-node-"]'),
+    );
+    const entries = wrappers
+      .map((wrapper) => ({
+        id: wrapper.dataset.testid?.replace("editor-node-", "") ?? "",
+        role:
+          wrapper.querySelector<HTMLElement>("[data-diagram-role]")?.dataset.diagramRole ??
+          wrapper.querySelector<HTMLElement>("[data-flow-variant]")?.dataset.flowVariant ??
+          "",
+      }))
+      .filter((entry) => entry.id.length > 0);
+
+    return (
+      entries.find((entry) => roles.includes(entry.role))?.id ??
+      entries[0]?.id ??
+      null
+    );
+  }, preferredRoles);
+}
+
+async function readCanvasNodeBoxes(page: Page) {
+  return page.evaluate(() => {
+    const entries = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-testid^="editor-node-"]'),
+    )
+      .map((element) => {
+        const id = element.dataset.testid?.replace("editor-node-", "") ?? "";
+        const rect = element.getBoundingClientRect();
+        if (!id) {
+          return null;
+        }
+
+        return [
+          id,
+          {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+          },
+        ] as const;
+      })
+      .filter((entry): entry is readonly [string, { x: number; y: number; width: number; height: number }] =>
+        Boolean(entry),
+      );
+
+    return Object.fromEntries(entries);
+  });
+}
+
+function countMovedCanvasNodes(
+  before: Record<string, { x: number; y: number }>,
+  after: Record<string, { x: number; y: number }>,
+  threshold = 32,
+) {
+  return Object.entries(before).filter(([nodeId, beforeBox]) => {
+    const afterBox = after[nodeId];
+    if (!afterBox) {
+      return false;
+    }
+
+    return (
+      Math.abs(afterBox.x - beforeBox.x) > threshold ||
+      Math.abs(afterBox.y - beforeBox.y) > threshold
+    );
+  }).length;
+}
+
+async function readVisibleFlowNodeIdsByRole(page: Page) {
+  return page.evaluate(() => {
+    const wrappers = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-testid^="editor-node-"]'),
+    );
+    const idsByRole: Record<string, string[]> = {};
+
+    for (const wrapper of wrappers) {
+      const nodeId = wrapper.dataset.testid?.replace("editor-node-", "") ?? "";
+      const role =
+        wrapper.querySelector<HTMLElement>("[data-flow-variant]")?.dataset.flowVariant ??
+        wrapper.querySelector<HTMLElement>("[data-diagram-role]")?.dataset.diagramRole ??
+        "";
+      if (!nodeId || !role) {
+        continue;
+      }
+
+      idsByRole[role] = [...(idsByRole[role] ?? []), nodeId];
+    }
+
+    return idsByRole;
+  });
+}
+
+async function openFlowSelectionMoreMenu(page: Page) {
+  const moreButton = page.getByTestId("selection-hud-flow-more-button");
+  const menu = page.getByTestId("selection-hud-flow-more-menu");
+
+  await expect(moreButton).toBeVisible();
+
+  if ((await menu.count()) === 0) {
+    await moreButton.click();
+  }
+
+  await expect(menu).toBeVisible();
 }
 
 async function setInspectorMode(page: Page, mode: "operational" | "technical") {
@@ -527,6 +681,20 @@ async function loadEditorSnapshot(page: Page, projectId: string) {
   }
 
   return snapshot;
+}
+
+async function applyEditorCommand(
+  page: Page,
+  projectId: string,
+  command: Record<string, unknown>,
+  context: string,
+) {
+  const response = await page.request.post(`/api/projects/${projectId}/editor-commands`, {
+    data: {
+      command,
+    },
+  });
+  await assertApiResponseOk(response, context);
 }
 
 async function forceSnapshotDiagramType(
@@ -733,6 +901,52 @@ async function createProjectAndOpenEditor(
   });
   await waitForEditorReady(page);
   return project;
+}
+
+async function createFlowProjectViaAssistantAndOpenEditor(
+  page: Page,
+  prefix: string,
+) {
+  const name = `${prefix} ${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+  const response = await page.request.post("/api/projects/create-with-assistant", {
+    data: {
+      projectName: name,
+      projectObjective: "Validar polimento visual do modo Processo",
+      profile: "process",
+      startStrategy: "manual",
+      initialView: "flow",
+      layout: "horizontal",
+      detailLevel: "intermediate",
+      automation: BASE_ASSISTANT_AUTOMATION,
+      context: {
+        setup: {
+          createExamples: true,
+        },
+        flow: {
+          autoCreateStartEnd: true,
+          allowDecisions: true,
+          direction: "left-right",
+          allowMultipleOutputs: false,
+        },
+      },
+    },
+  });
+
+  await assertApiResponseOk(response, "create flow project via assistant");
+
+  const payload = (await response.json()) as {
+    data?: {
+      projectId?: string;
+    };
+  };
+  const projectId = payload.data?.projectId;
+  if (!projectId) {
+    throw new Error("Assistant create API did not return a projectId.");
+  }
+
+  await page.goto(`/editor?projectId=${projectId}`);
+  await waitForEditorReady(page);
+  return { id: projectId, name } satisfies CreatedProject;
 }
 
 test.describe("Editor E2E (Fase 3A)", () => {
@@ -1255,31 +1469,13 @@ model Post {
   test("Fase 5.8 Flow: adicionar proxima etapa posiciona a direita e conecta flows-to", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createProjectAndOpenEditor(page, "E2E Flow Diferenca", {
-      diagramType: "flow",
-    });
+    const project = await createFlowProjectViaAssistantAndOpenEditor(
+      page,
+      "E2E Flow Diferenca",
+    );
 
     await setInspectorMode(page, "technical");
-    const sourceNodeId = await page.evaluate(() => {
-      const wrappers = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-testid^="editor-node-"]'),
-      );
-      const entries = wrappers
-        .map((wrapper) => ({
-          id: wrapper.dataset.testid?.replace("editor-node-", "") ?? "",
-          role: wrapper.querySelector<HTMLElement>("[data-diagram-role]")?.dataset
-            .diagramRole,
-        }))
-        .filter((entry) => entry.id.length > 0);
-
-      return (
-        entries.find(
-          (entry) => entry.role === "flow-start" || entry.role === "flow-step",
-        )?.id ??
-        entries[0]?.id ??
-        null
-      );
-    });
+    const sourceNodeId = await resolveVisibleFlowSourceNodeId(page);
     if (!sourceNodeId) {
       throw new Error("Flow sem no visivel para validar adicao contextual.");
     }
@@ -1292,24 +1488,14 @@ model Post {
     const beforeNodeCount = await nodeLocator.count();
     const beforeFlowEdgeCount = await flowEdgeLocator.count();
     const sourceBox = await sourceLocator.boundingBox();
+    const nodeBoxesBefore = await readCanvasNodeBoxes(page);
     if (!sourceBox) {
       throw new Error("Flow source node bounding box ausente.");
     }
 
-    await page.evaluate((nodeId) => {
-      const element = document.querySelector<HTMLElement>(
-        `[data-testid="editor-node-${nodeId}"]`,
-      );
-      if (!element) {
-        return;
-      }
-
-      element.dispatchEvent(
-        new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
-      );
-    }, sourceNodeId);
+    await dispatchClickOnCanvasNode(page, sourceNodeId);
     await expect(page.getByTestId("selection-hud-contextual-add-button")).toContainText(
-      "Adicionar proxima etapa",
+      "Continuar fluxo",
     );
 
     await page.getByTestId("selection-hud-contextual-add-button").click();
@@ -1325,19 +1511,327 @@ model Post {
     if (!insertedBox) {
       throw new Error("Flow inserted node bounding box ausente.");
     }
+    const nodeBoxesAfter = await readCanvasNodeBoxes(page);
+    const sourceBoxAfter = nodeBoxesAfter[sourceNodeId];
 
     expect(insertedBox.x).toBeGreaterThan(sourceBox.x);
+    expect(sourceBoxAfter).toBeDefined();
+    expect(Math.abs((sourceBoxAfter?.x ?? sourceBox.x) - sourceBox.x)).toBeLessThanOrEqual(12);
+    expect(Math.abs((sourceBoxAfter?.y ?? sourceBox.y) - sourceBox.y)).toBeLessThanOrEqual(12);
+    expect(countMovedCanvasNodes(nodeBoxesBefore, nodeBoxesAfter, 36)).toBeLessThanOrEqual(2);
     await expect
       .poll(async () => flowEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
       .toBeGreaterThan(beforeFlowEdgeCount);
   });
 
+  test("Fase 5.8 Flow: criar bifurcacao posiciona abaixo do tronco e conecta depends-on", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Branch Layout");
+
+    await setInspectorMode(page, "technical");
+    const sourceNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step", "flow-start"]);
+    if (!sourceNodeId) {
+      throw new Error("Flow sem no visivel para validar bifurcacao contextual.");
+    }
+
+    const sourceLocator = page.getByTestId(`editor-node-${sourceNodeId}`);
+    await dispatchClickOnCanvasNode(page, sourceNodeId);
+    await openFlowSelectionMoreMenu(page);
+    await expect(
+      page.getByTestId("selection-hud-contextual-secondary-flow-add-branch"),
+    ).toContainText("Criar bifurcacao");
+
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const branchEdgeLocator = page.locator(
+      '[data-testid^="editor-edge-"].editor-edge-kind-depends-on',
+    );
+    const beforeNodeCount = await nodeLocator.count();
+    const beforeBranchEdgeCount = await branchEdgeLocator.count();
+    const nodeBoxesBefore = await readCanvasNodeBoxes(page);
+
+    await page
+      .getByTestId("selection-hud-contextual-secondary-flow-add-branch")
+      .click();
+    await expect
+      .poll(async () => nodeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBe(beforeNodeCount + 1);
+
+    const insertedNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "inserted flow branch node id",
+    );
+    const insertedBox = await page.getByTestId(`editor-node-${insertedNodeId}`).boundingBox();
+    const sourceBox = await sourceLocator.boundingBox();
+    if (!insertedBox || !sourceBox) {
+      throw new Error("Flow source/branch node bounding box ausente.");
+    }
+    const nodeBoxesAfter = await readCanvasNodeBoxes(page);
+
+    expect(insertedBox.x).toBeGreaterThan(sourceBox.x + sourceBox.width * 0.45);
+    expect(insertedBox.y).toBeGreaterThan(sourceBox.y + 180);
+    expect(countMovedCanvasNodes(nodeBoxesBefore, nodeBoxesAfter, 36)).toBeLessThanOrEqual(1);
+    await expect
+      .poll(async () => branchEdgeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBeGreaterThan(beforeBranchEdgeCount);
+  });
+
+  test("Fase 5.8 Flow: registrar observacao posiciona acima do tronco e conecta references", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Note Layout");
+
+    await setInspectorMode(page, "technical");
+    const sourceNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step", "flow-start"]);
+    if (!sourceNodeId) {
+      throw new Error("Flow sem no visivel para validar observacao contextual.");
+    }
+
+    const sourceLocator = page.getByTestId(`editor-node-${sourceNodeId}`);
+    await dispatchClickOnCanvasNode(page, sourceNodeId);
+    await openFlowSelectionMoreMenu(page);
+    await expect(
+      page.getByTestId("selection-hud-contextual-secondary-flow-add-note"),
+    ).toContainText("Registrar observacao");
+
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const beforeNodeCount = await nodeLocator.count();
+    const nodeBoxesBefore = await readCanvasNodeBoxes(page);
+
+    await page
+      .getByTestId("selection-hud-contextual-secondary-flow-add-note")
+      .click();
+    await expect
+      .poll(async () => nodeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBe(beforeNodeCount + 1);
+
+    const insertedNodeId = await getRequiredText(
+      page.getByTestId("inspector-node-id"),
+      "inserted flow note node id",
+    );
+    const insertedBox = await page.getByTestId(`editor-node-${insertedNodeId}`).boundingBox();
+    const sourceBox = await sourceLocator.boundingBox();
+    if (!insertedBox || !sourceBox) {
+      throw new Error("Flow source/note node bounding box ausente.");
+    }
+    const nodeBoxesAfter = await readCanvasNodeBoxes(page);
+
+    expect(insertedBox.x).toBeGreaterThan(sourceBox.x + sourceBox.width * 0.25);
+    expect(insertedBox.y).toBeLessThan(sourceBox.y - 140);
+    expect(countMovedCanvasNodes(nodeBoxesBefore, nodeBoxesAfter, 36)).toBeLessThanOrEqual(1);
+    await expect(
+      page
+        .getByTestId(`editor-node-${insertedNodeId}`)
+        .locator('[data-flow-variant="flow-note"]'),
+    ).toHaveCount(1);
+  });
+
+  test("Fase 5.8 Flow: Organizar e Reaplicar layout recompõem trunk, branch e note", async ({
+    authenticatedPage: page,
+  }) => {
+    const project = await createFlowProjectViaAssistantAndOpenEditor(
+      page,
+      "E2E Flow Organize Reapply",
+    );
+
+    await setInspectorMode(page, "technical");
+    const sourceNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step", "flow-start"]);
+    if (!sourceNodeId) {
+      throw new Error("Flow sem no visivel para validar organizar/reaplicar.");
+    }
+
+    const initialSnapshot = await loadEditorSnapshot(page, project.id);
+    const idsByRoleInitial = await readVisibleFlowNodeIdsByRole(page);
+    const startNodeId = idsByRoleInitial["flow-start"]?.[0];
+    const stepNodeId = idsByRoleInitial["flow-step"]?.[0];
+    const endNodeId = idsByRoleInitial["flow-end"]?.[0];
+    const sourceNode = initialSnapshot.nodes.find((node) => node.id === sourceNodeId);
+    const startNode = initialSnapshot.nodes.find((node) => node.id === startNodeId);
+    const stepNode = initialSnapshot.nodes.find((node) => node.id === stepNodeId);
+    const endNode = initialSnapshot.nodes.find((node) => node.id === endNodeId);
+    if (!sourceNode || !startNode || !stepNode || !endNode) {
+      throw new Error("Snapshot inicial do flow nao retornou trunk suficiente para organizar.");
+    }
+
+    const decisionNodeId = randomUUID();
+    const noteNodeId = randomUUID();
+    await applyEditorCommand(
+      page,
+      project.id,
+      {
+        type: "addNode",
+        node: {
+          id: decisionNodeId,
+          kind: "flow-step",
+          label: `Decisao ${Date.now()}`,
+          position: {
+            x: sourceNode.position.x + 240,
+            y: sourceNode.position.y + 220,
+          },
+          data: {
+            __mapia: {
+              role: "flow-decision",
+            },
+          },
+        },
+      },
+      "add flow decision via API before organize/reapply",
+    );
+    await applyEditorCommand(
+      page,
+      project.id,
+      {
+        type: "addEdge",
+        edge: {
+          id: randomUUID(),
+          sourceNodeId,
+          targetNodeId: decisionNodeId,
+          kind: "depends-on",
+          label: "bifurca",
+          data: {},
+        },
+      },
+      "connect flow decision via API before organize/reapply",
+    );
+    await applyEditorCommand(
+      page,
+      project.id,
+      {
+        type: "addNode",
+        node: {
+          id: noteNodeId,
+          kind: "note",
+          label: `Observacao ${Date.now()}`,
+          position: {
+            x: sourceNode.position.x + 110,
+            y: sourceNode.position.y - 190,
+          },
+          data: {
+            __mapia: {
+              role: "flow-note",
+            },
+          },
+        },
+      },
+      "add flow note via API before organize/reapply",
+    );
+
+    await page.reload();
+    await waitForEditorReady(page);
+
+    const distortPositions = async (variant: "organize" | "reapply") => {
+      const offset =
+        variant === "organize"
+          ? { step: 260, end: 340, decision: -140, note: 310 }
+          : { step: 220, end: 300, decision: -170, note: 280 };
+
+      await applyEditorCommand(
+        page,
+        project.id,
+        {
+          type: "moveNode",
+          nodeId: stepNode.id,
+          position: {
+            x: stepNode.position.x + 120,
+            y: stepNode.position.y + offset.step,
+          },
+        },
+        `distort step before ${variant} flow layout`,
+      );
+      await applyEditorCommand(
+        page,
+        project.id,
+        {
+          type: "moveNode",
+          nodeId: endNode.id,
+          position: {
+            x: endNode.position.x - 180,
+            y: endNode.position.y + offset.end,
+          },
+        },
+        `distort end before ${variant} flow layout`,
+      );
+      await applyEditorCommand(
+        page,
+        project.id,
+        {
+          type: "moveNode",
+          nodeId: decisionNodeId,
+          position: {
+            x: sourceNode.position.x - 220,
+            y: sourceNode.position.y + offset.decision,
+          },
+        },
+        `distort branch before ${variant} flow layout`,
+      );
+      await applyEditorCommand(
+        page,
+        project.id,
+        {
+          type: "moveNode",
+          nodeId: noteNodeId,
+          position: {
+            x: sourceNode.position.x - 140,
+            y: sourceNode.position.y + offset.note,
+          },
+        },
+        `distort note before ${variant} flow layout`,
+      );
+    };
+
+    const expectFlowComposed = async () => {
+      await expect
+        .poll(
+          async () => {
+            const sourceBox = await page.getByTestId(`editor-node-${sourceNode.id}`).boundingBox();
+            const startBox = await page.getByTestId(`editor-node-${startNode.id}`).boundingBox();
+            const stepBox = await page.getByTestId(`editor-node-${stepNode.id}`).boundingBox();
+            const endBox = await page.getByTestId(`editor-node-${endNode.id}`).boundingBox();
+            const decisionBox = await page
+              .getByTestId(`editor-node-${decisionNodeId}`)
+              .boundingBox();
+            const noteBox = await page.getByTestId(`editor-node-${noteNodeId}`).boundingBox();
+            if (!sourceBox || !startBox || !stepBox || !endBox || !decisionBox || !noteBox) {
+              return false;
+            }
+
+            return (
+              Math.abs(startBox.y - stepBox.y) <= 20 &&
+              Math.abs(stepBox.y - endBox.y) <= 20 &&
+              startBox.x < stepBox.x &&
+              stepBox.x < endBox.x &&
+              decisionBox.x > sourceBox.x + sourceBox.width * 0.45 &&
+              decisionBox.y > sourceBox.y + 180 &&
+              noteBox.x > sourceBox.x + sourceBox.width * 0.25 &&
+              noteBox.y < sourceBox.y - 140
+            );
+          },
+          { timeout: E2E_API_TIMEOUT_MS },
+        )
+        .toBe(true);
+    };
+
+    await distortPositions("organize");
+    await page.reload();
+    await waitForEditorReady(page);
+    await page.getByTestId("organize-diagram-button").click();
+    await expectFlowComposed();
+
+    await distortPositions("reapply");
+    await page.reload();
+    await waitForEditorReady(page);
+    await expect(page.getByTestId("reapply-layout-button")).toBeEnabled();
+    await page.getByTestId("reapply-layout-button").click();
+    await expectFlowComposed();
+  });
+
   test("Fase 5.8 Roles Flow: badge de projeto nao aparece como Etapa e QuickAdd mostra papeis", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createProjectAndOpenEditor(page, "E2E Flow Roles", {
-      diagramType: "flow",
-    });
+    const project = await createFlowProjectViaAssistantAndOpenEditor(
+      page,
+      "E2E Flow Roles",
+    );
 
     await page.getByTestId("add-node-button").click();
     await expect(page.getByTestId("add-node-dialog")).toBeVisible();
@@ -1345,30 +1839,342 @@ model Post {
     await expect(page.getByTestId("add-node-kind-project")).toHaveCount(0);
     await expect(page.getByTestId("quick-add-role-flow-start")).toBeVisible();
     await expect(page.getByTestId("quick-add-role-flow-step")).toBeVisible();
+    await expect(page.getByTestId("quick-add-role-flow-decision")).toBeVisible();
     await expect(page.getByTestId("quick-add-role-flow-note")).toBeVisible();
     await expect(page.getByTestId("quick-add-role-flow-end")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("add-node-dialog")).toHaveCount(0);
 
-    const snapshot = await loadEditorSnapshot(page, project.id);
-    const projectNode = snapshot.nodes.find((node) => node.kind === "project");
-    if (!projectNode) {
-      throw new Error("Snapshot flow sem no de projeto para validar compatibilidade.");
+    const startLocator = page
+      .locator('[data-testid^="editor-node-"]')
+      .filter({ hasText: "Inicio" })
+      .first();
+    await expect(startLocator).toBeVisible();
+    await expect(startLocator).toContainText("Inicio");
+    await expect(startLocator).not.toContainText("Etapa");
+  });
+
+  test("Fase 5.10 Flow UI: variantes principais usam leitura dedicada no canvas", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Visual Grammar");
+
+    await setInspectorMode(page, "technical");
+
+    const startNode = page.locator('[data-flow-variant="flow-start"]').first();
+    const stepNode = page.locator('[data-flow-variant="flow-step"]').first();
+    const endNode = page.locator('[data-flow-variant="flow-end"]').first();
+
+    await expect(startNode).toBeVisible();
+    await expect(stepNode).toBeVisible();
+    await expect(endNode).toBeVisible();
+    await expect(startNode.locator(".diagram-node-flow__badge")).toHaveText("Inicio");
+    await expect(stepNode.locator(".diagram-node-flow__badge")).toHaveText("Atividade");
+    await expect(stepNode.locator(".diagram-node-flow__badge")).not.toHaveText("Etapa");
+    await expect(stepNode.locator(".diagram-node-flow__summary")).toHaveText(
+      "Executa um trabalho observavel dentro da operacao.",
+    );
+    await expect(stepNode).not.toContainText("Recebe");
+    await expect(stepNode).not.toContainText("Segue");
+    await expect(endNode.locator(".diagram-node-flow__badge")).toHaveText("Fim");
+
+    const sourceNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step", "flow-start"]);
+    if (!sourceNodeId) {
+      throw new Error("Flow sem no visivel para validar variantes principais no canvas.");
     }
 
-    const projectLocator = page.getByTestId(`editor-node-${projectNode.id}`);
-    if ((await projectLocator.count()) > 0) {
-      await expect(projectLocator).toContainText("Inicio");
-      await expect(projectLocator).not.toContainText("Etapa");
+    await dispatchClickOnCanvasNode(page, sourceNodeId);
+    await openFlowSelectionMoreMenu(page);
+    await page
+      .getByTestId("selection-hud-contextual-secondary-flow-add-branch")
+      .click();
+    await expect(page.locator('[data-flow-variant="flow-decision"]').first()).toBeVisible();
+
+    await dispatchClickOnCanvasNode(page, sourceNodeId);
+    await openFlowSelectionMoreMenu(page);
+    await page
+      .getByTestId("selection-hud-contextual-secondary-flow-add-note")
+      .click();
+    await expect(page.locator('[data-flow-variant="flow-note"]').first()).toBeVisible();
+
+    const decisionNode = page.locator('[data-flow-variant="flow-decision"]').first();
+    const noteNode = page.locator('[data-flow-variant="flow-note"]').first();
+
+    await expect(startNode).toBeVisible();
+    await expect(stepNode).toBeVisible();
+    await expect(decisionNode).toBeVisible();
+    await expect(noteNode).toBeVisible();
+    await expect(endNode).toBeVisible();
+    await expect(decisionNode.locator(".diagram-node-flow__badge")).toHaveText("Decisao");
+    await expect(decisionNode).not.toContainText("Ponto de decisao");
+    await expect(decisionNode.locator(".diagram-node-flow__summary")).toHaveText(
+      "Avalia uma regra e abre caminhos alternativos.",
+    );
+    await expect(noteNode.locator(".diagram-node-flow__badge")).toHaveText("Observacao");
+    await expect(noteNode).not.toContainText("Anotacao operacional");
+    await expect(noteNode.locator(".diagram-node-flow__summary")).toHaveText(
+      "Registra risco, excecao ou contexto sem mover o fluxo.",
+    );
+    await expect
+      .poll(async () => {
+        const labels = await page.locator(".react-flow__edge-text").allTextContents();
+        return labels.join(" ");
+      })
+      .toContain("Condicao");
+    await expect
+      .poll(async () => {
+        const labels = await page.locator(".react-flow__edge-text").allTextContents();
+        return labels.join(" ");
+      })
+      .toContain("Observacao");
+  });
+
+  test("Fase 5.9 Flow UI: canvas lidera a tela e inspetor le o processo antes da edicao", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow UI Polish");
+    const clickFlowNodeById = async (nodeId: string) => {
+      await page.evaluate((targetNodeId) => {
+        const element = document.querySelector<HTMLElement>(
+          `[data-testid="editor-node-${targetNodeId}"]`,
+        );
+        element?.dispatchEvent(
+          new MouseEvent("click", { bubbles: true, cancelable: true, view: window }),
+        );
+      }, nodeId);
+    };
+
+    const readFlowNodeIds = async () =>
+      page.evaluate(() => {
+        const wrappers = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-testid^="editor-node-"]'),
+        );
+        const resolveNodeId = (variant: string) =>
+          wrappers
+            .find((wrapper) =>
+              wrapper.querySelector<HTMLElement>(`[data-flow-variant="${variant}"]`),
+            )
+            ?.dataset.testid?.replace("editor-node-", "") ?? null;
+
+        return {
+          startId: resolveNodeId("flow-start"),
+          stepId: resolveNodeId("flow-step"),
+          decisionId: resolveNodeId("flow-decision"),
+        };
+      });
+
+    const canvasBox = await page.getByTestId("editor-canvas").boundingBox();
+    const metadataToggleBox = await page
+      .getByTestId("editor-panel-metadata-toggle")
+      .boundingBox();
+    if (!canvasBox || !metadataToggleBox) {
+      throw new Error("Bounding boxes ausentes para validar protagonismo do canvas.");
     }
+
+    expect(canvasBox.y).toBeLessThan(metadataToggleBox.y);
+
+    await setInspectorMode(page, "operational");
+    const processOverview = page.getByTestId("process-inspector-overview");
+    const initialFlowNodes = await readFlowNodeIds();
+    if (!initialFlowNodes.startId || !initialFlowNodes.stepId) {
+      throw new Error("Fluxo sem nos suficientes para validar overview operacional.");
+    }
+
+    await clickFlowNodeById(initialFlowNodes.startId);
+    await expect(processOverview).toBeVisible();
+    await expect(processOverview).toContainText("Leitura do fluxo");
+    await expect(processOverview).toContainText("Inicio");
+    await expect(processOverview).toContainText("Ponto de partida");
+
+    await clickFlowNodeById(initialFlowNodes.stepId);
+
+    await expect(processOverview).toContainText("Etapa");
+    await expect(processOverview).toContainText("Atividade");
+    await expect(processOverview).toContainText("Posicao no processo");
+    await expect(page.getByTestId("selection-hud-contextual-add-button")).toContainText(
+      "Continuar fluxo",
+    );
+    await expect(page.getByTestId("selection-hud-open-inspector-button")).toContainText(
+      "Editar no inspetor",
+    );
+    await expect(page.getByTestId("selection-hud-flow-more-button")).toBeVisible();
+    await expect(page.getByTestId("selection-hud-flow-more-menu")).toHaveCount(0);
+    await openFlowSelectionMoreMenu(page);
+    await expect(
+      page.getByTestId("selection-hud-contextual-secondary-flow-add-branch"),
+    ).toContainText("Criar bifurcacao");
+
+    await expect(page.getByTestId("process-relations-panel")).toBeVisible();
+    await expect(page.getByTestId("process-relations-panel")).toContainText("Antes");
+    await expect(page.getByTestId("process-relations-panel")).toContainText("Vem antes");
+    await expect(page.getByTestId("inspector-panel")).not.toContainText("Papel atual:");
+
+    const nodeLocator = page.locator('[data-testid^="editor-node-"]');
+    const beforeDecisionCount = await nodeLocator.count();
+    await page
+      .getByTestId("selection-hud-contextual-secondary-flow-add-branch")
+      .click();
+    await expect
+      .poll(async () => nodeLocator.count(), { timeout: E2E_API_TIMEOUT_MS })
+      .toBe(beforeDecisionCount + 1);
+    const flowNodesAfterBranch = await readFlowNodeIds();
+    if (!flowNodesAfterBranch.decisionId) {
+      throw new Error("Fluxo sem decisao visivel apos criar bifurcacao contextual.");
+    }
+    await clickFlowNodeById(flowNodesAfterBranch.decisionId);
+    await expect(processOverview).toContainText("Decisao");
+    await expect(processOverview).toContainText("Ponto de decisao");
+
+    await page.getByRole("button", { name: "Abrir transicao" }).first().click();
+    await expect(page.getByTestId("process-edge-overview")).toBeVisible();
+    await expect(page.getByTestId("process-edge-overview")).toContainText(
+      "Leitura da transicao",
+    );
+  });
+
+  test("Fase 5.11 Flow Inspector: overview, edicao e relacoes ficam confortaveis", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Inspector Comfort");
+    await setInspectorMode(page, "operational");
+
+    const stepNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step"]);
+    if (!stepNodeId) {
+      throw new Error("Fluxo sem etapa visivel para validar conforto do inspector.");
+    }
+
+    await dispatchClickOnCanvasNode(page, stepNodeId);
+
+    const inspector = page.getByTestId("inspector-panel");
+    const overview = page.getByTestId("process-inspector-overview");
+    const identification = page.getByTestId("process-inspector-identification");
+    const details = page.getByTestId("process-inspector-details");
+    const relations = page.getByTestId("process-relations-panel");
+    const labelInput = page.getByTestId("inspector-node-label");
+    const descriptionInput = page.getByTestId("inspector-node-description");
+    const tagsInput = page.getByTestId("inspector-node-tags");
+
+    await expect(overview).toBeVisible();
+    await expect(identification).toBeVisible();
+    await expect(details).toBeVisible();
+    await expect(relations).toBeVisible();
+    await expect(page.getByTestId("process-inspector-context-actions")).toBeVisible();
+    await expect(page.locator('[data-testid^="process-relation-item-"]').first()).toBeVisible();
+    await expect(relations.getByRole("button", { name: "Abrir transicao" }).first()).toBeVisible();
+
+    const inspectorBox = await inspector.boundingBox();
+    const overviewBox = await overview.boundingBox();
+    const identificationBox = await identification.boundingBox();
+    const detailsBox = await details.boundingBox();
+    const relationsBox = await relations.boundingBox();
+    const labelBox = await labelInput.boundingBox();
+    const descriptionBox = await descriptionInput.boundingBox();
+    if (
+      !inspectorBox ||
+      !overviewBox ||
+      !identificationBox ||
+      !detailsBox ||
+      !relationsBox ||
+      !labelBox ||
+      !descriptionBox
+    ) {
+      throw new Error("Bounding boxes ausentes para validar ergonomia do inspector.");
+    }
+
+    expect(inspectorBox.width).toBeGreaterThanOrEqual(360);
+    expect(overviewBox.y).toBeLessThan(identificationBox.y);
+    expect(identificationBox.y).toBeLessThan(detailsBox.y);
+    expect(detailsBox.y).toBeLessThan(relationsBox.y);
+    expect(labelBox.height).toBeGreaterThanOrEqual(48);
+    expect(descriptionBox.height).toBeGreaterThanOrEqual(170);
+
+    const updatedLabel = `Etapa conforto ${Date.now()}`;
+    const updatedDescription =
+      "Coordena a triagem, valida a entrada e libera a proxima passagem.";
+    const updatedTags = "triagem, prioridade, fila";
+
+    await labelInput.fill(updatedLabel);
+    await descriptionInput.fill(updatedDescription);
+    await tagsInput.fill(updatedTags);
+    await expect(details).toContainText("triagem");
+    await expect(details).toContainText("prioridade");
+
+    await page.getByTestId("inspector-apply-node").click();
+    await expect(page.getByTestId(`editor-node-${stepNodeId}`)).toContainText(updatedLabel);
+    await runActionAndWaitForManualSave(
+      page,
+      () => page.getByTestId("save-button").click(),
+      "flow inspector comfort manual save",
+    );
+  });
+
+  test("Fase 5.12 Flow Interaction: menu fecha por clique fora, Escape e troca de selecao", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Selection Menu");
+    await setInspectorMode(page, "operational");
+
+    const stepNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step"]);
+    const startNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-start"]);
+    if (!stepNodeId || !startNodeId || stepNodeId === startNodeId) {
+      throw new Error("Fluxo sem nos suficientes para validar o ciclo de vida do menu.");
+    }
+
+    await dispatchClickOnCanvasNode(page, stepNodeId);
+    const menu = page.getByTestId("selection-hud-flow-more-menu");
+
+    await openFlowSelectionMoreMenu(page);
+    await page.getByTestId("inspector-panel").click({ position: { x: 48, y: 48 } });
+    await expect(menu).toHaveCount(0);
+
+    await openFlowSelectionMoreMenu(page);
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+
+    await openFlowSelectionMoreMenu(page);
+    await dispatchClickOnCanvasNode(page, startNodeId);
+    await expect(menu).toHaveCount(0);
+    await expect(page.getByTestId("process-inspector-overview")).toContainText(
+      "Ponto de partida",
+    );
+  });
+
+  test("Fase 5.12 Flow Interaction: relacao abre no e transicao abre aresta", async ({
+    authenticatedPage: page,
+  }) => {
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Relation Open");
+    await setInspectorMode(page, "operational");
+
+    const stepNodeId = await resolveVisibleFlowSourceNodeId(page, ["flow-step"]);
+    if (!stepNodeId) {
+      throw new Error("Fluxo sem etapa visivel para validar abertura de relacao.");
+    }
+
+    await dispatchClickOnCanvasNode(page, stepNodeId);
+    const relations = page.getByTestId("process-relations-panel");
+    await expect(relations).toBeVisible();
+
+    await relations.getByRole("button", { name: "Abrir anterior" }).first().click();
+    await expect(page.getByTestId("process-inspector-overview")).toContainText(
+      "Ponto de partida",
+    );
+    await expect(page.getByTestId("process-edge-overview")).toHaveCount(0);
+
+    await dispatchClickOnCanvasNode(page, stepNodeId);
+    await relations.getByRole("button", { name: "Abrir transicao" }).first().click();
+    await expect(page.getByTestId("process-edge-overview")).toBeVisible();
+    await expect(page.getByTestId("selection-hud-open-inspector-button")).toContainText(
+      "Editar transicao",
+    );
   });
 
   test("Fase 5.8 Roles Flow: highlight semantico permite alvo valido a partir do inicio", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createProjectAndOpenEditor(page, "E2E Flow Highlight", {
-      diagramType: "flow",
-    });
+    const project = await createFlowProjectViaAssistantAndOpenEditor(
+      page,
+      "E2E Flow Highlight",
+    );
     const snapshotBefore = await loadEditorSnapshot(page, project.id);
     const sourceNode =
       snapshotBefore.nodes.find((node) => node.kind === "project") ??

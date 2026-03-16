@@ -48,6 +48,17 @@ import {
   ValidateSemanticDraftUseCase,
 } from "@/src/modules/semantics/application";
 import {
+  ApplyAssistantDraftToProjectUseCase,
+  ApplyProjectCreationUseCase,
+  CreateProjectWithAssistantUseCase,
+  GetProjectCreationDraftUseCase,
+  GetProjectCreationSettingsUseCase,
+  GetProjectCreationSettingsSummaryUseCase,
+  SaveProjectCreationDraftUseCase,
+  SaveProjectCreationSettingsUseCase,
+} from "@/src/modules/creation-assistant/application";
+import { PrismaProjectCreationStateRepository } from "@/src/modules/creation-assistant/infrastructure";
+import {
   FileSystemPrismaSchemaFileImportSource,
   InformationSchemaPostgresImportIntrospectionSource,
   PrismaPostgresIntrospectionQueryRunner,
@@ -86,6 +97,10 @@ export function createServerRepositories() {
   const wizardDraftRepository = new PrismaWizardDraftRepository(
     prisma.wizardDraft,
   );
+  const projectCreationStateRepository = new PrismaProjectCreationStateRepository(
+    prisma.projectCreationSettings,
+    prisma.projectCreationDraft,
+  );
   const workingSnapshotRepository = new PrismaWorkingSnapshotRepository(
     prisma.graphVersion,
   );
@@ -111,6 +126,7 @@ export function createServerRepositories() {
     workspaceRepository,
     projectRepository,
     wizardDraftRepository,
+    projectCreationStateRepository,
     workingSnapshotRepository,
     snapshotVersionRepository,
     semanticPolicyRepository,
@@ -157,6 +173,58 @@ export function createServerUseCases() {
       updateProjectMetadata: new UpdateProjectMetadataUseCase({
         projectRepository: repositories.projectRepository,
         workspaceRepository: repositories.workspaceRepository,
+      }),
+    },
+    creationAssistant: {
+      createProjectWithAssistant: new CreateProjectWithAssistantUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
+      }),
+      applyAssistantDraftToProject: new ApplyAssistantDraftToProjectUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
+      }),
+      applyProjectCreation: new ApplyProjectCreationUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
+      }),
+      getProjectCreationSettings: new GetProjectCreationSettingsUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
+      }),
+      getProjectCreationSettingsSummary:
+        new GetProjectCreationSettingsSummaryUseCase({
+          workspaceRepository: repositories.workspaceRepository,
+          projectRepository: repositories.projectRepository,
+          workingSnapshotRepository: repositories.workingSnapshotRepository,
+          projectCreationStateRepository:
+            repositories.projectCreationStateRepository,
+        }),
+      saveProjectCreationSettings: new SaveProjectCreationSettingsUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
+      }),
+      getProjectCreationDraft: new GetProjectCreationDraftUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
+      }),
+      saveProjectCreationDraft: new SaveProjectCreationDraftUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+        projectRepository: repositories.projectRepository,
+        workingSnapshotRepository: repositories.workingSnapshotRepository,
+        projectCreationStateRepository: repositories.projectCreationStateRepository,
       }),
     },
     wizard: {

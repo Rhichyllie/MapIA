@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "phase": "4E.9R",
+  "kind": "run_orchestrator",
+  "status": "blocked_preconditions",
+  "started_at": "2026-02-27T16:12:02Z",
+  "finished_at": "2026-02-27T16:12:02Z",
+  "require_ready_env": true,
+  "env_file": {
+    "enabled": false,
+    "mode": "merge",
+    "priority": "envfile",
+    "path": null
+  },
+  "outputs": {
+    "preconditions_report": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\4e9r-preconditions.20260227-161202.report.json",
+    "evidence_output": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\observability-evidence.4e9r.20260227-161202.json",
+    "smoke_report": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\post-apply-smoke.4e9r.20260227-161202.report.json",
+    "baseline_output": "C:\\Projetos\\MapIA\\infra\\observability\\calibration\\baseline-thresholds.4e9.yaml",
+    "naming_output": "C:\\Projetos\\MapIA\\infra\\observability\\calibration\\naming-compatibility.4e9.yaml",
+    "readiness_output": "C:\\Projetos\\MapIA\\infra\\observability\\calibration\\finalization-readiness.4e10.yaml",
+    "run_report": "C:\\Projetos\\MapIA\\infra\\observability\\evidence\\run-4e9r-real.20260227-161202.report.json"
+  },
+  "steps": [
+    {
+      "id": "A_gate_preconditions",
+      "description": "Gate de precondicoes 4E.9R",
+      "status": "failed",
+      "exit_code": 1,
+      "started_at": "2026-02-27T16:12:02Z",
+      "finished_at": "2026-02-27T16:12:02Z"
+    }
+  ],
+  "profile_resolution": null,
+  "stop_condition_triggered": true
+}

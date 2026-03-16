@@ -1,0 +1,51 @@
+version: 1
+phase: 4E.8
+default_profile: otel_collector_prometheus_tempo_latency
+notes:
+  - O profile default reflete o naming canonico assumido nos artefatos versionados 4E.8.
+  - Use profiles alternativos no script de apply para compatibilizar collector/backend sem editar dashboards/rules manualmente.
+  - Validar profile final contra metricas reais do ambiente alvo antes do apply definitivo.
+canonical:
+  labels:
+    deployment_environment: deployment_environment
+    service_name: service_name
+    service_version: service_version
+    span_name: span_name
+    status_code: status_code
+  metrics:
+    importing_runs_finalized_total: importing_telemetry_runs_finalized_total
+    importing_adapter_warnings_total: importing_telemetry_adapter_warnings_total
+    importing_adapter_late_drops_total: importing_telemetry_adapter_late_drops_total
+    importing_run_duration_bucket_ms: importing_telemetry_run_duration_milliseconds_bucket
+    importing_step_duration_bucket_ms: importing_telemetry_step_duration_milliseconds_bucket
+    prisma_operations_total: prisma_telemetry_operations_total
+    prisma_errors_total: prisma_telemetry_errors_total
+    prisma_slow_queries_total: prisma_telemetry_slow_queries_total
+    prisma_query_duration_bucket_ms: prisma_telemetry_query_duration_milliseconds_bucket
+    spanmetrics_calls_total: traces_spanmetrics_calls_total
+    spanmetrics_latency_bucket_ms: traces_spanmetrics_latency_bucket
+profiles:
+  otel_collector_prometheus_tempo_latency:
+    description: OTel metrics (Prometheus naming) + Tempo spanmetrics com histogram `latency`.
+    labels: {}
+    metrics: {}
+  tempo_spanmetrics_duration_ms:
+    description: Tempo/spanmetrics com histogram `duration_milliseconds` em vez de `latency`.
+    labels: {}
+    metrics:
+      spanmetrics_latency_bucket_ms: traces_spanmetrics_duration_milliseconds_bucket
+  resource_labels_short:
+    description: Backends que expõem labels curtos (`service`, `environment`, `version`).
+    labels:
+      deployment_environment: environment
+      service_name: service
+      service_version: version
+    metrics: {}
+  resource_labels_mixed_duration_ms:
+    description: Labels curtos + spanmetrics duration_ms.
+    labels:
+      deployment_environment: environment
+      service_name: service
+      service_version: version
+    metrics:
+      spanmetrics_latency_bucket_ms: traces_spanmetrics_duration_milliseconds_bucket

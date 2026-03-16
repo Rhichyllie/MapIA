@@ -6,7 +6,13 @@ import {
   type DiagramRole,
 } from "./diagram-roles";
 
-type DiagramTypeEffective = DiagramType | "erd" | undefined;
+type DiagramTypeEffective =
+  | DiagramType
+  | "erd"
+  | "sitemap"
+  | "graph"
+  | "timeline"
+  | undefined;
 
 type NormalizeDiagramSnapshotInput = {
   snapshot: GraphSnapshot;
@@ -37,6 +43,11 @@ const GENERATED_FALLBACK_IDS = {
     "00000000-0000-4000-8000-000000000e01".replace("e", "2"),
     "00000000-0000-4000-8000-000000000e02".replace("e", "2"),
     "00000000-0000-4000-8000-000000000e03".replace("e", "2"),
+  ],
+  timeline: [
+    "00000000-0000-4000-8000-000000000t01".replace("t", "3"),
+    "00000000-0000-4000-8000-000000000t02".replace("t", "3"),
+    "00000000-0000-4000-8000-000000000t03".replace("t", "3"),
   ],
 } as const;
 
@@ -92,7 +103,7 @@ function resolveSeedPosition(nodes: GraphSnapshot["nodes"]) {
 }
 
 function pickGeneratedNodeId(
-  diagramType: "flow" | "mindmap" | "erd",
+  diagramType: "flow" | "mindmap" | "erd" | "timeline",
   existingIds: Set<string>,
 ) {
   const preferredIds = GENERATED_FALLBACK_IDS[diagramType];
@@ -104,7 +115,7 @@ function pickGeneratedNodeId(
 
   let suffix = 4;
   while (suffix < 999) {
-    const candidate = `00000000-0000-4000-8000-${diagramType === "flow" ? "000000000f" : diagramType === "mindmap" ? "0000000001" : "0000000002"}${suffix
+    const candidate = `00000000-0000-4000-8000-${diagramType === "flow" ? "000000000f" : diagramType === "mindmap" ? "0000000001" : diagramType === "timeline" ? "0000000003" : "0000000002"}${suffix
       .toString()
       .padStart(2, "0")}`;
     if (!existingIds.has(candidate)) {
@@ -165,7 +176,7 @@ function resolveMindmapRootNodeId(input: {
 }
 
 function createFallbackNode(input: {
-  diagramType: "flow" | "mindmap" | "erd";
+  diagramType: "flow" | "mindmap" | "erd" | "timeline";
   snapshot: GraphSnapshot;
   rootNodeName?: string;
 }) {
@@ -205,6 +216,21 @@ function createFallbackNode(input: {
     };
   }
 
+  if (input.diagramType === "timeline") {
+    return {
+      id: pickGeneratedNodeId("timeline", existingIds),
+      projectId,
+      kind: "note" as const,
+      label: "Marco 1",
+      position: {
+        x: seedPosition.x + 260,
+        y: seedPosition.y,
+      },
+      data: writeDiagramRoleToPayload({}, "timeline-milestone"),
+      externalRefs: [],
+    };
+  }
+
   return {
     id: pickGeneratedNodeId("erd", existingIds),
     projectId,
@@ -235,7 +261,13 @@ export function normalizeDiagramSnapshot(
     externalRefs: [...(edge.externalRefs ?? [])],
   }));
 
-  if (diagramType === "flow" || diagramType === "mindmap" || diagramType === "erd") {
+  if (
+    diagramType === "flow" ||
+    diagramType === "mindmap" ||
+    diagramType === "erd" ||
+    diagramType === "sitemap" ||
+    diagramType === "timeline"
+  ) {
     for (const node of nextNodes) {
       if (isMetaNodeKind(node.kind)) {
         hiddenNodeIdSet.add(node.id);
@@ -249,7 +281,13 @@ export function normalizeDiagramSnapshot(
 
   let computedRootNodeId: string | undefined;
 
-  if (!hasVisibleRealNode && (diagramType === "flow" || diagramType === "mindmap" || diagramType === "erd")) {
+  if (
+    !hasVisibleRealNode &&
+    (diagramType === "flow" ||
+      diagramType === "mindmap" ||
+      diagramType === "erd" ||
+      diagramType === "timeline")
+  ) {
     const fallbackNode = createFallbackNode({
       diagramType,
       snapshot: input.snapshot,

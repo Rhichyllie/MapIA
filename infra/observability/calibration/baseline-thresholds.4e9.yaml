@@ -1,0 +1,413 @@
+version: 1
+phase: 4E.9
+status: dev_local_real_evidence
+calibration_date: '2026-03-04'
+baseline_windows:
+  alert: 15m
+  operational: 7d
+  trend: 30d
+evidence:
+  status: dev_local_real_evidence
+  environment_scope: dev_local
+  required_environments:
+  - dev_local
+  source_file: evidence/observability-evidence.4e9r.20260304-180338.json
+  collected_at: '2026-03-04T18:05:04Z'
+  required_windows:
+    alert: 15m
+    operational: 7d
+    trend: 30d
+  remote_smoke:
+    grafana:
+      executed: true
+      token_env: GRAFANA_API_TOKEN
+      health:
+        commit: 701c851be7a930e04fbc6ebb1cd4254da80edd4c
+        database: ok
+        version: 10.4.2
+      dashboards:
+      - uid: mapia-importing-health
+        status: http_error
+        error: 'HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-importing-health:
+          {"extra":null,"message":"Invalid API key","messageId":"api-key.invalid","statusCode":401,"traceID":""}
+
+          '
+      - uid: mapia-importing-performance
+        status: http_error
+        error: 'HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-importing-performance:
+          {"extra":null,"message":"Invalid API key","messageId":"api-key.invalid","statusCode":401,"traceID":""}
+
+          '
+      - uid: mapia-otel-runtime-warnings
+        status: http_error
+        error: 'HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-otel-runtime-warnings:
+          {"extra":null,"message":"Invalid API key","messageId":"api-key.invalid","statusCode":401,"traceID":""}
+
+          '
+      - uid: mapia-http-platform-overview
+        status: http_error
+        error: 'HTTP 401 em http://127.0.0.1:3001/api/dashboards/uid/mapia-http-platform-overview:
+          {"extra":null,"message":"Invalid API key","messageId":"api-key.invalid","statusCode":401,"traceID":""}
+
+          '
+      status: partial
+    prometheus:
+      executed: true
+      status: ok
+    loki:
+      executed: true
+      status: ok
+  naming_observed_final_profile: otel_collector_prometheus_tempo_latency
+  environments:
+    dev_local:
+      status: evidence_partial
+      signal_status:
+        importing_failure_rate:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        importing_run_duration_p95:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        importing_adapter_warning_rate:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        importing_adapter_late_drops:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        prisma_error_rate:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        prisma_slow_query_rate:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        prisma_query_duration_p95:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        http_spanmetrics_volume:
+          status: evidence_present_all_windows
+          windows_present:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          reason: null
+        runtime_warnings_recurrence:
+          status: no_data_or_query_error
+          windows_present: []
+          reason: null
+minimum_volume_gates:
+  importing_runs_15m_warning: 20
+  importing_runs_15m_critical: 50
+  importing_runs_1h: 100
+  prisma_ops_15m_warning: 100
+  prisma_ops_15m_critical: 300
+  spanmetrics_calls_15m_warning: 200
+  spanmetrics_calls_15m_critical: 400
+thresholds:
+  staging:
+    calibration_state: provisional_4e9_inherited_from_4e8_pending_real_evidence
+    importing:
+      failure_rate_warning_max_15m: 0.05
+      failure_rate_critical_max_15m: 0.12
+      run_duration_p95_warning_ms_max_15m: 15000
+      run_duration_p95_critical_ms_max_15m: 30000
+      adapter_warning_rate_warning_max_15m: 0.02
+      adapter_warning_rate_critical_max_15m: 0.05
+      adapter_late_drops_warning_count_15m: 1
+      adapter_late_drops_critical_count_15m: 5
+    prisma:
+      error_rate_warning_max_15m: 0.02
+      error_rate_critical_max_15m: 0.05
+      slow_query_threshold_ms: 250
+      slow_query_rate_warning_max_15m: 0.05
+      slow_query_rate_critical_max_15m: 0.12
+      query_duration_p95_warning_ms_max_15m: 500
+      query_duration_p95_critical_ms_max_15m: 1000
+    runtime:
+      bootstrap_failed_max_per_deploy: 0
+      instrumentation_init_failed_max_15m: 0
+      shutdown_failed_recurrence_warning_count_30m: 1
+    spanmetrics:
+      volume_drop_ratio_min_vs_7d_baseline: 0.3
+      volume_spike_ratio_max_vs_7d_baseline: 3.0
+  production:
+    calibration_state: provisional_4e9_inherited_from_4e8_pending_real_evidence
+    importing:
+      failure_rate_warning_max_15m: 0.01
+      failure_rate_critical_max_15m: 0.03
+      run_duration_p95_warning_ms_max_15m: 10000
+      run_duration_p95_critical_ms_max_15m: 20000
+      adapter_warning_rate_warning_max_15m: 0.005
+      adapter_warning_rate_critical_max_15m: 0.02
+      adapter_late_drops_warning_count_15m: 1
+      adapter_late_drops_critical_count_15m: 3
+    prisma:
+      error_rate_warning_max_15m: 0.01
+      error_rate_critical_max_15m: 0.02
+      slow_query_threshold_ms: 250
+      slow_query_rate_warning_max_15m: 0.02
+      slow_query_rate_critical_max_15m: 0.05
+      query_duration_p95_warning_ms_max_15m: 300
+      query_duration_p95_critical_ms_max_15m: 700
+    runtime:
+      bootstrap_failed_max_per_deploy: 0
+      instrumentation_init_failed_max_15m: 0
+      shutdown_failed_recurrence_warning_count_30m: 1
+    spanmetrics:
+      volume_drop_ratio_min_vs_7d_baseline: 0.5
+      volume_spike_ratio_max_vs_7d_baseline: 2.0
+recalibration_notes:
+- 4E.9 promove o pipeline de ingestao/coleta de evidencias reais e baseline/naming
+  versionados para promocao automatizada.
+- Thresholds nao sao promovidos automaticamente sem evidencias reais e/ou `threshold_decisions`
+  explicitas no arquivo de evidencias.
+- "Quando ha evidencias parciais, manter provis\xF3rio por sinal/ambiente com motivo\
+  \ registrado em `evidence.environments.*.signal_status`."
+pending_real_data_signals:
+- runtime_warnings_recurrence
+next_step_to_finalize_real_baseline:
+- Executar `collect-observability-evidence.py` com endpoints reais de Grafana/Prometheus/Loki
+  e confirmar `signals.*.*.status` com janelas 15m/7d/30d.
+- Preencher/gerar `threshold_decisions` com thresholds finais por sinal/ambiente a
+  partir das evidencias reais.
+- Reexecutar `promote-baseline-4e9.py --allow-threshold-overrides-from-evidence` e
+  ajustar rules conforme thresholds promovidos.
+- "Em `dev_local`, manter status `dev_local_real_evidence` para valida\xE7\xE3o operacional\
+  \ sem promover defaults globais de staging/producao."
+source_baseline: calibration/baseline-thresholds.4e8.yaml
+environment_scope: dev_local
+environment_scope_status: dev_local_real_evidence
+thresholds_overrides_applied_from_evidence: []
+thresholds_delta:
+  source_baseline: calibration/baseline-thresholds.4e8.yaml
+  evidence_source_file: evidence/observability-evidence.4e9r.20260304-180338.json
+  generated_at: '2026-03-04T18:05:30Z'
+  staging:
+    importing.adapter_late_drops_critical_count_15m:
+      previous: 5
+      current: 5
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.adapter_late_drops_warning_count_15m:
+      previous: 1
+      current: 1
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.adapter_warning_rate_critical_max_15m:
+      previous: 0.05
+      current: 0.05
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.adapter_warning_rate_warning_max_15m:
+      previous: 0.02
+      current: 0.02
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.failure_rate_critical_max_15m:
+      previous: 0.12
+      current: 0.12
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.failure_rate_warning_max_15m:
+      previous: 0.05
+      current: 0.05
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.run_duration_p95_critical_ms_max_15m:
+      previous: 30000
+      current: 30000
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.run_duration_p95_warning_ms_max_15m:
+      previous: 15000
+      current: 15000
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.error_rate_critical_max_15m:
+      previous: 0.05
+      current: 0.05
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.error_rate_warning_max_15m:
+      previous: 0.02
+      current: 0.02
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.query_duration_p95_critical_ms_max_15m:
+      previous: 1000
+      current: 1000
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.query_duration_p95_warning_ms_max_15m:
+      previous: 500
+      current: 500
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.slow_query_rate_critical_max_15m:
+      previous: 0.12
+      current: 0.12
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.slow_query_rate_warning_max_15m:
+      previous: 0.05
+      current: 0.05
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.slow_query_threshold_ms:
+      previous: 250
+      current: 250
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    runtime.bootstrap_failed_max_per_deploy:
+      previous: 0
+      current: 0
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    runtime.instrumentation_init_failed_max_15m:
+      previous: 0
+      current: 0
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    runtime.shutdown_failed_recurrence_warning_count_30m:
+      previous: 1
+      current: 1
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    spanmetrics.volume_drop_ratio_min_vs_7d_baseline:
+      previous: 0.3
+      current: 0.3
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    spanmetrics.volume_spike_ratio_max_vs_7d_baseline:
+      previous: 3.0
+      current: 3.0
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+  production:
+    importing.adapter_late_drops_critical_count_15m:
+      previous: 3
+      current: 3
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.adapter_late_drops_warning_count_15m:
+      previous: 1
+      current: 1
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.adapter_warning_rate_critical_max_15m:
+      previous: 0.02
+      current: 0.02
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.adapter_warning_rate_warning_max_15m:
+      previous: 0.005
+      current: 0.005
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.failure_rate_critical_max_15m:
+      previous: 0.03
+      current: 0.03
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.failure_rate_warning_max_15m:
+      previous: 0.01
+      current: 0.01
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.run_duration_p95_critical_ms_max_15m:
+      previous: 20000
+      current: 20000
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    importing.run_duration_p95_warning_ms_max_15m:
+      previous: 10000
+      current: 10000
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.error_rate_critical_max_15m:
+      previous: 0.02
+      current: 0.02
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.error_rate_warning_max_15m:
+      previous: 0.01
+      current: 0.01
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.query_duration_p95_critical_ms_max_15m:
+      previous: 700
+      current: 700
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.query_duration_p95_warning_ms_max_15m:
+      previous: 300
+      current: 300
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.slow_query_rate_critical_max_15m:
+      previous: 0.05
+      current: 0.05
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.slow_query_rate_warning_max_15m:
+      previous: 0.02
+      current: 0.02
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    prisma.slow_query_threshold_ms:
+      previous: 250
+      current: 250
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    runtime.bootstrap_failed_max_per_deploy:
+      previous: 0
+      current: 0
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    runtime.instrumentation_init_failed_max_15m:
+      previous: 0
+      current: 0
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    runtime.shutdown_failed_recurrence_warning_count_30m:
+      previous: 1
+      current: 1
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    spanmetrics.volume_drop_ratio_min_vs_7d_baseline:
+      previous: 0.5
+      current: 0.5
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null
+    spanmetrics.volume_spike_ratio_max_vs_7d_baseline:
+      previous: 2.0
+      current: 2.0
+      reason: inherited_from_4e8_pending_real_evidence
+      evidence_used: null

@@ -1,0 +1,60 @@
+{
+  "title": "MapIA - Dashboard 4 - HTTP Platform Overview",
+  "uid": "mapia-http-platform-overview",
+  "schemaVersion": 39,
+  "version": 3,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["mapia", "observability", "4e9", "http"],
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "env", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(traces_spanmetrics_calls_total, deployment_environment)" }, "includeAll": true, "multi": true },
+      { "name": "service", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(traces_spanmetrics_calls_total, service_name)" }, "includeAll": true, "multi": true },
+      { "name": "route", "type": "textbox", "query": ".*", "current": { "text": ".*", "value": ".*" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Volume de spans HTTP (/s)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(traces_spanmetrics_calls_total{span_name=~\"HTTP.*\",deployment_environment=~\"$env\",service_name=~\"$service\"}[5m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "HTTP error rate",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(traces_spanmetrics_calls_total{span_name=~\"HTTP.*\",status_code=~\"STATUS_CODE_ERROR|ERROR\",deployment_environment=~\"$env\",service_name=~\"$service\"}[5m])) / clamp_min(sum(rate(traces_spanmetrics_calls_total{span_name=~\"HTTP.*\",deployment_environment=~\"$env\",service_name=~\"$service\"}[5m])), 1e-9)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP latency p95 por rota (span metrics)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, span_name) (rate(traces_spanmetrics_latency_bucket{span_name=~\"$route\",deployment_environment=~\"$env\",service_name=~\"$service\"}[5m])))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Top endpoints por volume (instant)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "topk(20, sum by (span_name) (rate(traces_spanmetrics_calls_total{span_name=~\"HTTP.*\",deployment_environment=~\"$env\",service_name=~\"$service\"}[5m])))", "instant": true }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    }
+  ]
+}

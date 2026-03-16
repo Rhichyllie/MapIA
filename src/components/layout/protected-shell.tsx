@@ -1,6 +1,7 @@
 import type { Session } from "next-auth";
 import { SignOutButton } from "@/src/components/auth/sign-out-button";
 import { NavLink } from "@/src/components/layout/nav-link";
+import { ThemeToggle } from "@/src/components/ui/theme-toggle";
 
 type ProtectedShellProps = {
   children: React.ReactNode;
@@ -15,10 +16,11 @@ export function ProtectedShell({ children, session }: ProtectedShellProps) {
           <span className="brand-mark" aria-hidden="true" />
           <div>
             <h1>MapIA</h1>
-            <p>Arquitetura da Informacao + Diagramas</p>
+            <p>Arquitetura da informacao e diagramas</p>
           </div>
         </div>
         <div className="row-actions">
+          <ThemeToggle />
           <span className="badge" aria-label="Usuario autenticado">
             <span className="badge-dot" aria-hidden="true" />
             {session.user?.email ?? "Usuario"}
@@ -31,10 +33,10 @@ export function ProtectedShell({ children, session }: ProtectedShellProps) {
         <aside className="side-nav" aria-label="Navegacao principal">
           <ul className="nav-list">
             <li>
-              <NavLink href="/dashboard" label="Workspace" />
+              <NavLink href="/dashboard" label="Area de trabalho" />
             </li>
             <li>
-              <NavLink href="/wizard" label="Wizard" />
+              <NavLink href="/create" label="Assistente de criacao" />
             </li>
             <li>
               <NavLink href="/editor" label="Editor" />

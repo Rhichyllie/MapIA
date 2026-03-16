@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "phase": "4E.9",
+  "environment_scope": "staging_prod",
+  "status": "template_no_real_evidence",
+  "collected_at": null,
+  "collector": {
+    "script": "infra/observability/scripts/collect-observability-evidence.py",
+    "profile_requested": null,
+    "environment_scope": "staging_prod",
+    "environments": [
+      "staging",
+      "production"
+    ],
+    "http_timeout_seconds": 15,
+    "windows": {
+      "alert": "15m",
+      "operational": "7d",
+      "trend": "30d"
+    },
+    "env_file": {
+      "enabled": false,
+      "mode": "merge",
+      "priority": "envfile",
+      "path": null,
+      "selected_keys_count": 0,
+      "applied_keys_count": 0,
+      "conflict_keys_count": 0
+    }
+  },
+  "environment_access": {
+    "grafana": {
+      "available": false,
+      "reason": "endpoint nao informado"
+    },
+    "prometheus": {
+      "available": false,
+      "reason": "endpoint nao informado"
+    },
+    "loki": {
+      "available": false,
+      "reason": "endpoint nao informado"
+    }
+  },
+  "remote_smoke": {
+    "grafana": {
+      "executed": false
+    },
+    "prometheus": {
+      "executed": false
+    },
+    "loki": {
+      "executed": false
+    }
+  },
+  "naming_observed": {
+    "status": "not_collected",
+    "profile_candidates": {},
+    "final_profile": null,
+    "prometheus": {
+      "labels_present": [],
+      "metrics_present": {}
+    },
+    "loki": {
+      "labels_present": []
+    }
+  },
+  "signals": {
+    "staging": {},
+    "production": {}
+  },
+  "threshold_decisions": {
+    "staging": {},
+    "production": {}
+  },
+  "notes": [
+    "Preencher via coleta automatizada ou export agregado seguro.",
+    "Thresholds finais nao devem ser promovidos sem evidencias reais 15m/7d/30d.",
+    "Escopo staging_prod exige matriz real por ambiente (staging/producao)."
+  ]
+}

@@ -132,4 +132,66 @@ describe("normalizeDiagramSnapshot", () => {
     expect(first.computedRootNodeId).toBe("40000000-0000-4000-8000-000000000002");
     expect(second.computedRootNodeId).toBe(first.computedRootNodeId);
   });
+
+  it("sitemap hides meta nodes and timeline creates fallback milestone when empty", () => {
+    const sitemapSnapshot = createBaseSnapshot({
+      diagramType: "sitemap",
+      nodes: [
+        {
+          id: "70000000-0000-4000-8000-000000000001",
+          projectId: "71000000-0000-4000-8000-000000000001",
+          kind: "workspace",
+          label: "Workspace",
+          position: { x: 0, y: 0 },
+          data: {},
+          externalRefs: [],
+        },
+        {
+          id: "70000000-0000-4000-8000-000000000002",
+          projectId: "71000000-0000-4000-8000-000000000001",
+          kind: "project",
+          label: "Projeto",
+          position: { x: 120, y: 40 },
+          data: {},
+          externalRefs: [],
+        },
+      ],
+      edges: [],
+    });
+
+    const timelineSnapshot = createBaseSnapshot({
+      diagramType: "timeline",
+      nodes: [
+        {
+          id: "72000000-0000-4000-8000-000000000001",
+          projectId: "73000000-0000-4000-8000-000000000001",
+          kind: "workspace",
+          label: "Workspace",
+          position: { x: -40, y: 10 },
+          data: {},
+          externalRefs: [],
+        },
+      ],
+      edges: [],
+    });
+
+    const normalizedSitemap = normalizeDiagramSnapshot({
+      snapshot: sitemapSnapshot,
+      diagramTypeEffective: "sitemap",
+    });
+    const normalizedTimeline = normalizeDiagramSnapshot({
+      snapshot: timelineSnapshot,
+      diagramTypeEffective: "timeline",
+    });
+
+    expect(normalizedSitemap.hiddenNodeIds).toHaveLength(2);
+    expect(
+      normalizedTimeline.normalizedSnapshot.nodes.some(
+        (node) =>
+          node.label === "Marco 1" &&
+          (node.data.__mapia as { role?: string } | undefined)?.role ===
+            "timeline-milestone",
+      ),
+    ).toBe(true);
+  });
 });

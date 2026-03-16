@@ -48,7 +48,7 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
   }
 
   return (
-    <form className="stack-sm" onSubmit={handleSubmit}>
+    <form className="stack-sm" onSubmit={handleSubmit} data-testid="login-form">
       {!devCredentialsEnabled ? (
         <div className="error-box">
           O login por credenciais de desenvolvimento esta desabilitado fora de{" "}
@@ -64,6 +64,7 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
           name="email"
           type="email"
           autoComplete="username"
+          data-testid="login-email-input"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           disabled={!devCredentialsEnabled}
@@ -78,6 +79,7 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
           name="password"
           type="password"
           autoComplete="current-password"
+          data-testid="login-password-input"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           disabled={!devCredentialsEnabled}
@@ -95,6 +97,7 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
         className="btn btn-primary"
         type="submit"
         disabled={isSubmitting || !devCredentialsEnabled}
+        data-testid="login-submit-button"
       >
         {isSubmitting ? "Entrando..." : "Entrar"}
       </button>

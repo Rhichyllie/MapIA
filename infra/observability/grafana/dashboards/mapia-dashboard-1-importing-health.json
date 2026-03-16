@@ -1,0 +1,60 @@
+{
+  "title": "MapIA - Dashboard 1 - Health do Importing",
+  "uid": "mapia-importing-health",
+  "schemaVersion": 39,
+  "version": 3,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["mapia", "observability", "4e9", "importing"],
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "env", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(importing_telemetry_runs_finalized_total, deployment_environment)" }, "includeAll": true, "multi": true },
+      { "name": "service", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(importing_telemetry_runs_finalized_total, service_name)" }, "includeAll": true, "multi": true },
+      { "name": "version", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(importing_telemetry_runs_finalized_total, service_version)" }, "includeAll": true, "multi": true }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Runs finalizadas por outcome",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (importing_outcome) (rate(importing_telemetry_runs_finalized_total{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Failure rate (15m)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(importing_telemetry_runs_finalized_total{importing_outcome=\"failure\",deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[15m])) / clamp_min(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[15m])), 1)" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } },
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Adapter warnings por codigo",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (importing_warning_code) (rate(importing_telemetry_adapter_warnings_total{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Late drops por kind",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (importing_drop_kind) (increase(importing_telemetry_adapter_late_drops_total{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[15m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    }
+  ]
+}

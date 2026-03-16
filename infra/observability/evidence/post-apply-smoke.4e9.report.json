@@ -1,0 +1,17 @@
+{
+  "phase": "4E.9",
+  "checked_at": "2026-02-25T19:08:30Z",
+  "mode": "dry-run",
+  "profile_requested": null,
+  "remote": {
+    "status": "not_executed",
+    "reason": "dry_run_or_missing_endpoints"
+  },
+  "local_render": {
+    "status": "ok",
+    "render_root": "C:\\Users\\rhich\\AppData\\Local\\Temp\\mapia-observability-post-apply-i9ucmso1",
+    "profile_resolved": "otel_collector_prometheus_tempo_latency",
+    "naming_file": "calibration/naming-compatibility.4e9.yaml"
+  },
+  "status": "ok_dry_run"
+}

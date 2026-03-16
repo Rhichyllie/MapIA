@@ -30,6 +30,8 @@ model Project {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   auditEvents   AuditEvent[]
+  creationSettings ProjectCreationSettings?
+  creationDraft    ProjectCreationDraft?
   editorSnapshotVersions EditorSnapshotVersion[]
   edges         Edge[]
   externalRefs  ExternalRef[]
@@ -43,6 +45,78 @@ model Project {
   @@unique([workspaceId, slug])
   @@index([workspaceId])
   @@map("projects")
+}
+
+model ProjectCreationSettings {
+  id            String   @id @default(uuid()) @db.Uuid
+  projectId     String   @unique @db.Uuid
+  profile       String?  @db.VarChar(80)
+  startStrategy String?  @db.VarChar(80)
+  startSource   String?  @db.VarChar(80)
+  templatePreset String? @db.VarChar(80)
+  initialView   String?  @db.VarChar(80)
+  layout        String?  @db.VarChar(80)
+  detailLevel   String?  @db.VarChar(80)
+  sourceConfig  Json?
+  automation    Json?
+  context       Json?
+  appliedSettings Json?
+  appliedVersion Int      @default(1)
+  appliedAt      DateTime?
+  appliedByIdentity String? @db.VarChar(255)
+  draftPayload  Json?
+  draftVersion  Int      @default(1)
+  draftUpdatedAt DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_creation_settings")
+}
+
+model ProjectCreationDraft {
+  id              String   @id @default(uuid()) @db.Uuid
+  projectId        String   @unique @db.Uuid
+  draftPayloadJson Json
+  draftVersion     Int      @default(1)
+  updatedByIdentity String? @db.VarChar(255)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_creation_drafts")
+}
+
+model CreationTelemetryEvent {
+  id                String   @id @default(uuid()) @db.Uuid
+  eventName         String   @db.VarChar(120)
+  eventVersion      Int
+  eventId           String   @db.VarChar(120)
+  dedupeKey         String?  @db.VarChar(180)
+  emittedAt         DateTime
+  ingestedAt        DateTime @default(now())
+  environment       String   @db.VarChar(40)
+  releaseVersion    String   @db.VarChar(80)
+  serviceName       String   @db.VarChar(80)
+  requestId         String   @db.VarChar(120)
+  traceId           String   @db.VarChar(120)
+  correlationId     String   @db.VarChar(120)
+  causationId       String?  @db.VarChar(120)
+  actorType         String   @db.VarChar(40)
+  actorIdentityHash String?  @db.VarChar(128)
+  projectId         String?  @db.Uuid
+  classification    String   @db.VarChar(40)
+  piiLevel          String   @db.VarChar(40)
+  retentionClass    String   @db.VarChar(40)
+  payload           Json
+
+  @@index([eventName, emittedAt])
+  @@index([emittedAt])
+  @@index([projectId, emittedAt])
+  @@unique([eventName, eventVersion, dedupeKey])
+  @@map("creation_telemetry_events")
 }
 
 model WizardDraft {

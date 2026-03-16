@@ -125,6 +125,23 @@ describe("diagram layout engine", () => {
     );
   });
 
+  it("supports top-down flow direction", () => {
+    const positions = computeDiagramLayoutPositions({
+      nodes,
+      edges,
+      diagramType: "flow",
+      options: { direction: "top-down", nodeSpacingX: 260, nodeSpacingY: 140 },
+    });
+
+    expect(positions[nodes[0].id]?.y).toBe(0);
+    expect(positions[nodes[1].id]?.y).toBeGreaterThan(
+      positions[nodes[0].id]?.y ?? 0,
+    );
+    expect(positions[nodes[3].id]?.y).toBeGreaterThan(
+      positions[nodes[2].id]?.y ?? 0,
+    );
+  });
+
   it("keeps mindmap root at (0,0) with children away from center", () => {
     const positions = computeDiagramLayoutPositions({
       nodes,
@@ -174,4 +191,3 @@ describe("diagram layout engine", () => {
     expect(legacy.nodes).toEqual(nodes);
   });
 });
-

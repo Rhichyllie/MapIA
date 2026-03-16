@@ -24,6 +24,7 @@ const TreeLayoutOptionsOverridesSchema = z.object({
 });
 
 const FlowLayoutOptionsOverridesSchema = z.object({
+  direction: DirectionSchema.optional(),
   nodeSpacingX: SpacingSchema.optional(),
   nodeSpacingY: SpacingSchema.optional(),
 });
@@ -41,6 +42,7 @@ export const TreeLayoutOptionsSchema = z.object({
 
 export const FlowLayoutOptionsSchema = z.object({
   type: z.literal("flow"),
+  direction: DirectionSchema,
   nodeSpacingX: SpacingSchema,
   nodeSpacingY: SpacingSchema,
 });
@@ -98,6 +100,7 @@ const TREE_DEFAULT_OPTIONS: TreeLayoutOptions = {
 
 const FLOW_DEFAULT_OPTIONS: FlowLayoutOptions = {
   type: "flow",
+  direction: "left-right",
   nodeSpacingX: 280,
   nodeSpacingY: 140,
 };
@@ -317,8 +320,15 @@ function applyFlowLayout(
   for (const group of groups) {
     group.ids.forEach((nodeId, index) => {
       positions[nodeId] = {
-        x: group.level * options.nodeSpacingX,
-        y: index * options.nodeSpacingY,
+        ...(options.direction === "left-right"
+          ? {
+              x: group.level * options.nodeSpacingX,
+              y: index * options.nodeSpacingY,
+            }
+          : {
+              x: index * options.nodeSpacingY,
+              y: group.level * options.nodeSpacingX,
+            }),
       };
     });
   }

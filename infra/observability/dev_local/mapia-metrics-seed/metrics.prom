@@ -1,0 +1,66 @@
+# HELP importing_telemetry_runs_finalized_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE importing_telemetry_runs_finalized_total counter
+importing_telemetry_runs_finalized_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",importing_outcome="success"} 0
+importing_telemetry_runs_finalized_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",importing_outcome="failure"} 0
+
+# HELP importing_telemetry_adapter_warnings_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE importing_telemetry_adapter_warnings_total counter
+importing_telemetry_adapter_warnings_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",warning_type="compat_seed"} 0
+
+# HELP importing_telemetry_adapter_late_drops_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE importing_telemetry_adapter_late_drops_total counter
+importing_telemetry_adapter_late_drops_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev"} 0
+
+# HELP importing_telemetry_run_duration_milliseconds Zero-valued seed histogram to keep the dev_local metric catalog compatible.
+# TYPE importing_telemetry_run_duration_milliseconds histogram
+importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",le="50"} 0
+importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",le="100"} 0
+importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",le="250"} 0
+importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",le="500"} 0
+importing_telemetry_run_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",le="+Inf"} 0
+importing_telemetry_run_duration_milliseconds_sum{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev"} 0
+importing_telemetry_run_duration_milliseconds_count{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev"} 0
+
+# HELP importing_telemetry_step_duration_milliseconds Zero-valued seed histogram to keep the dev_local metric catalog compatible.
+# TYPE importing_telemetry_step_duration_milliseconds histogram
+importing_telemetry_step_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",step_name="parse",le="25"} 0
+importing_telemetry_step_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",step_name="parse",le="50"} 0
+importing_telemetry_step_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",step_name="parse",le="100"} 0
+importing_telemetry_step_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",step_name="parse",le="+Inf"} 0
+importing_telemetry_step_duration_milliseconds_sum{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",step_name="parse"} 0
+importing_telemetry_step_duration_milliseconds_count{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",step_name="parse"} 0
+
+# HELP prisma_telemetry_operations_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE prisma_telemetry_operations_total counter
+prisma_telemetry_operations_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany"} 0
+
+# HELP prisma_telemetry_errors_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE prisma_telemetry_errors_total counter
+prisma_telemetry_errors_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany"} 0
+
+# HELP prisma_telemetry_slow_queries_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE prisma_telemetry_slow_queries_total counter
+prisma_telemetry_slow_queries_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany"} 0
+
+# HELP prisma_telemetry_query_duration_milliseconds Zero-valued seed histogram to keep the dev_local metric catalog compatible.
+# TYPE prisma_telemetry_query_duration_milliseconds histogram
+prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany",le="5"} 0
+prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany",le="10"} 0
+prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany",le="25"} 0
+prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany",le="+Inf"} 0
+prisma_telemetry_query_duration_milliseconds_sum{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany"} 0
+prisma_telemetry_query_duration_milliseconds_count{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",operation="findMany"} 0
+
+# HELP traces_spanmetrics_calls_total Zero-valued seed series to keep the dev_local metric catalog compatible.
+# TYPE traces_spanmetrics_calls_total counter
+traces_spanmetrics_calls_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200"} 0
+traces_spanmetrics_calls_total{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="importing.pipeline",status_code="200"} 0
+
+# HELP traces_spanmetrics_latency Zero-valued seed histogram to keep the dev_local metric catalog compatible.
+# TYPE traces_spanmetrics_latency histogram
+traces_spanmetrics_latency_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200",le="10"} 0
+traces_spanmetrics_latency_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200",le="50"} 0
+traces_spanmetrics_latency_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200",le="100"} 0
+traces_spanmetrics_latency_bucket{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200",le="+Inf"} 0
+traces_spanmetrics_latency_sum{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200"} 0
+traces_spanmetrics_latency_count{deployment_environment="dev_local",service_name="mapia-dev-local-seed",service_version="0.0.0-dev",span_name="HTTP GET /api/projects",status_code="200"} 0

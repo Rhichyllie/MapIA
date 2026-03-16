@@ -1,0 +1,60 @@
+{
+  "title": "MapIA - Dashboard 3 - Runtime OTel / Warnings",
+  "uid": "mapia-otel-runtime-warnings",
+  "schemaVersion": 39,
+  "version": 3,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["mapia", "observability", "4e9", "otel-runtime"],
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "env", "type": "textbox", "query": ".*", "current": { "text": ".*", "value": ".*" } },
+      { "name": "service", "type": "textbox", "query": ".*", "current": { "text": ".*", "value": ".*" } },
+      { "name": "version", "type": "textbox", "query": ".*", "current": { "text": ".*", "value": ".*" } }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Warnings runtime criticos (Loki)",
+      "datasource": { "type": "loki", "uid": "LOKI_DS_DEV_LOCAL" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (code) (count_over_time({service_name=~\"$service\",deployment_environment=~\"$env\",service_version=~\"$version\"} |= \"[otel-runtime]\" | regexp \"(?P<code>BOOTSTRAP_FAILED|SHUTDOWN_FAILED|INSTRUMENTATION_INIT_FAILED)\" [5m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "BOOTSTRAP_DISABLED inesperado (staging/prod)",
+      "datasource": { "type": "loki", "uid": "LOKI_DS_DEV_LOCAL" },
+      "targets": [
+        { "refId": "A", "expr": "sum(count_over_time({service_name=~\"$service\",deployment_environment=~\"staging|production\"} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [15m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Warnings de config OTel (Loki)",
+      "datasource": { "type": "loki", "uid": "LOKI_DS_DEV_LOCAL" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (code) (count_over_time({service_name=~\"$service\",deployment_environment=~\"$env\"} |= \"[otel-runtime]\" | regexp \"(?P<code>MISSING_OTLP_ENDPOINT|MISSING_OTLP_METRICS_ENDPOINT|INVALID_URL|CLAMPED_NUMBER|BATCH_SIZE_ADJUSTED)\" [5m]))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Runtime OTel warnings recentes",
+      "datasource": { "type": "loki", "uid": "LOKI_DS_DEV_LOCAL" },
+      "targets": [
+        { "refId": "A", "expr": "{service_name=~\"$service\",deployment_environment=~\"$env\",service_version=~\"$version\"} |= \"[otel-runtime]\"" }
+      ],
+      "options": { "showLabels": true, "wrapLogMessage": true },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    }
+  ]
+}

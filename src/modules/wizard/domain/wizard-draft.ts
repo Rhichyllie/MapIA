@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { ProjectTemplateSchema } from "@/src/modules/projects/domain";
+import {
+  AnyDiagramTypeSchema,
+  DiagramLayoutOptionsSchema,
+  DiagramTypeSchema,
+} from "@/src/modules/graph/domain";
+
+export const DEFAULT_WIZARD_ROOT_NODE_NAME = "Visao geral";
 
 export const WizardDraftStatusSchema = z.enum([
   "draft",
@@ -17,14 +24,8 @@ export const WizardStepSchema = z.enum([
   "review",
 ]);
 
-export const WizardDiagramTypeSchema = z.enum([
-  "graph",
-  "tree",
-  "sitemap",
-  "flowchart",
-  "erd",
-  "timeline",
-]);
+export const WizardDiagramTypeSchema = AnyDiagramTypeSchema;
+export const WizardSupportedDiagramTypeSchema = DiagramTypeSchema;
 
 export const WizardDataSourceSchema = z.enum(["manual", "import"]);
 export const WizardImportKindSchema = z.enum(["postgres", "prisma"]);
@@ -34,6 +35,8 @@ export const WizardDraftConfigSchema = z.object({
   description: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
   generateRootNode: z.boolean().optional(),
+  rootNodeName: z.string().max(120).optional(),
+  allowReapplyLayout: z.boolean().optional(),
 });
 
 export const WizardReadyConfigSchema = z.object({
@@ -41,11 +44,14 @@ export const WizardReadyConfigSchema = z.object({
   description: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
   generateRootNode: z.boolean().default(true),
+  rootNodeName: z.string().max(120).optional(),
+  allowReapplyLayout: z.boolean().default(true),
 });
 
 export const WizardDraftPayloadSchema = z.object({
   template: ProjectTemplateSchema.optional(),
   diagramType: WizardDiagramTypeSchema.optional(),
+  layoutOptions: DiagramLayoutOptionsSchema.optional(),
   dataSource: WizardDataSourceSchema.optional(),
   importKind: WizardImportKindSchema.optional(),
   config: WizardDraftConfigSchema.default({}),
@@ -54,17 +60,37 @@ export const WizardDraftPayloadSchema = z.object({
 export const WizardReadyPayloadSchema = z
   .object({
     template: ProjectTemplateSchema,
-    diagramType: WizardDiagramTypeSchema,
+    diagramType: WizardSupportedDiagramTypeSchema,
+    layoutOptions: DiagramLayoutOptionsSchema.optional(),
     dataSource: WizardDataSourceSchema,
     importKind: WizardImportKindSchema.optional(),
     config: WizardReadyConfigSchema,
   })
   .superRefine((value, ctx) => {
+    if (value.layoutOptions && value.layoutOptions.type !== value.diagramType) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["layoutOptions"],
+        message: "As opcoes de layout devem corresponder ao tipo de diagrama.",
+      });
+    }
+
     if (value.dataSource === "import" && !value.importKind) {
       ctx.addIssue({
         code: "custom",
         path: ["importKind"],
         message: "Selecione o tipo de importacao.",
+      });
+    }
+
+    if (
+      value.config.generateRootNode !== false &&
+      !value.config.rootNodeName?.trim()
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["config", "rootNodeName"],
+        message: "Informe o nome do no raiz inicial.",
       });
     }
   });
@@ -95,6 +121,9 @@ export const WizardGenerateInputSchema = z.object({
 export type WizardDraftStatus = z.infer<typeof WizardDraftStatusSchema>;
 export type WizardStep = z.infer<typeof WizardStepSchema>;
 export type WizardDiagramType = z.infer<typeof WizardDiagramTypeSchema>;
+export type WizardSupportedDiagramType = z.infer<
+  typeof WizardSupportedDiagramTypeSchema
+>;
 export type WizardDataSource = z.infer<typeof WizardDataSourceSchema>;
 export type WizardImportKind = z.infer<typeof WizardImportKindSchema>;
 export type WizardDraftPayload = z.infer<typeof WizardDraftPayloadSchema>;

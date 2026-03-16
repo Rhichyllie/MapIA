@@ -1,0 +1,103 @@
+version: 1
+phase: 4E.8
+status: partial_real_baseline_pending_env_access
+calibration_date: 2026-02-25
+baseline_windows:
+  alert: 15m
+  operational: 7d
+  trend: 30d
+evidence:
+  status: unavailable_in_workspace
+  environments:
+    staging:
+      has_real_series_7d: false
+      has_real_series_30d: false
+      notes:
+        - Nenhuma exportacao de series/queries de staging foi disponibilizada no workspace desta rodada.
+    production:
+      has_real_series_7d: false
+      has_real_series_30d: false
+      notes:
+        - Nenhuma exportacao de series/queries de production foi disponibilizada no workspace desta rodada.
+  required_inputs_for_final_recalibration:
+    - outputs de queries agregadas 15m/7d/30d por ambiente (staging/prod) para importing/prisma/http spanmetrics
+    - ocorrencias reais de alertas (falso positivo/falso negativo) em pelo menos 7d
+    - confirmacao do naming final de metricas/labels do backend/collector aplicado
+minimum_volume_gates:
+  importing_runs_15m_warning: 20
+  importing_runs_15m_critical: 50
+  importing_runs_1h: 100
+  prisma_ops_15m_warning: 100
+  prisma_ops_15m_critical: 300
+  spanmetrics_calls_15m_warning: 200
+  spanmetrics_calls_15m_critical: 400
+thresholds:
+  staging:
+    calibration_state: provisional_4e7_carried_into_4e8
+    importing:
+      failure_rate_warning_max_15m: 0.05
+      failure_rate_critical_max_15m: 0.12
+      run_duration_p95_warning_ms_max_15m: 15000
+      run_duration_p95_critical_ms_max_15m: 30000
+      adapter_warning_rate_warning_max_15m: 0.02
+      adapter_warning_rate_critical_max_15m: 0.05
+      adapter_late_drops_warning_count_15m: 1
+      adapter_late_drops_critical_count_15m: 5
+    prisma:
+      error_rate_warning_max_15m: 0.02
+      error_rate_critical_max_15m: 0.05
+      slow_query_threshold_ms: 250
+      slow_query_rate_warning_max_15m: 0.05
+      slow_query_rate_critical_max_15m: 0.12
+      query_duration_p95_warning_ms_max_15m: 500
+      query_duration_p95_critical_ms_max_15m: 1000
+    runtime:
+      bootstrap_failed_max_per_deploy: 0
+      instrumentation_init_failed_max_15m: 0
+      shutdown_failed_recurrence_warning_count_30m: 1
+    spanmetrics:
+      volume_drop_ratio_min_vs_7d_baseline: 0.30
+      volume_spike_ratio_max_vs_7d_baseline: 3.00
+  production:
+    calibration_state: provisional_4e7_carried_into_4e8
+    importing:
+      failure_rate_warning_max_15m: 0.01
+      failure_rate_critical_max_15m: 0.03
+      run_duration_p95_warning_ms_max_15m: 10000
+      run_duration_p95_critical_ms_max_15m: 20000
+      adapter_warning_rate_warning_max_15m: 0.005
+      adapter_warning_rate_critical_max_15m: 0.02
+      adapter_late_drops_warning_count_15m: 1
+      adapter_late_drops_critical_count_15m: 3
+    prisma:
+      error_rate_warning_max_15m: 0.01
+      error_rate_critical_max_15m: 0.02
+      slow_query_threshold_ms: 250
+      slow_query_rate_warning_max_15m: 0.02
+      slow_query_rate_critical_max_15m: 0.05
+      query_duration_p95_warning_ms_max_15m: 300
+      query_duration_p95_critical_ms_max_15m: 700
+    runtime:
+      bootstrap_failed_max_per_deploy: 0
+      instrumentation_init_failed_max_15m: 0
+      shutdown_failed_recurrence_warning_count_30m: 1
+    spanmetrics:
+      volume_drop_ratio_min_vs_7d_baseline: 0.50
+      volume_spike_ratio_max_vs_7d_baseline: 2.00
+recalibration_notes:
+  - 4E.8 nesta rodada implementa formato/versionamento de baseline real + automacao de apply/validate + refinamento de alert precision.
+  - Thresholds permanecem provisoriamente herdados da 4E.7 para sinais sem serie real no workspace.
+  - Ajustes de precisao (gates/for/severidade/recorrencia) foram aplicados nas rules 4E.8 sem alterar dominio/use-cases.
+pending_real_data_signals:
+  - importing_failure_rate
+  - importing_run_duration_p95
+  - importing_adapter_warning_rate
+  - prisma_error_rate
+  - prisma_slow_query_rate
+  - prisma_query_duration_p95
+  - http_spanmetrics_volume_anomaly
+  - runtime_warning_recurrence
+next_step_to_finalize_real_baseline:
+  - Exportar evidencias de staging/prod (15m/7d/30d) e registrar em arquivo de calibracao 4E.8.x
+  - Reaplicar `infra/observability/scripts/apply-observability.py` com profile/naming final do backend
+  - Revisar alert precision com incidentes/ocorrencias reais e promover thresholds finais

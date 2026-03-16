@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: mapia
       POSTGRES_PASSWORD: mapia
     ports:
-      - "55432:5432"
+      - "56432:5432"
     volumes:
       - mapia-postgres-data:/var/lib/postgresql/data
     healthcheck:

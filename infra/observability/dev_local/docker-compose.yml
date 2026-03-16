@@ -1,0 +1,197 @@
+name: mapia-observability-dev-local
+
+services:
+  mapia-metrics-seed:
+    image: python:3.12-alpine
+    working_dir: /srv/mapia-metrics-seed
+    command:
+      - python
+      - /srv/mapia-metrics-seed/server.py
+    volumes:
+      - ./mapia-metrics-seed:/srv/mapia-metrics-seed:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - 'import sys, urllib.request; sys.exit(0 if urllib.request.urlopen("http://127.0.0.1:9464/metrics", timeout=2).status == 200 else 1)'
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 64M
+
+  mapia-logs-seed:
+    image: python:3.12-alpine
+    working_dir: /srv/mapia-logs-seed
+    command:
+      - python
+      - /srv/mapia-logs-seed/server.py
+    volumes:
+      - ./mapia-logs-seed:/srv/mapia-logs-seed:ro
+      - mapia-seed-logs:/var/log/mapia
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -s /var/log/mapia/mapia-seed.log
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.10"
+          memory: 64M
+
+  promtail:
+    image: grafana/promtail:2.9.7
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - mapia-seed-logs:/var/log/mapia:ro
+    depends_on:
+      loki:
+        condition: service_healthy
+      mapia-logs-seed:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -s /tmp/promtail-positions.yaml
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    command:
+      - "--config=/etc/otelcol-contrib/config.yaml"
+    ports:
+      - "13133:13133"
+      - "4317:4317"
+      - "4318:4318"
+      - "8889:8889"
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      mapia-metrics-seed:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - /otelcol-contrib
+        - validate
+        - --config=/etc/otelcol-contrib/config.yaml
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_LOG_LEVEL=info
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - sh -ec 'resp="$$(wget -qO- http://127.0.0.1:3000/api/health)" && case "$$resp" in *"\"database\":\"ok\""*|*"\"status\":\"ok\""*) exit 0 ;; *) exit 1 ;; esac'
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+  prometheus:
+    image: prom/prometheus:v2.50.1
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/mapia-observability.rules.yaml:/etc/prometheus/rules/mapia-observability.rules.yaml:ro
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      mapia-metrics-seed:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:9090/-/ready > /dev/null
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+  loki:
+    image: grafana/loki:2.9.7
+    ports:
+      - "3100:3100"
+    command:
+      - "-config.file=/etc/loki/loki-config.yml"
+    volumes:
+      - loki-data:/loki
+      - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:3100/ready > /dev/null
+      interval: 5s
+      timeout: 3s
+      retries: 60
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 512M
+
+volumes:
+  grafana-data:
+  prometheus-data:
+  loki-data:
+  mapia-seed-logs:

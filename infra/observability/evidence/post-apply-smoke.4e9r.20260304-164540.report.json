@@ -1,0 +1,198 @@
+{
+  "phase": "4E.9",
+  "checked_at": "2026-03-04T16:49:18Z",
+  "mode": "remote_or_mixed",
+  "profile_requested": "otel_collector_prometheus_tempo_latency",
+  "env_file": {
+    "enabled": false,
+    "mode": "merge",
+    "priority": "envfile",
+    "path": null,
+    "selected_keys_count": 0,
+    "applied_keys_count": 0,
+    "conflict_keys_count": 0
+  },
+  "remote_endpoints_source": {
+    "grafana_url": "env",
+    "prometheus_url": "env",
+    "loki_url": "env"
+  },
+  "remote": {
+    "grafana": {
+      "executed": true,
+      "status": "ok",
+      "token_env": "GRAFANA_API_TOKEN",
+      "health": {
+        "database": "ok",
+        "version": "10.4.2"
+      },
+      "dashboards": [
+        {
+          "uid": "mapia-importing-health",
+          "status": "ok"
+        },
+        {
+          "uid": "mapia-importing-performance",
+          "status": "ok"
+        },
+        {
+          "uid": "mapia-otel-runtime-warnings",
+          "status": "ok"
+        },
+        {
+          "uid": "mapia-http-platform-overview",
+          "status": "ok"
+        }
+      ]
+    },
+    "prometheus": {
+      "executed": true,
+      "status": "ok",
+      "profile_used": "otel_collector_prometheus_tempo_latency",
+      "naming_file": "calibration/naming-compatibility.4e9.yaml",
+      "rules_api": {
+        "status": "success"
+      },
+      "naming_profile_validation": {
+        "labels": {
+          "deployment_environment": {
+            "name": "deployment_environment",
+            "present": true
+          },
+          "service_name": {
+            "name": "service_name",
+            "present": true
+          },
+          "service_version": {
+            "name": "service_version",
+            "present": true
+          },
+          "span_name": {
+            "name": "span_name",
+            "present": true
+          },
+          "status_code": {
+            "name": "status_code",
+            "present": true
+          }
+        },
+        "metrics": {
+          "importing_runs_finalized_total": {
+            "name": "importing_telemetry_runs_finalized_total",
+            "present": true
+          },
+          "importing_adapter_warnings_total": {
+            "name": "importing_telemetry_adapter_warnings_total",
+            "present": true
+          },
+          "importing_adapter_late_drops_total": {
+            "name": "importing_telemetry_adapter_late_drops_total",
+            "present": true
+          },
+          "importing_run_duration_bucket_ms": {
+            "name": "importing_telemetry_run_duration_milliseconds_bucket",
+            "present": true
+          },
+          "importing_step_duration_bucket_ms": {
+            "name": "importing_telemetry_step_duration_milliseconds_bucket",
+            "present": true
+          },
+          "prisma_operations_total": {
+            "name": "prisma_telemetry_operations_total",
+            "present": true
+          },
+          "prisma_errors_total": {
+            "name": "prisma_telemetry_errors_total",
+            "present": true
+          },
+          "prisma_slow_queries_total": {
+            "name": "prisma_telemetry_slow_queries_total",
+            "present": true
+          },
+          "prisma_query_duration_bucket_ms": {
+            "name": "prisma_telemetry_query_duration_milliseconds_bucket",
+            "present": true
+          },
+          "spanmetrics_calls_total": {
+            "name": "traces_spanmetrics_calls_total",
+            "present": true
+          },
+          "spanmetrics_latency_bucket_ms": {
+            "name": "traces_spanmetrics_latency_bucket",
+            "present": true
+          }
+        },
+        "labels_present_count": 5,
+        "metrics_present_count": 11
+      },
+      "signal_family_smoke": {
+        "importing": {
+          "runs_count_15m_staging": {
+            "status": "empty",
+            "result_count": 0,
+            "expr": "sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=\"staging\"}[15m]))"
+          },
+          "failure_rate_15m_staging": {
+            "status": "empty",
+            "result_count": 0,
+            "expr": "(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=\"staging\",importing_outcome=\"failure\"}[15m]))) / clamp_min(sum(increase(importing_telemetry_runs_finalized_total{deployment_environment=\"staging\"}[15m])), 1)"
+          }
+        },
+        "prisma": {
+          "ops_count_15m_staging": {
+            "status": "empty",
+            "result_count": 0,
+            "expr": "sum(increase(prisma_telemetry_operations_total{deployment_environment=\"staging\"}[15m]))"
+          },
+          "query_p95_15m_staging": {
+            "status": "empty",
+            "result_count": 0,
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(prisma_telemetry_query_duration_milliseconds_bucket{deployment_environment=\"staging\"}[15m])))"
+          }
+        },
+        "spanmetrics": {
+          "calls_count_15m_staging": {
+            "status": "empty",
+            "result_count": 0,
+            "expr": "sum(increase(traces_spanmetrics_calls_total{deployment_environment=\"staging\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[15m]))"
+          },
+          "latency_p95_15m_staging": {
+            "status": "empty",
+            "result_count": 0,
+            "expr": "histogram_quantile(0.95, sum by (le) (increase(traces_spanmetrics_latency_bucket{deployment_environment=\"staging\",span_name=~\"HTTP.*|importing\\\\.pipeline\"}[15m])))"
+          }
+        }
+      }
+    },
+    "loki": {
+      "executed": true,
+      "status": "partial",
+      "labels": [],
+      "env_label_used": null,
+      "runtime_smoke": {
+        "bootstrap_failed_15m": {
+          "status": "http_error",
+          "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_FAILED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+          "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_FAILED\" [15m]))"
+        },
+        "bootstrap_disabled_15m": {
+          "status": "http_error",
+          "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+BOOTSTRAP_DISABLED%22+%5B15m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+          "expr": "sum(count_over_time({} |= \"[otel-runtime] BOOTSTRAP_DISABLED\" [15m]))"
+        },
+        "shutdown_failed_30m": {
+          "status": "http_error",
+          "error": "HTTP 400 em http://127.0.0.1:3100/loki/api/v1/query?query=sum%28count_over_time%28%7B%7D+%7C%3D+%22%5Botel-runtime%5D+SHUTDOWN_FAILED%22+%5B30m%5D%29%29: parse error : queries require at least one regexp or equality matcher that does not have an empty-compatible value. For instance, app=~\".*\" does not meet this requirement, but app=~\".+\" will",
+          "expr": "sum(count_over_time({} |= \"[otel-runtime] SHUTDOWN_FAILED\" [30m]))"
+        }
+      }
+    }
+  },
+  "local_render": {
+    "status": "ok",
+    "render_root": "C:\\Users\\rhich\\AppData\\Local\\Temp\\mapia-observability-post-apply-f4njb5t3",
+    "profile_resolved": "otel_collector_prometheus_tempo_latency",
+    "naming_file": "calibration/naming-compatibility.4e9.yaml"
+  },
+  "status": "ok"
+}

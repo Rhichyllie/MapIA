@@ -1,0 +1,61 @@
+{
+  "title": "MapIA - Dashboard 2 - Performance do Importing",
+  "uid": "mapia-importing-performance",
+  "schemaVersion": 39,
+  "version": 3,
+  "refresh": "30s",
+  "timezone": "browser",
+  "tags": ["mapia", "observability", "4e9", "importing", "performance"],
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "env", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(importing_telemetry_runs_finalized_total, deployment_environment)" }, "includeAll": true, "multi": true },
+      { "name": "service", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(importing_telemetry_runs_finalized_total, service_name)" }, "includeAll": true, "multi": true },
+      { "name": "version", "type": "query", "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" }, "query": { "query": "label_values(importing_telemetry_runs_finalized_total, service_version)" }, "includeAll": true, "multi": true }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Run duration p50/p95/p99 (ms)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le) (rate(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m])))" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le) (rate(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m])))" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le) (rate(importing_telemetry_run_duration_milliseconds_bucket{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m])))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Step duration p95 por step (ms)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, importing_step_name) (rate(importing_telemetry_step_duration_milliseconds_bucket{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m])))" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Throughput de runs finalizadas (/min)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(importing_telemetry_runs_finalized_total{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[1m])) * 60" }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "Top steps por p95 (instant)",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "sort_desc(histogram_quantile(0.95, sum by (le, importing_step_name) (rate(importing_telemetry_step_duration_milliseconds_bucket{deployment_environment=~\"$env\",service_name=~\"$service\",service_version=~\"$version\"}[5m]))))" , "instant": true }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    }
+  ]
+}

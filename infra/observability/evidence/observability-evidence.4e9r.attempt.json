@@ -1,0 +1,154 @@
+{
+  "version": 1,
+  "phase": "4E.9",
+  "status": "blocked_no_remote_endpoints",
+  "collected_at": "2026-02-25T19:44:59Z",
+  "collector": {
+    "script": "infra/observability/scripts/collect-observability-evidence.py",
+    "profile_requested": null,
+    "http_timeout_seconds": 15,
+    "windows": {
+      "alert": "15m",
+      "operational": "7d",
+      "trend": "30d"
+    }
+  },
+  "environment_access": {
+    "grafana": {
+      "available": false,
+      "reason": "endpoint nao informado"
+    },
+    "prometheus": {
+      "available": false,
+      "reason": "endpoint nao informado"
+    },
+    "loki": {
+      "available": false,
+      "reason": "endpoint nao informado"
+    }
+  },
+  "remote_smoke": {
+    "grafana": {
+      "executed": false,
+      "status": "not_configured"
+    },
+    "prometheus": {
+      "executed": false,
+      "status": "not_configured"
+    },
+    "loki": {
+      "executed": false,
+      "status": "not_configured"
+    }
+  },
+  "naming_observed": {
+    "status": "not_collected",
+    "profile_candidates": {},
+    "final_profile": null,
+    "prometheus": {
+      "labels_present": [],
+      "metrics_present": {}
+    },
+    "loki": {
+      "labels_present": []
+    }
+  },
+  "signals": {
+    "staging": {
+      "importing_failure_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_run_duration_p95": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_adapter_warning_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_adapter_late_drops": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_error_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_slow_query_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_query_duration_p95": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "http_spanmetrics_volume": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "runtime_warnings_recurrence": {
+        "windows": {},
+        "status": "not_collected"
+      }
+    },
+    "production": {
+      "importing_failure_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_run_duration_p95": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_adapter_warning_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "importing_adapter_late_drops": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_error_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_slow_query_rate": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "prisma_query_duration_p95": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "http_spanmetrics_volume": {
+        "windows": {},
+        "status": "not_collected"
+      },
+      "runtime_warnings_recurrence": {
+        "windows": {},
+        "status": "not_collected"
+      }
+    }
+  },
+  "threshold_decisions": {
+    "staging": {},
+    "production": {}
+  },
+  "notes": [
+    "Preencher via coleta automatizada ou export agregado seguro.",
+    "Thresholds finais nao devem ser promovidos sem evidencias reais 15m/7d/30d."
+  ],
+  "prometheus": {
+    "executed": false,
+    "status": "not_configured"
+  },
+  "loki": {
+    "executed": false,
+    "status": "not_configured"
+  },
+  "grafana": {
+    "executed": false,
+    "status": "not_configured"
+  }
+}

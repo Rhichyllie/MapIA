@@ -1,0 +1,68 @@
+version: 1
+phase: 4E.7
+status: provisional_baseline
+calibrated_on: 2026-02-25
+notes:
+  - Baseline provisoria por ausencia de serie historica confiavel em staging/prod no momento desta fase.
+  - Recalibrar com dados reais apos no minimo 14 dias de coleta estavel por ambiente.
+windows:
+  short: 15m
+  medium: 7d
+  long: 30d
+minimum_volume_gates:
+  importing_runs_15m: 20
+  importing_runs_1h: 50
+  prisma_ops_15m: 100
+  http_spans_15m: 200
+thresholds:
+  staging:
+    importing:
+      success_rate_min: 0.95
+      failure_rate_max: 0.05
+      run_duration_p95_ms_max: 15000
+      adapter_warning_rate_max: 0.02
+      adapter_late_drops_max: 0
+    runtime:
+      bootstrap_failed_max_per_deploy: 0
+      bootstrap_disabled_unexpected_max_per_deploy: 0
+      instrumentation_init_failed_max_7d: 0
+      shutdown_failed_max_7d: 1
+    prisma:
+      query_duration_p95_ms_max: 500
+      error_rate_max: 0.02
+      slow_query_threshold_ms: 250
+      slow_query_rate_max: 0.05
+    http:
+      span_volume_drop_ratio_min_vs_7d_baseline: 0.3
+      span_volume_spike_ratio_max_vs_7d_baseline: 3.0
+  production:
+    importing:
+      success_rate_min: 0.99
+      failure_rate_max: 0.01
+      run_duration_p95_ms_max: 10000
+      adapter_warning_rate_max: 0.005
+      adapter_late_drops_max: 0
+    runtime:
+      bootstrap_failed_max_per_deploy: 0
+      bootstrap_disabled_unexpected_max_per_deploy: 0
+      instrumentation_init_failed_max_7d: 0
+      shutdown_failed_max_7d: 0
+    prisma:
+      query_duration_p95_ms_max: 300
+      error_rate_max: 0.01
+      slow_query_threshold_ms: 250
+      slow_query_rate_max: 0.02
+    http:
+      span_volume_drop_ratio_min_vs_7d_baseline: 0.5
+      span_volume_spike_ratio_max_vs_7d_baseline: 2.0
+recalibration_policy:
+  cadence: monthly_or_after_major_release
+  triggers:
+    - sustained throughput change > 2x for 7d
+    - schema/import source mix changes materially
+    - new instrumentation enabled (Prisma/Next)
+    - collector/export pipeline topology change
+  process:
+    - compare 15m/7d/30d percentiles and rates
+    - update thresholds preserving min-volume gates
+    - review alert precision/recall with incidents and false positives

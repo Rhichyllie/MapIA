@@ -64,6 +64,12 @@ export const GraphSnapshotSchema = z.object({
   nodes: z.array(NodeSchema),
   edges: z.array(EdgeSchema),
   viewport: ViewportStateSchema,
+  // Kept intentionally generic to preserve compatibility with legacy snapshots
+  // while allowing layout metadata for newer diagram types.
+  diagramType: z.string().min(1).max(80).optional(),
+  layoutOptions: z.record(z.string(), z.unknown()).optional(),
+  rootNodeName: z.string().max(120).optional(),
+  allowReapplyLayout: z.boolean().optional(),
 });
 
 export type ExternalSystem = z.infer<typeof ExternalSystemSchema>;

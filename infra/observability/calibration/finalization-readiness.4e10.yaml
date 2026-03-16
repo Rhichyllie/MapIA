@@ -1,0 +1,247 @@
+version: 1
+phase: 4E.10
+status: ready_dev_local_real_evidence
+environment_scope: dev_local
+environment_scope_status: dev_local_real_evidence
+generated_at: '2026-03-04T18:05:31Z'
+sources:
+  baseline_4e9: calibration/baseline-thresholds.4e9.yaml
+  naming_4e9: calibration/naming-compatibility.4e9.yaml
+  evidence_4e9: evidence/observability-evidence.4e9r.20260304-180338.json
+  post_apply_smoke_report_4e9: evidence/post-apply-smoke.4e9r.20260304-180338.report.json
+compatibility:
+  status: ok
+  supports_provisional_calibration_state_4e9: true
+  supports_candidate_default_profile_4e9: true
+  supports_profiles_alternativos_fallback: true
+  supports_dev_local_environment_scope: true
+  baseline_phase_detected: 4E.9
+  naming_phase_detected: 4E.9
+  baseline_status_detected: dev_local_real_evidence
+  naming_validation_status_detected: dev_local_real_evidence
+  expected_dry_run_commands_unchanged:
+  - pnpm observability:validate
+  - pnpm observability:apply:dry-run
+  - pnpm observability:post-apply:smoke
+baseline_threshold_finalization_readiness:
+  status: dev_local_real_evidence
+  pending_4e9r_real_evidence: false
+  environment_scope: dev_local
+  summary_counts:
+    signals_total: 9
+    signals_ready: 8
+    signals_partial: 1
+    signals_pending_4e9r_real_evidence: 0
+  environments:
+    dev_local:
+      environment_status_4e9: evidence_partial
+      thresholds_calibration_state_4e9: null
+      signals:
+        importing_failure_rate:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        importing_run_duration_p95:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        importing_adapter_warning_rate:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        importing_adapter_late_drops:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        prisma_error_rate:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        prisma_slow_query_rate:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        prisma_query_duration_p95:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        http_spanmetrics_volume:
+          evidence_status_4e9: evidence_present_all_windows
+          windows_present_4e9:
+          - alert_15m
+          - operational_7d
+          - trend_30d
+          promotion_readiness: ready_for_threshold_finalization
+          reason: evidencia_real_15m_7d_30d_presente
+          reason_from_4e9: null
+        runtime_warnings_recurrence:
+          evidence_status_4e9: no_data_or_query_error
+          windows_present_4e9: []
+          promotion_readiness: partial_evidence_pending_4e9r_real_evidence
+          reason: evidencia_real_incompleta_ou_query_error
+          reason_from_4e9: null
+      summary:
+        signals_total: 9
+        signals_ready: 8
+        signals_partial: 1
+        signals_pending_4e9r_real_evidence: 0
+  policy:
+    rule: nao_promover_threshold_final_sem_evidencia_real_15m_7d_30d
+    allow_partial_signal_finalization_when_supported_by_real_evidence: true
+naming_default_profile_finalization_readiness:
+  status: dev_local_real_evidence
+  pending_4e9r_real_evidence: false
+  current_default_profile: otel_collector_prometheus_tempo_latency
+  validation_status_4e9: dev_local_real_evidence
+  final_profile_detected_4e9: otel_collector_prometheus_tempo_latency
+  final_profile_applied_as_default_4e9: null
+  profile_detection_status_from_evidence: unique_best_candidate
+  profile_detection_source_path_from_evidence: prometheus.profile_detection
+  environment_scope: dev_local
+  available_profiles:
+  - otel_collector_prometheus_tempo_latency
+  - resource_labels_mixed_duration_ms
+  - resource_labels_short
+  - tempo_spanmetrics_duration_ms
+  reason: naming_validado_por_evidencia_real_dev_local
+apply_real_remote_smoke_readiness:
+  status: dev_local_real_evidence
+  pending_4e9r_real_evidence: false
+  environment_scope: dev_local
+  workspace_preconditions:
+    status: ready_current_workspace
+    pending_4e9r_real_evidence: false
+    checks:
+      grafana_url_env:
+        env: GRAFANA_URL
+        kind: url
+        present: true
+        valid: true
+        invalid_reason: null
+        value_length: 21
+      prometheus_url_env:
+        env: PROMETHEUS_URL
+        kind: url
+        present: true
+        valid: true
+        invalid_reason: null
+        value_length: 21
+      loki_url_env:
+        env: LOKI_URL
+        kind: url
+        present: true
+        valid: true
+        invalid_reason: null
+        value_length: 21
+      grafana_api_token_env:
+        env: GRAFANA_API_TOKEN
+        kind: secret
+        present: true
+        valid: true
+        invalid_reason: null
+        value_length: 16
+      grafana_prometheus_uid_env:
+        env: MAPIA_DS_PROMETHEUS_UID
+        kind: uid
+        present: true
+        valid: true
+        invalid_reason: null
+        value_length: 17
+      grafana_loki_uid_env:
+        env: MAPIA_DS_LOKI_UID
+        kind: uid
+        present: true
+        valid: true
+        invalid_reason: null
+        value_length: 17
+    missing: []
+    invalid: []
+    operator_runtime_args_still_required:
+    - --grafana-dashboards-dir
+    - --grafana-provisioning-dir
+    - --prometheus-rules-dir
+    - --loki-rules-dir
+    reason: null
+  current_smoke_report_4e9_summary:
+    present: true
+    status: ok
+    mode: remote_or_mixed
+    local_render_status: ok
+    remote_status: null
+  reason: depende_de_endpoints_credenciais_uids_e_execucao_remota_real
+observed_4e9_evidence_summary:
+  present: true
+  status: dev_local_real_evidence
+  environment_scope: dev_local
+  naming_observed_final_profile: otel_collector_prometheus_tempo_latency
+  naming_profile_detection_status: unique_best_candidate
+  naming_profile_detection_source_path: prometheus.profile_detection
+  environments:
+    dev_local:
+      signal_shape_detected: by_signal
+      signal_shape_reason: shape_signals.<env>.<signal>.windows
+      signals_with_any_window: 9
+      signals_declared: 9
+      windows_detected:
+      - alert_15m
+      - operational_7d
+      - trend_30d
+pending_dependencies:
+- id: pending_4e9r_real_evidence
+  status: resolved
+  blocks: []
+  required_inputs:
+  - endpoints reais Grafana/Prometheus/Loki (dev_local localhost)
+  - GRAFANA_API_TOKEN
+  - MAPIA_DS_PROMETHEUS_UID
+  - MAPIA_DS_LOKI_UID
+  - evidencias agregadas 15m/7d/30d por ambiente/sinal no escopo dev_local
+  - apply real + post-apply-smoke remoto com relatorio
+coupling_points_to_4e9r:
+- baseline-thresholds.4e9.yaml -> evidence.environments.*.signal_status
+- baseline-thresholds.4e9.yaml -> thresholds.*.calibration_state
+- naming-compatibility.4e9.yaml -> validation.status/final_profile_detected/final_profile_applied_as_default
+- observability-evidence.4e9.capture.json -> naming_observed.final_profile e signals.<env>.<signal>.windows
+- post-apply-smoke report 4E.9/4E.9R -> status remoto (Grafana/Prometheus/Loki)
+next_actions:
+- Executar 4E.9R em dev_local com endpoints localhost reais e registrar evidencias
+  sem marcar staging/producao.
+- "Regerar este artefato 4E.10 apos coleta real/promo\xE7\xE3o/smoke remoto para atualizar\
+  \ readiness sem retrabalho."
+- Promover thresholds/profile final somente para sinais/perfis suportados por evidencia
+  real validada.

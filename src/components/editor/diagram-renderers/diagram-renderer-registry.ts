@@ -13,8 +13,10 @@ import {
   GraphNodeRenderer,
   MindmapNodeRenderer,
   SitemapNodeRenderer,
+  TimelineNodeRenderer,
   TreeNodeRenderer,
 } from "./diagram-node-renderers";
+import { FLOW_RENDERER_PRESENTATION } from "./flow-presentation";
 import { ParallelBezierEdge } from "./parallel-bezier-edge";
 
 export type DiagramRendererKey =
@@ -23,7 +25,8 @@ export type DiagramRendererKey =
   | "mindmap"
   | "erd"
   | "sitemap"
-  | "graph";
+  | "graph"
+  | "timeline";
 
 export type RendererConfig = {
   key: DiagramRendererKey;
@@ -80,6 +83,10 @@ const GRAPH_NODE_TYPES: NodeTypes = {
   graph: GraphNodeRenderer,
 };
 
+const TIMELINE_NODE_TYPES: NodeTypes = {
+  timeline: TimelineNodeRenderer,
+};
+
 function resolveTreeDirection(
   layoutOptions: unknown,
 ): "top-down" | "left-right" {
@@ -94,6 +101,22 @@ function resolveTreeDirection(
   }
 
   return "top-down";
+}
+
+function resolveFlowDirection(
+  layoutOptions: unknown,
+): "top-down" | "left-right" {
+  if (!layoutOptions || typeof layoutOptions !== "object" || Array.isArray(layoutOptions)) {
+    return "left-right";
+  }
+
+  const direction = (layoutOptions as { direction?: unknown }).direction;
+
+  if (direction === "top-down") {
+    return "top-down";
+  }
+
+  return "left-right";
 }
 
 function createBaseEdgeOptions(className: string): DefaultEdgeOptions {
@@ -131,33 +154,26 @@ function createTreeRenderer(
   };
 }
 
-function createFlowRenderer(): RendererConfig {
+function createFlowRenderer(
+  input: ResolveDiagramRendererInput,
+): RendererConfig {
   return {
     key: "flow",
     label: "Processo",
     nodeType: "flow",
     nodeTypes: FLOW_NODE_TYPES,
     edgeTypes: EDGE_TYPES,
-    defaultEdgeOptions: {
-      ...createBaseEdgeOptions("editor-edge editor-edge-flow"),
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: "var(--canvas-edge-color)",
-      },
-    },
-    backgroundConfig: {
-      variant: BackgroundVariant.Cross,
-      gap: 22,
-      className: "editor-canvas-background-flow",
-    },
-    minimapClassName: "editor-minimap editor-minimap-flow",
-    canvasClassName: "canvas-frame canvas-frame-flow",
+    defaultEdgeOptions: FLOW_RENDERER_PRESENTATION.defaultEdgeOptions,
+    backgroundConfig: FLOW_RENDERER_PRESENTATION.background,
+    minimapClassName: FLOW_RENDERER_PRESENTATION.minimapClassName,
+    canvasClassName: FLOW_RENDERER_PRESENTATION.canvasClassName,
     canvasDataAttributes: {
       "data-diagram-renderer": "flow",
     },
-    connectionLineType: ConnectionLineType.Bezier,
+    connectionLineType: FLOW_RENDERER_PRESENTATION.connectionLineType,
     supportsPorts: true,
     supportsParallelEdges: true,
+    treeDirection: resolveFlowDirection(input.layoutOptions),
   };
 }
 
@@ -188,7 +204,7 @@ function createMindmapRenderer(): RendererConfig {
 function createErdRenderer(): RendererConfig {
   return {
     key: "erd",
-    label: "ERD (legado)",
+    label: "Modelo de dados (ERD)",
     nodeType: "erd",
     nodeTypes: ERD_NODE_TYPES,
     edgeTypes: EDGE_TYPES,
@@ -209,10 +225,12 @@ function createErdRenderer(): RendererConfig {
   };
 }
 
-function createSitemapRenderer(): RendererConfig {
+function createSitemapRenderer(
+  input: ResolveDiagramRendererInput,
+): RendererConfig {
   return {
     key: "sitemap",
-    label: "Sitemap (legado)",
+    label: "Sitemap",
     nodeType: "sitemap",
     nodeTypes: SITEMAP_NODE_TYPES,
     edgeTypes: EDGE_TYPES,
@@ -230,13 +248,14 @@ function createSitemapRenderer(): RendererConfig {
     connectionLineType: ConnectionLineType.SmoothStep,
     supportsPorts: true,
     supportsParallelEdges: true,
+    treeDirection: resolveTreeDirection(input.layoutOptions),
   };
 }
 
 function createGraphRenderer(): RendererConfig {
   return {
     key: "graph",
-    label: "Graph (legado)",
+    label: "Grafo",
     nodeType: "graph",
     nodeTypes: GRAPH_NODE_TYPES,
     edgeTypes: EDGE_TYPES,
@@ -257,6 +276,39 @@ function createGraphRenderer(): RendererConfig {
   };
 }
 
+function createTimelineRenderer(
+  input: ResolveDiagramRendererInput,
+): RendererConfig {
+  return {
+    key: "timeline",
+    label: "Timeline",
+    nodeType: "timeline",
+    nodeTypes: TIMELINE_NODE_TYPES,
+    edgeTypes: EDGE_TYPES,
+    defaultEdgeOptions: {
+      ...createBaseEdgeOptions("editor-edge editor-edge-timeline"),
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+        color: "var(--canvas-edge-color)",
+      },
+    },
+    backgroundConfig: {
+      variant: BackgroundVariant.Lines,
+      gap: 20,
+      className: "editor-canvas-background-timeline",
+    },
+    minimapClassName: "editor-minimap editor-minimap-timeline",
+    canvasClassName: "canvas-frame canvas-frame-timeline",
+    canvasDataAttributes: {
+      "data-diagram-renderer": "timeline",
+    },
+    connectionLineType: ConnectionLineType.Bezier,
+    supportsPorts: true,
+    supportsParallelEdges: true,
+    treeDirection: resolveFlowDirection(input.layoutOptions),
+  };
+}
+
 function resolveLegacyRendererFromDiagramType(
   diagramType: string | undefined,
 ): DiagramRendererKey | undefined {
@@ -270,6 +322,10 @@ function resolveLegacyRendererFromDiagramType(
 
   if (diagramType === "graph") {
     return "graph";
+  }
+
+  if (diagramType === "timeline") {
+    return "timeline";
   }
 
   if (diagramType === "flowchart") {
@@ -301,11 +357,15 @@ export function resolveDiagramRenderer(
   }
 
   if (input.diagramType === "flow") {
-    return createFlowRenderer();
+    return createFlowRenderer(input);
   }
 
   if (input.diagramType === "mindmap") {
     return createMindmapRenderer();
+  }
+
+  if (input.diagramType === "timeline") {
+    return createTimelineRenderer(input);
   }
 
   const legacyFromDiagramType = resolveLegacyRendererFromDiagramType(
@@ -319,7 +379,11 @@ export function resolveDiagramRenderer(
   }
 
   if (legacyKey === "sitemap") {
-    return createSitemapRenderer();
+    return createSitemapRenderer(input);
+  }
+
+  if (legacyKey === "timeline") {
+    return createTimelineRenderer(input);
   }
 
   return createGraphRenderer();

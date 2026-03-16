@@ -1,0 +1,14 @@
+{
+  "phase": "4E.9",
+  "checked_at": "2026-02-25T23:57:49Z",
+  "mode": "remote_or_mixed",
+  "profile_requested": null,
+  "remote": {},
+  "local_render": {
+    "status": "ok",
+    "render_root": "C:\\Users\\rhich\\AppData\\Local\\Temp\\mapia-observability-post-apply-f9b78wjn",
+    "profile_resolved": "otel_collector_prometheus_tempo_latency",
+    "naming_file": "calibration/naming-compatibility.4e9.yaml"
+  },
+  "status": "blocked_missing_remote_endpoints"
+}

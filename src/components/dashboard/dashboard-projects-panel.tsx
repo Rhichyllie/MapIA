@@ -1,97 +1,87 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { PageHeader } from "@/src/components/ui/page-header";
-
-type DashboardWorkspace = {
-  id: string;
-  slug: string;
-  name: string;
-  ownerIdentity?: string;
-};
-
-type DashboardProject = {
-  id: string;
-  slug: string;
-  name: string;
-  description?: string;
-  template: "sitemap" | "flowchart" | "erd" | "graph";
-};
+import { NewProjectDrawer } from "./new-project-drawer";
+import { ProjectsGrid } from "./projects-grid";
+import { ProjectsList } from "./projects-list";
+import { WorkspaceToolbar } from "./workspace-toolbar";
+import {
+  CARD_HIGHLIGHT_MS,
+  SEARCH_DEBOUNCE_MS,
+  filterAndSortProjects,
+  type DashboardProject,
+  type DashboardWorkspace,
+  type DiagramFilter,
+  type InitialDiagramChoice,
+  type SnapshotFilter,
+  type SortOption,
+  type TemplateFilter,
+  type WorkspaceDensity,
+  type WorkspaceMode,
+  type WorkspaceViewMode,
+} from "./workspace-projects";
 
 type DashboardProjectsPanelProps = {
   workspace: DashboardWorkspace;
   projects: DashboardProject[];
 };
 
-type InitialDiagramChoice = "wizard" | "tree" | "flow" | "mindmap";
+const WORKSPACE_VIEW_STORAGE_KEY_PREFIX = "mapia-workspace-view";
+const WORKSPACE_DENSITY_STORAGE_KEY_PREFIX = "mapia-workspace-density";
+const WORKSPACE_MODE_STORAGE_KEY_PREFIX = "mapia-workspace-mode";
 
-const diagramTypeOptions: Array<{
-  value: InitialDiagramChoice;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "wizard",
-    label: "Escolher no wizard",
-    description: "Recomendado para configurar com mais contexto.",
-  },
-  {
-    value: "tree",
-    label: "Tree (hierarquia)",
-    description: "Ideal para estruturas em níveis.",
-  },
-  {
-    value: "flow",
-    label: "Flow (processo)",
-    description: "Ideal para fluxos de etapas.",
-  },
-  {
-    value: "mindmap",
-    label: "Mindmap (ideias)",
-    description: "Ideal para mapas mentais radiais.",
-  },
-];
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
 
-const legacyTemplateOptions: Array<{
-  value: DashboardProject["template"];
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "graph",
-    label: "Graph (padrão legado)",
-    description: "Estrutura genérica para compatibilidade.",
-  },
-  {
-    value: "sitemap",
-    label: "Sitemap",
-    description: "Navegação de páginas ou seções.",
-  },
-  {
-    value: "flowchart",
-    label: "Flowchart",
-    description: "Fluxograma clássico de processos.",
-  },
-  {
-    value: "erd",
-    label: "ERD",
-    description: "Relacionamento de entidades e dados.",
-  },
-];
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedValue(value);
+    }, delayMs);
 
-function buildWizardHref(projectId: string, initialDiagramType: InitialDiagramChoice) {
-  const params = new URLSearchParams({
-    projectId,
-  });
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [delayMs, value]);
 
-  if (initialDiagramType !== "wizard") {
-    params.set("diagramType", initialDiagramType);
+  return debouncedValue;
+}
+
+function validateProjectName(name: string) {
+  const trimmed = name.trim();
+
+  if (!trimmed) {
+    return "Informe um nome para criar o projeto.";
   }
 
-  return `/wizard?${params.toString()}`;
+  if (trimmed.length < 3) {
+    return "Use ao menos 3 caracteres no nome.";
+  }
+
+  if (trimmed.length > 120) {
+    return "Use no maximo 120 caracteres no nome.";
+  }
+
+  return null;
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
 }
 
 export function DashboardProjectsPanel({
@@ -99,33 +89,213 @@ export function DashboardProjectsPanel({
   projects,
 }: DashboardProjectsPanelProps) {
   const router = useRouter();
+  const drawerNameInputRef = useRef<HTMLInputElement | null>(null);
+  const newProjectButtonRef = useRef<HTMLButtonElement | null>(null);
+  const wasDrawerOpenRef = useRef(false);
+  const workspaceViewStorageKey = `${WORKSPACE_VIEW_STORAGE_KEY_PREFIX}:${workspace.id}`;
+  const workspaceDensityStorageKey = `${WORKSPACE_DENSITY_STORAGE_KEY_PREFIX}:${workspace.id}`;
+  const workspaceModeStorageKey = `${WORKSPACE_MODE_STORAGE_KEY_PREFIX}:${workspace.id}`;
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [diagramFilter, setDiagramFilter] = useState<DiagramFilter>("all");
+  const [templateFilter, setTemplateFilter] = useState<TemplateFilter>("all");
+  const [snapshotFilter, setSnapshotFilter] = useState<SnapshotFilter>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("updated-desc");
+  const [viewMode, setViewMode] = useState<WorkspaceViewMode>("list");
+  const [density, setDensity] = useState<WorkspaceDensity>("compact");
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("operational");
+  const [hasHydratedPreferences, setHasHydratedPreferences] = useState(false);
+
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [initialDiagramType, setInitialDiagramType] =
     useState<InitialDiagramChoice>("wizard");
-  const [template, setTemplate] =
-    useState<DashboardProject["template"]>("graph");
+  const [template, setTemplate] = useState<DashboardProject["template"]>("graph");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [lastCreatedProject, setLastCreatedProject] = useState<{
-    id: string;
-    initialDiagramType: InitialDiagramChoice;
-  } | null>(null);
+  const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null);
+  const [recentlyCreatedProjectId, setRecentlyCreatedProjectId] = useState<string | null>(
+    null,
+  );
+  const [highlightedProjectId, setHighlightedProjectId] = useState<string | null>(null);
+
+  const debouncedSearchTerm = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const storedView = window.localStorage.getItem(workspaceViewStorageKey);
+      if (storedView === "grid" || storedView === "list") {
+        setViewMode(storedView);
+      }
+
+      const storedDensity = window.localStorage.getItem(workspaceDensityStorageKey);
+      if (storedDensity === "compact" || storedDensity === "comfortable") {
+        setDensity(storedDensity);
+      }
+
+      const storedMode = window.localStorage.getItem(workspaceModeStorageKey);
+      if (storedMode === "operational" || storedMode === "technical") {
+        setWorkspaceMode(storedMode);
+      }
+    } catch {
+      setViewMode("list");
+      setDensity("compact");
+      setWorkspaceMode("operational");
+    } finally {
+      setHasHydratedPreferences(true);
+    }
+  }, [workspaceDensityStorageKey, workspaceModeStorageKey, workspaceViewStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasHydratedPreferences) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(workspaceViewStorageKey, viewMode);
+      window.localStorage.setItem(workspaceDensityStorageKey, density);
+      window.localStorage.setItem(workspaceModeStorageKey, workspaceMode);
+    } catch {
+      // Ignora indisponibilidade do localStorage.
+    }
+  }, [
+    density,
+    hasHydratedPreferences,
+    viewMode,
+    workspaceDensityStorageKey,
+    workspaceMode,
+    workspaceModeStorageKey,
+    workspaceViewStorageKey,
+  ]);
+
+  useEffect(() => {
+    if (isDrawerOpen) {
+      wasDrawerOpenRef.current = true;
+      return;
+    }
+
+    if (!isDrawerOpen && wasDrawerOpenRef.current) {
+      wasDrawerOpenRef.current = false;
+      newProjectButtonRef.current?.focus();
+    }
+  }, [isDrawerOpen]);
+
+  useEffect(() => {
+    if (!recentlyCreatedProjectId) {
+      return;
+    }
+
+    const createdProjectExists = projects.some(
+      (project) => project.id === recentlyCreatedProjectId,
+    );
+
+    if (!createdProjectExists) {
+      return;
+    }
+
+    setRecentlyCreatedProjectId(null);
+    setHighlightedProjectId(recentlyCreatedProjectId);
+
+    const projectCard = document.querySelector<HTMLElement>(
+      `[data-project-id="${recentlyCreatedProjectId}"]`,
+    );
+    projectCard?.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const timer = window.setTimeout(() => {
+      setHighlightedProjectId((current) =>
+        current === recentlyCreatedProjectId ? null : current,
+      );
+    }, CARD_HIGHLIGHT_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [projects, recentlyCreatedProjectId]);
+
+  const filteredProjects = useMemo(
+    () =>
+      filterAndSortProjects(projects, {
+        searchTerm: debouncedSearchTerm,
+        diagramFilter,
+        templateFilter,
+        snapshotFilter,
+        sortOption,
+        workspaceMode,
+      }),
+    [
+      debouncedSearchTerm,
+      diagramFilter,
+      projects,
+      snapshotFilter,
+      sortOption,
+      templateFilter,
+      workspaceMode,
+    ],
+  );
+
+  const hasActiveFilters =
+    debouncedSearchTerm.trim().length > 0 ||
+    diagramFilter !== "all" ||
+    templateFilter !== "all" ||
+    snapshotFilter !== "all" ||
+    sortOption !== "updated-desc";
+
+  const workspaceStats = useMemo(() => {
+    const withGeneratedSnapshot = projects.filter(
+      (project) => project.hasInitialSnapshot,
+    ).length;
+
+    return {
+      total: projects.length,
+      generated: withGeneratedSnapshot,
+      pending: projects.length - withGeneratedSnapshot,
+    };
+  }, [projects]);
+
+  function closeDrawerAndResetForm() {
+    setIsDrawerOpen(false);
+    setName("");
+    setDescription("");
+    setInitialDiagramType("wizard");
+    setTemplate("graph");
+    setErrorMessage(null);
+  }
+
+  function clearFilters() {
+    setSearchTerm("");
+    setDiagramFilter("all");
+    setTemplateFilter("all");
+    setSnapshotFilter("all");
+    setSortOption("updated-desc");
+  }
+
+  async function handleCopyTechnicalId(project: DashboardProject) {
+    try {
+      await copyTextToClipboard(project.id);
+      setWorkspaceMessage(`ID tecnico copiado: ${project.id}`);
+    } catch {
+      setWorkspaceMessage("Nao foi possivel copiar o ID tecnico.");
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
+    const validationError = validateProjectName(trimmedName);
 
-    if (!trimmedName) {
-      setErrorMessage("Informe o nome do projeto.");
+    if (validationError) {
+      setErrorMessage(validationError);
       return;
     }
 
     setIsSubmitting(true);
     setErrorMessage(null);
-    setSuccessMessage(null);
 
     try {
       const response = await fetch("/api/projects", {
@@ -140,7 +310,12 @@ export function DashboardProjectsPanel({
       });
 
       const payload = (await response.json()) as {
-        data?: { project?: { id?: string; name?: string } };
+        data?: {
+          project?: {
+            id?: string;
+            name?: string;
+          };
+        };
         message?: string;
       };
 
@@ -149,17 +324,11 @@ export function DashboardProjectsPanel({
         return;
       }
 
-      setSuccessMessage(
+      setWorkspaceMessage(
         `Projeto "${payload.data?.project?.name ?? trimmedName}" criado com sucesso.`,
       );
-      setLastCreatedProject({
-        id: payload.data?.project?.id ?? "",
-        initialDiagramType,
-      });
-      setName("");
-      setDescription("");
-      setInitialDiagramType("wizard");
-      setTemplate("graph");
+      setRecentlyCreatedProjectId(payload.data?.project?.id ?? null);
+      closeDrawerAndResetForm();
       router.refresh();
     } catch {
       setErrorMessage("Falha de rede ao criar projeto.");
@@ -172,8 +341,8 @@ export function DashboardProjectsPanel({
     <>
       <section className="panel">
         <PageHeader
-          title="Workspace"
-          description="Centralize seus projetos, inicie pelo wizard guiado e evolua no editor visual."
+          title="Hub da area de trabalho"
+          description="Gerencie projetos e avance no fluxo Workspace -> Assistente de criacao -> Editor."
           actions={
             <span className="badge">
               <span className="badge-dot" aria-hidden="true" />
@@ -181,232 +350,114 @@ export function DashboardProjectsPanel({
             </span>
           }
         />
-        <div className="panel-body">
-          <div className="grid-tiles">
-            <div className="tile">
-              <h3>Workspace atual</h3>
-              <p>{workspace.name}</p>
-            </div>
-            <div className="tile">
-              <h3>Responsável</h3>
-              <p>{workspace.ownerIdentity ?? "Nao identificado"}</p>
-            </div>
+
+        <div className="panel-body stack-sm">
+          <div className="grid-tiles workspace-stats-grid">
             <div className="tile">
               <h3>Projetos</h3>
-              <p>{projects.length} projeto(s) ativos neste workspace.</p>
+              <p>{workspaceStats.total}</p>
+            </div>
+            <div className="tile">
+              <h3>Snapshot gerado</h3>
+              <p>{workspaceStats.generated}</p>
+            </div>
+            <div className="tile">
+              <h3>Snapshot pendente</h3>
+              <p>{workspaceStats.pending}</p>
             </div>
           </div>
-        </div>
-      </section>
 
-      <section className="panel">
-        <PageHeader
-          title="Criar projeto"
-          description="Informe somente o essencial para começar. Você pode detalhar o restante no wizard."
-        />
-        <div className="panel-body">
-          <form
-            className="dashboard-form"
-            onSubmit={handleSubmit}
-            data-testid="dashboard-create-project-form"
-          >
-            <div className="field">
-              <label htmlFor="project-name">Nome do projeto</label>
-              <input
-                id="project-name"
-                data-testid="dashboard-project-name-input"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Ex.: Mapa do processo de onboarding"
-                required
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="project-description">
-                Finalidade (opcional)
-              </label>
-              <textarea
-                id="project-description"
-                data-testid="dashboard-project-description-input"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                rows={3}
-                placeholder="Ex.: Mapear o fluxo de onboarding entre RH, TI e gestor."
-              />
-            </div>
-
-            <div className="field">
-              <label htmlFor="project-initial-diagram">
-                Tipo inicial do diagrama
-              </label>
-              <select
-                id="project-initial-diagram"
-                data-testid="dashboard-initial-diagram-type-select"
-                value={initialDiagramType}
-                onChange={(event) =>
-                  setInitialDiagramType(
-                    event.target.value as InitialDiagramChoice,
-                  )
-                }
-              >
-                {diagramTypeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <p className="helper">
-                {
-                  diagramTypeOptions.find(
-                    (option) => option.value === initialDiagramType,
-                  )?.description
-                }
-              </p>
-            </div>
-
-            <details className="tile">
-              <summary>Avancado: templates legados</summary>
-              <div className="stack-sm">
-                <div className="field">
-                  <label htmlFor="project-template">Template legado</label>
-                  <select
-                    id="project-template"
-                    data-testid="dashboard-project-template-select"
-                    value={template}
-                    onChange={(event) =>
-                      setTemplate(
-                        event.target.value as DashboardProject["template"],
-                      )
-                    }
-                  >
-                    {legacyTemplateOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <p className="helper">
-                  {
-                    legacyTemplateOptions.find(
-                      (option) => option.value === template,
-                    )?.description
-                  }
-                </p>
-              </div>
-            </details>
-
-            {errorMessage ? (
-              <div
-                className="error-box"
-                data-testid="dashboard-create-project-error"
-              >
-                {errorMessage}
-              </div>
-            ) : null}
-            {successMessage ? (
-              <div
-                className="success-box"
-                data-testid="dashboard-create-project-success"
-              >
-                <p>{successMessage}</p>
-                {lastCreatedProject?.id ? (
-                  <div className="row-actions">
-                    <Link
-                      className="btn btn-primary"
-                      href={buildWizardHref(
-                        lastCreatedProject.id,
-                        lastCreatedProject.initialDiagramType,
-                      )}
-                      data-testid="dashboard-success-open-wizard-button"
-                    >
-                      Abrir Wizard
-                    </Link>
-                    <Link
-                      className="btn"
-                      href={`/editor?projectId=${lastCreatedProject.id}`}
-                      data-testid="dashboard-success-open-editor-button"
-                    >
-                      Abrir Editor
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="row-actions">
-              <button
-                className="btn btn-primary"
-                type="submit"
-                disabled={isSubmitting}
-                data-testid="dashboard-create-project-button"
-              >
-                {isSubmitting ? "Criando..." : "Criar projeto"}
-              </button>
-              <p className="helper">
-                Após criar, você pode seguir no Wizard para gerar o snapshot
-                inicial.
-              </p>
-            </div>
-          </form>
+          <WorkspaceToolbar
+            searchTerm={searchTerm}
+            onSearchTermChange={setSearchTerm}
+            onClearSearch={() => setSearchTerm("")}
+            diagramFilter={diagramFilter}
+            onDiagramFilterChange={setDiagramFilter}
+            templateFilter={templateFilter}
+            onTemplateFilterChange={setTemplateFilter}
+            snapshotFilter={snapshotFilter}
+            onSnapshotFilterChange={setSnapshotFilter}
+            sortOption={sortOption}
+            onSortOptionChange={setSortOption}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            density={density}
+            onDensityChange={setDensity}
+            workspaceMode={workspaceMode}
+            onWorkspaceModeChange={setWorkspaceMode}
+            onClearFilters={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            onOpenNewProject={() => {
+              setWorkspaceMessage(null);
+              setErrorMessage(null);
+              router.push("/create");
+            }}
+            newProjectButtonRef={newProjectButtonRef}
+            filteredCount={filteredProjects.length}
+            totalCount={projects.length}
+            workspaceMessage={workspaceMessage}
+          />
         </div>
       </section>
 
       <section className="panel">
         <PageHeader
           title="Projetos"
-          description={`${projects.length} projeto(s) neste workspace.`}
+          description={`${filteredProjects.length} projeto(s) na visualizacao atual.`}
         />
         <div className="panel-body">
-          {projects.length === 0 ? (
-            <EmptyState
-              title="Nenhum projeto criado ainda"
-              description="Crie seu primeiro projeto para iniciar o fluxo Workspace -> Wizard -> Editor."
-              dataTestId="dashboard-empty-projects"
+          {filteredProjects.length === 0 ? (
+            projects.length === 0 ? (
+              <EmptyState
+                title="Nenhum projeto criado ainda"
+                description="Crie seu primeiro projeto para iniciar o fluxo workspace -> Assistente de criacao -> Editor."
+                dataTestId="dashboard-empty-projects"
+              />
+            ) : (
+              <EmptyState
+                title="Nenhum projeto encontrado"
+                description="Ajuste busca, filtros ou ordenacao para encontrar projetos."
+                dataTestId="dashboard-empty-filtered-projects"
+              />
+            )
+          ) : viewMode === "grid" ? (
+            <ProjectsGrid
+              projects={filteredProjects}
+              density={density}
+              workspaceMode={workspaceMode}
+              highlightedProjectId={highlightedProjectId}
+              onCopyTechnicalId={handleCopyTechnicalId}
             />
           ) : (
-            <div className="project-list" data-testid="dashboard-project-list">
-              {projects.map((project) => (
-                <article
-                  className="tile"
-                  key={project.id}
-                  data-testid={`dashboard-project-card-${project.id}`}
-                >
-                  <div
-                    className="row-actions"
-                    style={{ justifyContent: "space-between" }}
-                  >
-                    <h3>{project.name}</h3>
-                    <span className="badge">
-                      {project.template === "graph"
-                        ? "Template padrão"
-                        : `Template ${project.template.toUpperCase()}`}
-                    </span>
-                  </div>
-                  <p>{project.description ?? "Sem descricao informada."}</p>
-                  <div className="row-actions">
-                    <Link
-                      className="btn btn-primary"
-                      href={buildWizardHref(project.id, "wizard")}
-                      data-testid={`dashboard-open-wizard-${project.id}`}
-                    >
-                      Abrir Wizard
-                    </Link>
-                    <Link
-                      className="btn"
-                      href={`/editor?projectId=${project.id}`}
-                      data-testid={`dashboard-open-editor-${project.id}`}
-                    >
-                      Abrir Editor
-                    </Link>
-                  </div>
-                </article>
-              ))}
-            </div>
+            <ProjectsList
+              projects={filteredProjects}
+              density={density}
+              workspaceMode={workspaceMode}
+              highlightedProjectId={highlightedProjectId}
+              onOpenProject={(projectId) => router.push(`/editor?projectId=${projectId}`)}
+              onCopyTechnicalId={handleCopyTechnicalId}
+            />
           )}
         </div>
       </section>
+
+      <NewProjectDrawer
+        isOpen={isDrawerOpen}
+        isSubmitting={isSubmitting}
+        name={name}
+        description={description}
+        initialDiagramType={initialDiagramType}
+        template={template}
+        workspaceMode={workspaceMode}
+        errorMessage={errorMessage}
+        nameInputRef={drawerNameInputRef}
+        onClose={closeDrawerAndResetForm}
+        onSubmit={handleSubmit}
+        onNameChange={setName}
+        onDescriptionChange={setDescription}
+        onInitialDiagramTypeChange={setInitialDiagramType}
+        onTemplateChange={setTemplate}
+      />
     </>
   );
 }

@@ -1,4 +1,6 @@
 import type { NodeKind } from "@/src/domain";
+import { resolveGraphDiagramRole } from "./graph-semantics";
+import { resolveFlowDiagramRole } from "./flow-diagram-roles";
 import type { DiagramType } from "@/src/modules/graph/domain";
 
 export type DiagramRole =
@@ -6,6 +8,10 @@ export type DiagramRole =
   | "meta-project"
   | "tree-root"
   | "tree-node"
+  | "hierarchy-root"
+  | "hierarchy-node"
+  | "sitemap-home"
+  | "sitemap-section"
   | "flow-start"
   | "flow-step"
   | "flow-note"
@@ -14,10 +20,20 @@ export type DiagramRole =
   | "mindmap-root"
   | "mindmap-branch"
   | "mindmap-reference"
+  | "graph-core"
+  | "graph-topic"
+  | "graph-supporting"
+  | "timeline-milestone"
   | "erd-entity"
   | "erd-comment";
 
-export type DiagramRoleDiagramType = DiagramType | "erd" | undefined;
+export type DiagramRoleDiagramType =
+  | DiagramType
+  | "erd"
+  | "sitemap"
+  | "graph"
+  | "timeline"
+  | undefined;
 
 type ResolveDiagramRoleInput = {
   diagramType: DiagramRoleDiagramType;
@@ -57,6 +73,10 @@ export function readDiagramRoleFromPayload(
     role === "meta-project" ||
     role === "tree-root" ||
     role === "tree-node" ||
+    role === "hierarchy-root" ||
+    role === "hierarchy-node" ||
+    role === "sitemap-home" ||
+    role === "sitemap-section" ||
     role === "flow-start" ||
     role === "flow-step" ||
     role === "flow-note" ||
@@ -65,6 +85,10 @@ export function readDiagramRoleFromPayload(
     role === "mindmap-root" ||
     role === "mindmap-branch" ||
     role === "mindmap-reference" ||
+    role === "graph-core" ||
+    role === "graph-topic" ||
+    role === "graph-supporting" ||
+    role === "timeline-milestone" ||
     role === "erd-entity" ||
     role === "erd-comment"
   ) {
@@ -111,6 +135,10 @@ function matchesRootByName(input: {
   return rootName === nodeLabel;
 }
 
+function normalizedLabel(value: string | undefined) {
+  return value?.trim().toLowerCase();
+}
+
 export function resolveDiagramRole(input: ResolveDiagramRoleInput): DiagramRole {
   const explicitRole = readDiagramRoleFromPayload(input.nodePayload);
 
@@ -123,37 +151,57 @@ export function resolveDiagramRole(input: ResolveDiagramRoleInput): DiagramRole 
       return "tree-root";
     }
 
+    if (input.diagramType === "sitemap") {
+      return "sitemap-home";
+    }
+
     if (input.diagramType === "flow") {
       return "flow-start";
+    }
+
+    if (input.diagramType === "timeline") {
+      return "timeline-milestone";
     }
 
     return "meta-project";
   }
 
   if (input.diagramType === "tree") {
+    if (explicitRole === "hierarchy-root" || explicitRole === "hierarchy-node") {
+      return explicitRole;
+    }
+
+    if (explicitRole === "tree-root" || explicitRole === "tree-node") {
+      return explicitRole;
+    }
+
     return "tree-node";
   }
 
-  if (input.diagramType === "flow") {
-    if (input.nodeKind === "flow-step") {
-      if (
-        explicitRole === "flow-start" ||
-        explicitRole === "flow-end" ||
-        explicitRole === "flow-step" ||
-        explicitRole === "flow-decision"
-      ) {
-        return explicitRole;
-      }
-
-      return "flow-step";
+  if (input.diagramType === "sitemap") {
+    if (explicitRole === "sitemap-home" || explicitRole === "sitemap-section") {
+      return explicitRole;
     }
 
-    if (input.nodeKind === "note") {
-      if (explicitRole === "flow-note") {
-        return "flow-note";
-      }
+    const nodeLabel = normalizedLabel(input.nodeLabel);
+    if (nodeLabel === "home" || nodeLabel === "inicio") {
+      return "sitemap-home";
+    }
 
-      return "flow-note";
+    if (input.nodeKind === "page") {
+      return "sitemap-section";
+    }
+
+    return "mindmap-reference";
+  }
+
+  if (input.diagramType === "flow") {
+    if (input.nodeKind === "flow-step" || input.nodeKind === "note") {
+      return resolveFlowDiagramRole({
+        explicitRole,
+        nodeKind: input.nodeKind,
+        nodeLabel: input.nodeLabel,
+      });
     }
 
     if (input.nodeKind === "entity") {
@@ -210,6 +258,22 @@ export function resolveDiagramRole(input: ResolveDiagramRoleInput): DiagramRole 
     }
 
     return "tree-node";
+  }
+
+  if (input.diagramType === "graph") {
+    return resolveGraphDiagramRole({
+      diagramRole: explicitRole,
+      nodeKind: input.nodeKind,
+      nodeLabel: input.nodeLabel,
+    });
+  }
+
+  if (input.diagramType === "timeline") {
+    if (explicitRole === "timeline-milestone") {
+      return explicitRole;
+    }
+
+    return "timeline-milestone";
   }
 
   if (input.nodeKind === "entity") {

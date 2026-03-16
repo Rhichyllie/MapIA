@@ -1,11 +1,25 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
+import type { DiagramRole } from "@/src/modules/diagrams/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
+import {
+  computeFlowInsertPosition,
+  computeFlowReflow,
+} from "./diagram-layout-flow";
 
-export type DiagramLayoutType = DiagramType | "erd" | undefined;
+export { computeFlowContextualNudgePositions } from "./diagram-layout-flow";
+
+export type DiagramLayoutType =
+  | DiagramType
+  | "erd"
+  | "sitemap"
+  | "graph"
+  | "timeline"
+  | undefined;
 
 export type DiagramLayoutNode = {
   id: string;
   kind: NodeKind;
+  diagramRole?: DiagramRole;
   position: {
     x: number;
     y: number;
@@ -37,18 +51,44 @@ const TREE_SPACING = {
   y: 220,
 };
 
-const FLOW_SPACING = {
-  x: 280,
-  y: 190,
+const TIMELINE_SPACING = {
+  x: 320,
+  y: 170,
 };
 
 const MINDMAP_RING_STEP = 240;
 const MINDMAP_INSERT_RADIUS = 260;
 
+const GRAPH_RING_STEP = 228;
+const GRAPH_INSERT_RADIUS = 188;
+
 const ERD_GRID_SPACING = {
   x: 340,
   y: 220,
 };
+
+function resolveDirection(
+  diagramType: DiagramLayoutType,
+  layoutOptions: unknown,
+): "top-down" | "left-right" {
+  const defaultDirection =
+    diagramType === "flow" || diagramType === "timeline" ? "left-right" : "top-down";
+
+  if (!layoutOptions || typeof layoutOptions !== "object" || Array.isArray(layoutOptions)) {
+    return defaultDirection;
+  }
+
+  const direction = (layoutOptions as { direction?: unknown }).direction;
+  if (direction === "left-right") {
+    return "left-right";
+  }
+
+  if (direction === "top-down") {
+    return "top-down";
+  }
+
+  return defaultDirection;
+}
 
 function roundPosition(position: { x: number; y: number }) {
   return {
@@ -168,6 +208,18 @@ function resolveLargestFreeAngle(input: {
   return bestMidpoint;
 }
 
+function isSlotFree(
+  candidate: { x: number; y: number },
+  nodes: DiagramLayoutNode[],
+  minDistance: number,
+) {
+  return nodes.every(
+    (node) =>
+      Math.hypot(node.position.x - candidate.x, node.position.y - candidate.y) >=
+      minDistance,
+  );
+}
+
 function isErdSlotFree(
   candidate: { x: number; y: number },
   nodes: DiagramLayoutNode[],
@@ -229,6 +281,7 @@ function layoutTree(
   nodes: DiagramLayoutNode[],
   edges: DiagramLayoutEdge[],
   rootId?: string,
+  direction: "top-down" | "left-right" = "top-down",
 ) {
   const positions: Record<string, { x: number; y: number }> = {};
   if (nodes.length === 0) {
@@ -294,10 +347,17 @@ function layoutTree(
     const startX = -((levelNodes.length - 1) * TREE_SPACING.x) / 2;
     for (let index = 0; index < levelNodes.length; index += 1) {
       const nodeId = levelNodes[index];
-      positions[nodeId] = roundPosition({
-        x: startX + index * TREE_SPACING.x,
-        y: level * TREE_SPACING.y,
-      });
+      positions[nodeId] = roundPosition(
+        direction === "left-right"
+          ? {
+              x: level * TREE_SPACING.x,
+              y: startX + index * TREE_SPACING.y,
+            }
+          : {
+              x: startX + index * TREE_SPACING.x,
+              y: level * TREE_SPACING.y,
+            },
+      );
     }
   }
 
@@ -307,127 +367,18 @@ function layoutTree(
   const disconnectedStartY = (maxLevel + 1) * TREE_SPACING.y + TREE_SPACING.y;
 
   disconnected.forEach((nodeId, index) => {
-    positions[nodeId] = roundPosition({
-      x: index * TREE_SPACING.x,
-      y: disconnectedStartY,
-    });
+    positions[nodeId] = roundPosition(
+      direction === "left-right"
+        ? {
+            x: disconnectedStartY,
+            y: index * TREE_SPACING.y,
+          }
+        : {
+            x: index * TREE_SPACING.x,
+            y: disconnectedStartY,
+          },
+    );
   });
-
-  return positions;
-}
-
-function layoutFlow(nodes: DiagramLayoutNode[], edges: DiagramLayoutEdge[]) {
-  const positions: Record<string, { x: number; y: number }> = {};
-  if (nodes.length === 0) {
-    return positions;
-  }
-
-  const orderedNodes = sortNodesForDeterminism(nodes);
-  const nodeIds = orderedNodes.map((node) => node.id);
-  const incoming = new Map<string, number>(nodeIds.map((nodeId) => [nodeId, 0]));
-  const flowsBySource = new Map<string, string[]>();
-  const dependsBySource = new Map<string, string[]>();
-
-  for (const edge of edges) {
-    if (!incoming.has(edge.sourceNodeId) || !incoming.has(edge.targetNodeId)) {
-      continue;
-    }
-
-    if (edge.kind === "flows-to") {
-      const nextTargets = flowsBySource.get(edge.sourceNodeId) ?? [];
-      nextTargets.push(edge.targetNodeId);
-      nextTargets.sort();
-      flowsBySource.set(edge.sourceNodeId, nextTargets);
-      incoming.set(edge.targetNodeId, (incoming.get(edge.targetNodeId) ?? 0) + 1);
-      continue;
-    }
-
-    if (edge.kind === "depends-on") {
-      const nextTargets = dependsBySource.get(edge.sourceNodeId) ?? [];
-      nextTargets.push(edge.targetNodeId);
-      nextTargets.sort();
-      dependsBySource.set(edge.sourceNodeId, nextTargets);
-    }
-  }
-
-  const queue = nodeIds
-    .filter((nodeId) => (incoming.get(nodeId) ?? 0) === 0)
-    .sort()
-    .map((nodeId) => ({ nodeId, column: 0 }));
-  const visited = new Set<string>();
-  const columnByNode = new Map<string, number>();
-
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (!current) {
-      continue;
-    }
-
-    if (visited.has(current.nodeId)) {
-      columnByNode.set(
-        current.nodeId,
-        Math.max(columnByNode.get(current.nodeId) ?? 0, current.column),
-      );
-      continue;
-    }
-
-    visited.add(current.nodeId);
-    columnByNode.set(current.nodeId, current.column);
-
-    const nextByFlow = flowsBySource.get(current.nodeId) ?? [];
-    for (const targetId of nextByFlow) {
-      incoming.set(targetId, (incoming.get(targetId) ?? 1) - 1);
-      const nextColumn = current.column + 1;
-      if ((incoming.get(targetId) ?? 0) <= 0) {
-        queue.push({ nodeId: targetId, column: nextColumn });
-      } else {
-        columnByNode.set(
-          targetId,
-          Math.max(columnByNode.get(targetId) ?? 0, nextColumn),
-        );
-      }
-    }
-  }
-
-  for (const [sourceId, targetIds] of dependsBySource.entries()) {
-    const sourceColumn = columnByNode.get(sourceId) ?? 0;
-    for (const targetId of targetIds) {
-      columnByNode.set(
-        targetId,
-        Math.max(columnByNode.get(targetId) ?? 0, sourceColumn + 1),
-      );
-    }
-  }
-
-  let fallbackColumn = 0;
-  for (const nodeId of nodeIds) {
-    if (columnByNode.has(nodeId)) {
-      fallbackColumn = Math.max(fallbackColumn, columnByNode.get(nodeId) ?? 0);
-      continue;
-    }
-    fallbackColumn += 1;
-    columnByNode.set(nodeId, fallbackColumn);
-  }
-
-  const groupedByColumn = new Map<number, string[]>();
-  for (const [nodeId, column] of columnByNode.entries()) {
-    const grouped = groupedByColumn.get(column) ?? [];
-    grouped.push(nodeId);
-    groupedByColumn.set(column, grouped.sort());
-  }
-
-  const sortedColumns = [...groupedByColumn.keys()].sort((a, b) => a - b);
-  for (const column of sortedColumns) {
-    const columnNodes = groupedByColumn.get(column) ?? [];
-    const startY = -((columnNodes.length - 1) * FLOW_SPACING.y) / 2;
-    for (let index = 0; index < columnNodes.length; index += 1) {
-      const nodeId = columnNodes[index];
-      positions[nodeId] = roundPosition({
-        x: column * FLOW_SPACING.x,
-        y: startY + index * FLOW_SPACING.y,
-      });
-    }
-  }
 
   return positions;
 }
@@ -550,27 +501,361 @@ function layoutErd(nodes: DiagramLayoutNode[]) {
   return positions;
 }
 
+function buildUndirectedAdjacency(
+  nodes: DiagramLayoutNode[],
+  edges: DiagramLayoutEdge[],
+) {
+  const nodeMap = createNodeMap(nodes);
+  const adjacency = new Map<string, Set<string>>();
+
+  for (const node of nodes) {
+    adjacency.set(node.id, new Set<string>());
+  }
+
+  for (const edge of edges) {
+    if (!nodeMap.has(edge.sourceNodeId) || !nodeMap.has(edge.targetNodeId)) {
+      continue;
+    }
+
+    adjacency.get(edge.sourceNodeId)?.add(edge.targetNodeId);
+    adjacency.get(edge.targetNodeId)?.add(edge.sourceNodeId);
+  }
+
+  return adjacency;
+}
+
+function resolveGraphCenterId(
+  nodes: DiagramLayoutNode[],
+  edges: DiagramLayoutEdge[],
+) {
+  if (nodes.length === 0) {
+    return undefined;
+  }
+
+  const explicitCore = nodes.find((node) => node.diagramRole === "graph-core");
+  if (explicitCore) {
+    return explicitCore.id;
+  }
+
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const degreeByNode = new Map<string, number>(
+    nodes.map((node) => [node.id, 0]),
+  );
+
+  for (const edge of edges) {
+    if (!nodeIds.has(edge.sourceNodeId) || !nodeIds.has(edge.targetNodeId)) {
+      continue;
+    }
+
+    degreeByNode.set(
+      edge.sourceNodeId,
+      (degreeByNode.get(edge.sourceNodeId) ?? 0) + 1,
+    );
+    degreeByNode.set(
+      edge.targetNodeId,
+      (degreeByNode.get(edge.targetNodeId) ?? 0) + 1,
+    );
+  }
+
+  return [...degreeByNode.entries()]
+    .sort((entryA, entryB) => {
+      if (entryA[1] !== entryB[1]) {
+        return entryB[1] - entryA[1];
+      }
+
+      return entryA[0].localeCompare(entryB[0]);
+    })[0]?.[0];
+}
+
+function layoutGraph(nodes: DiagramLayoutNode[], edges: DiagramLayoutEdge[]) {
+  const positions: Record<string, { x: number; y: number }> = {};
+  if (nodes.length === 0) {
+    return positions;
+  }
+
+  const orderedNodes = sortNodesForDeterminism(nodes);
+  const adjacency = buildUndirectedAdjacency(orderedNodes, edges);
+  const centerNodeId = resolveGraphCenterId(orderedNodes, edges) ?? orderedNodes[0]?.id;
+  if (!centerNodeId) {
+    return positions;
+  }
+
+  const ringByNode = new Map<string, number>([[centerNodeId, 0]]);
+  const queue = [centerNodeId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+    if (!currentId) {
+      continue;
+    }
+
+    const currentRing = ringByNode.get(currentId) ?? 0;
+    const neighbors = [...(adjacency.get(currentId) ?? [])].sort();
+
+    for (const neighborId of neighbors) {
+      if (ringByNode.has(neighborId)) {
+        continue;
+      }
+
+      ringByNode.set(neighborId, currentRing + 1);
+      queue.push(neighborId);
+    }
+  }
+
+  const maxRingFromConnected =
+    ringByNode.size > 0 ? Math.max(...ringByNode.values()) : 0;
+  const disconnected = orderedNodes
+    .map((node) => node.id)
+    .filter((nodeId) => !ringByNode.has(nodeId));
+  disconnected.forEach((nodeId, index) => {
+    ringByNode.set(nodeId, maxRingFromConnected + 1 + Math.floor(index / 6));
+  });
+
+  positions[centerNodeId] = { x: 0, y: 0 };
+  const ringGroups = new Map<number, string[]>();
+  for (const [nodeId, ring] of ringByNode.entries()) {
+    if (ring === 0) {
+      continue;
+    }
+
+    const group = ringGroups.get(ring) ?? [];
+    group.push(nodeId);
+    ringGroups.set(ring, group);
+  }
+
+  const degreeByNode = new Map<string, number>();
+  for (const node of orderedNodes) {
+    degreeByNode.set(node.id, adjacency.get(node.id)?.size ?? 0);
+  }
+
+  for (const ring of [...ringGroups.keys()].sort((a, b) => a - b)) {
+    const ringNodes = (ringGroups.get(ring) ?? []).sort((nodeA, nodeB) => {
+      const degreeA = degreeByNode.get(nodeA) ?? 0;
+      const degreeB = degreeByNode.get(nodeB) ?? 0;
+      if (degreeA !== degreeB) {
+        return degreeB - degreeA;
+      }
+      return nodeA.localeCompare(nodeB);
+    });
+    const supportNodes = ringNodes.filter(
+      (nodeId) =>
+        orderedNodes.find((node) => node.id === nodeId)?.diagramRole ===
+        "graph-supporting",
+    );
+    const primaryNodes = ringNodes.filter((nodeId) => !supportNodes.includes(nodeId));
+
+    const radius = GRAPH_RING_STEP * ring;
+    const primaryAngleStep = primaryNodes.length
+      ? (Math.PI * 1.15) / Math.max(primaryNodes.length - 1, 1)
+      : 0;
+    const primaryStartAngle = primaryNodes.length <= 1 ? -Math.PI / 2 : -Math.PI * 0.85;
+
+    for (let index = 0; index < primaryNodes.length; index += 1) {
+      const nodeId = primaryNodes[index];
+      const angle =
+        primaryNodes.length === 1
+          ? -Math.PI / 2
+          : primaryStartAngle + primaryAngleStep * index;
+
+      positions[nodeId] = roundPosition({
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius + (index % 2 === 0 ? -18 : 14),
+      });
+    }
+
+    const supportRadius = radius + 86;
+    const supportAngleStep = supportNodes.length
+      ? (Math.PI * 0.62) / Math.max(supportNodes.length - 1, 1)
+      : 0;
+    const supportStartAngle = supportNodes.length <= 1 ? Math.PI * 0.55 : Math.PI * 0.28;
+
+    for (let index = 0; index < supportNodes.length; index += 1) {
+      const nodeId = supportNodes[index];
+      const angle =
+        supportNodes.length === 1
+          ? Math.PI * 0.55
+          : supportStartAngle + supportAngleStep * index;
+
+      positions[nodeId] = roundPosition({
+        x: Math.cos(angle) * supportRadius,
+        y: Math.sin(angle) * supportRadius + 44,
+      });
+    }
+  }
+
+  return positions;
+}
+
+function resolveGraphInsertionSlot(input: {
+  anchorNode: DiagramLayoutNode;
+  nodes: DiagramLayoutNode[];
+}) {
+  const preferredAngle = resolveLargestFreeAngle({
+    anchorNode: input.anchorNode,
+    nodes: input.nodes,
+  });
+
+  for (let ring = 1; ring <= 5; ring += 1) {
+    const radius = GRAPH_INSERT_RADIUS + (ring - 1) * 72;
+    const candidate = {
+      x: input.anchorNode.position.x + Math.cos(preferredAngle) * radius,
+      y: input.anchorNode.position.y + Math.sin(preferredAngle) * radius,
+    };
+
+    if (isSlotFree(candidate, input.nodes, 150)) {
+      return roundPosition(candidate);
+    }
+  }
+
+  return roundPosition({
+    x: input.anchorNode.position.x + GRAPH_INSERT_RADIUS,
+    y: input.anchorNode.position.y,
+  });
+}
+
+function layoutTimeline(
+  nodes: DiagramLayoutNode[],
+  edges: DiagramLayoutEdge[],
+  direction: "top-down" | "left-right" = "left-right",
+) {
+  const positions: Record<string, { x: number; y: number }> = {};
+  if (nodes.length === 0) {
+    return positions;
+  }
+
+  const orderedNodes = sortNodesForDeterminism(nodes);
+  const nodeMap = createNodeMap(orderedNodes);
+  const rankByNodeId = new Map(orderedNodes.map((node, index) => [node.id, index] as const));
+  const readyQueueSort = (nodeIdA: string, nodeIdB: string) => {
+    const rankDifference = (rankByNodeId.get(nodeIdA) ?? 0) - (rankByNodeId.get(nodeIdB) ?? 0);
+    if (rankDifference !== 0) {
+      return rankDifference;
+    }
+
+    return nodeIdA.localeCompare(nodeIdB);
+  };
+  const outgoingBySource = new Map<string, Set<string>>();
+  const incomingByNodeId = new Map<string, number>(
+    orderedNodes.map((node) => [node.id, 0] as const),
+  );
+
+  for (const edge of edges) {
+    if (edge.kind !== "flows-to") {
+      continue;
+    }
+
+    if (!nodeMap.has(edge.sourceNodeId) || !nodeMap.has(edge.targetNodeId)) {
+      continue;
+    }
+
+    const targets = outgoingBySource.get(edge.sourceNodeId) ?? new Set<string>();
+    if (targets.has(edge.targetNodeId)) {
+      continue;
+    }
+
+    targets.add(edge.targetNodeId);
+    outgoingBySource.set(edge.sourceNodeId, targets);
+    incomingByNodeId.set(
+      edge.targetNodeId,
+      (incomingByNodeId.get(edge.targetNodeId) ?? 0) + 1,
+    );
+  }
+
+  const pendingIncomingByNodeId = new Map(incomingByNodeId);
+  const readyQueue = orderedNodes
+    .map((node) => node.id)
+    .filter((nodeId) => (pendingIncomingByNodeId.get(nodeId) ?? 0) === 0)
+    .sort(readyQueueSort);
+  const orderedTimelineIds: string[] = [];
+
+  while (readyQueue.length > 0) {
+    const currentNodeId = readyQueue.shift();
+    if (!currentNodeId) {
+      continue;
+    }
+
+    orderedTimelineIds.push(currentNodeId);
+    const sortedTargets = [...(outgoingBySource.get(currentNodeId) ?? [])].sort(readyQueueSort);
+    for (const targetNodeId of sortedTargets) {
+      const remainingIncoming = (pendingIncomingByNodeId.get(targetNodeId) ?? 0) - 1;
+      pendingIncomingByNodeId.set(targetNodeId, remainingIncoming);
+      if (remainingIncoming === 0) {
+        readyQueue.push(targetNodeId);
+        readyQueue.sort(readyQueueSort);
+      }
+    }
+  }
+
+  for (const nodeId of orderedNodes.map((node) => node.id)) {
+    if (!orderedTimelineIds.includes(nodeId)) {
+      orderedTimelineIds.push(nodeId);
+    }
+  }
+
+  orderedTimelineIds.forEach((nodeId, index) => {
+    const primary = index * TIMELINE_SPACING.x;
+    positions[nodeId] = roundPosition(
+      direction === "left-right"
+        ? {
+            x: primary,
+            y: 0,
+          }
+        : {
+            x: 0,
+            y: primary,
+          },
+    );
+  });
+
+  return positions;
+}
+
 export function computeInsertPosition(
   diagramType: DiagramLayoutType,
   referenceNode: DiagramLayoutNode | null,
   nodes: DiagramLayoutNode[],
   viewport: DiagramLayoutViewport,
+  layoutOptions?: unknown,
 ) {
   if (!referenceNode) {
     return resolveViewportCenter(nodes, viewport);
   }
 
   if (diagramType === "tree") {
+    const direction = resolveDirection("tree", layoutOptions);
     return roundPosition({
-      x: referenceNode.position.x,
-      y: referenceNode.position.y + TREE_SPACING.y,
+      ...(direction === "left-right"
+        ? {
+            x: referenceNode.position.x + TREE_SPACING.x,
+            y: referenceNode.position.y,
+          }
+        : {
+            x: referenceNode.position.x,
+            y: referenceNode.position.y + TREE_SPACING.y,
+          }),
+    });
+  }
+
+  if (diagramType === "sitemap") {
+    const direction = resolveDirection("sitemap", layoutOptions);
+    return roundPosition({
+      ...(direction === "left-right"
+        ? {
+            x: referenceNode.position.x + TREE_SPACING.x,
+            y: referenceNode.position.y,
+          }
+        : {
+            x: referenceNode.position.x,
+            y: referenceNode.position.y + TREE_SPACING.y,
+          }),
     });
   }
 
   if (diagramType === "flow") {
-    return roundPosition({
-      x: referenceNode.position.x + FLOW_SPACING.x,
-      y: referenceNode.position.y,
+    return computeFlowInsertPosition({
+      anchorNode: referenceNode,
+      nodes,
+      layoutOptions,
     });
   }
 
@@ -594,6 +879,28 @@ export function computeInsertPosition(
     });
   }
 
+  if (diagramType === "timeline") {
+    const direction = resolveDirection("timeline", layoutOptions);
+    return roundPosition({
+      ...(direction === "left-right"
+        ? {
+            x: referenceNode.position.x + TIMELINE_SPACING.x,
+            y: referenceNode.position.y,
+          }
+        : {
+            x: referenceNode.position.x,
+            y: referenceNode.position.y + TIMELINE_SPACING.x,
+          }),
+    });
+  }
+
+  if (diagramType === "graph") {
+    return resolveGraphInsertionSlot({
+      anchorNode: referenceNode,
+      nodes,
+    });
+  }
+
   return roundPosition({
     x: referenceNode.position.x + DEFAULT_INSERT_OFFSET.x,
     y: referenceNode.position.y + DEFAULT_INSERT_OFFSET.y,
@@ -605,21 +912,48 @@ export function computeReflow(
   nodes: DiagramLayoutNode[],
   edges: DiagramLayoutEdge[],
   rootId?: string | null,
+  layoutOptions?: unknown,
 ) {
   if (diagramType === "tree") {
-    return layoutTree(nodes, edges, rootId ?? undefined);
+    return layoutTree(
+      nodes,
+      edges,
+      rootId ?? undefined,
+      resolveDirection("tree", layoutOptions),
+    );
   }
 
   if (diagramType === "flow") {
-    return layoutFlow(nodes, edges);
+    return computeFlowReflow(nodes, edges, resolveDirection("flow", layoutOptions));
   }
 
   if (diagramType === "mindmap") {
     return layoutMindmap(nodes, edges, rootId ?? undefined);
   }
 
+  if (diagramType === "sitemap") {
+    return layoutTree(
+      nodes,
+      edges,
+      rootId ?? undefined,
+      resolveDirection("sitemap", layoutOptions),
+    );
+  }
+
   if (diagramType === "erd") {
     return layoutErd(nodes);
+  }
+
+  if (diagramType === "graph") {
+    return layoutGraph(nodes, edges);
+  }
+
+  if (diagramType === "timeline") {
+    return layoutTimeline(
+      nodes,
+      edges,
+      resolveDirection("timeline", layoutOptions),
+    );
   }
 
   return nodes.reduce<Record<string, { x: number; y: number }>>((acc, node) => {
@@ -627,3 +961,4 @@ export function computeReflow(
     return acc;
   }, {});
 }
+

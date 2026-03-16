@@ -1,0 +1,195 @@
+version: 1
+phase: 4E.9
+default_profile: otel_collector_prometheus_tempo_latency
+notes:
+- O profile default reflete o naming canonico assumido nos artefatos versionados 4E.8.
+- Use profiles alternativos no script de apply para compatibilizar collector/backend
+  sem editar dashboards/rules manualmente.
+- Validar profile final contra metricas reais do ambiente alvo antes do apply definitivo.
+- 4E.9 adiciona metadados de validacao por evidencia real; sem evidencias reais, o
+  profile default pode permanecer candidato (nao validado).
+- 'Escopo dev_local: evidencias reais locais nao promovem automaticamente default_profile
+  global de staging/producao.'
+canonical:
+  labels:
+    deployment_environment: deployment_environment
+    service_name: service_name
+    service_version: service_version
+    span_name: span_name
+    status_code: status_code
+  metrics:
+    importing_runs_finalized_total: importing_telemetry_runs_finalized_total
+    importing_adapter_warnings_total: importing_telemetry_adapter_warnings_total
+    importing_adapter_late_drops_total: importing_telemetry_adapter_late_drops_total
+    importing_run_duration_bucket_ms: importing_telemetry_run_duration_milliseconds_bucket
+    importing_step_duration_bucket_ms: importing_telemetry_step_duration_milliseconds_bucket
+    prisma_operations_total: prisma_telemetry_operations_total
+    prisma_errors_total: prisma_telemetry_errors_total
+    prisma_slow_queries_total: prisma_telemetry_slow_queries_total
+    prisma_query_duration_bucket_ms: prisma_telemetry_query_duration_milliseconds_bucket
+    spanmetrics_calls_total: traces_spanmetrics_calls_total
+    spanmetrics_latency_bucket_ms: traces_spanmetrics_latency_bucket
+profiles:
+  otel_collector_prometheus_tempo_latency:
+    description: OTel metrics (Prometheus naming) + Tempo spanmetrics com histogram
+      `latency`.
+    labels: {}
+    metrics: {}
+  tempo_spanmetrics_duration_ms:
+    description: Tempo/spanmetrics com histogram `duration_milliseconds` em vez de
+      `latency`.
+    labels: {}
+    metrics:
+      spanmetrics_latency_bucket_ms: traces_spanmetrics_duration_milliseconds_bucket
+  resource_labels_short:
+    description: "Backends que exp\xF5em labels curtos (`service`, `environment`,\
+      \ `version`)."
+    labels:
+      deployment_environment: environment
+      service_name: service
+      service_version: version
+    metrics: {}
+  resource_labels_mixed_duration_ms:
+    description: Labels curtos + spanmetrics duration_ms.
+    labels:
+      deployment_environment: environment
+      service_name: service
+      service_version: version
+    metrics:
+      spanmetrics_latency_bucket_ms: traces_spanmetrics_duration_milliseconds_bucket
+source_naming: calibration/naming-compatibility.4e8.yaml
+environment_scope: dev_local
+status: dev_local_real_evidence
+validation:
+  status: dev_local_real_evidence
+  environment_scope: dev_local
+  validated_on: '2026-03-04T18:05:30Z'
+  source_evidence_file: evidence/observability-evidence.4e9r.20260304-180338.json
+  evidence_status: dev_local_real_evidence
+  candidate_scores:
+    otel_collector_prometheus_tempo_latency:
+      labels:
+        deployment_environment: true
+        service_name: true
+        service_version: true
+        span_name: true
+        status_code: true
+      metrics:
+        importing_runs_finalized_total: true
+        importing_adapter_warnings_total: true
+        importing_adapter_late_drops_total: true
+        importing_run_duration_bucket_ms: true
+        importing_step_duration_bucket_ms: true
+        prisma_operations_total: true
+        prisma_errors_total: true
+        prisma_slow_queries_total: true
+        prisma_query_duration_bucket_ms: true
+        spanmetrics_calls_total: true
+        spanmetrics_latency_bucket_ms: true
+      score: 16
+    resource_labels_mixed_duration_ms:
+      labels:
+        deployment_environment: false
+        service_name: false
+        service_version: true
+        span_name: true
+        status_code: true
+      metrics:
+        importing_runs_finalized_total: true
+        importing_adapter_warnings_total: true
+        importing_adapter_late_drops_total: true
+        importing_run_duration_bucket_ms: true
+        importing_step_duration_bucket_ms: true
+        prisma_operations_total: true
+        prisma_errors_total: true
+        prisma_slow_queries_total: true
+        prisma_query_duration_bucket_ms: true
+        spanmetrics_calls_total: true
+        spanmetrics_latency_bucket_ms: false
+      score: 13
+    resource_labels_short:
+      labels:
+        deployment_environment: false
+        service_name: false
+        service_version: true
+        span_name: true
+        status_code: true
+      metrics:
+        importing_runs_finalized_total: true
+        importing_adapter_warnings_total: true
+        importing_adapter_late_drops_total: true
+        importing_run_duration_bucket_ms: true
+        importing_step_duration_bucket_ms: true
+        prisma_operations_total: true
+        prisma_errors_total: true
+        prisma_slow_queries_total: true
+        prisma_query_duration_bucket_ms: true
+        spanmetrics_calls_total: true
+        spanmetrics_latency_bucket_ms: true
+      score: 14
+    tempo_spanmetrics_duration_ms:
+      labels:
+        deployment_environment: true
+        service_name: true
+        service_version: true
+        span_name: true
+        status_code: true
+      metrics:
+        importing_runs_finalized_total: true
+        importing_adapter_warnings_total: true
+        importing_adapter_late_drops_total: true
+        importing_run_duration_bucket_ms: true
+        importing_step_duration_bucket_ms: true
+        prisma_operations_total: true
+        prisma_errors_total: true
+        prisma_slow_queries_total: true
+        prisma_query_duration_bucket_ms: true
+        spanmetrics_calls_total: true
+        spanmetrics_latency_bucket_ms: false
+      score: 15
+  observed_prometheus_labels_sample:
+  - __name__
+  - branch
+  - call
+  - code
+  - config
+  - deployment_environment
+  - dialer_name
+  - endpoint
+  - event
+  - goarch
+  - goos
+  - goversion
+  - handler
+  - importing_outcome
+  - instance
+  - interval
+  - job
+  - le
+  - listener_name
+  - name
+  - operation
+  - quantile
+  - reason
+  - revision
+  - role
+  - rule_group
+  - scrape_job
+  - service_name
+  - service_version
+  - slice
+  - span_name
+  - status_code
+  - step_name
+  - tags
+  - type
+  - version
+  - warning_type
+  observed_loki_labels_sample:
+  - deployment_environment
+  - filename
+  - job
+  - service_name
+  - service_version
+  final_profile_detected: otel_collector_prometheus_tempo_latency
+  final_profile_applied_as_default: null

@@ -20,21 +20,13 @@ export function CardOption({
   return (
     <button
       type="button"
-      className="tile"
+      className={`tile card-option ${selected ? "is-selected" : ""}`}
       onClick={onSelect}
       aria-pressed={selected}
       data-selected={selected}
       data-testid={dataTestId}
-      style={
-        selected
-          ? {
-              borderColor: "rgba(15, 118, 110, 0.45)",
-              boxShadow: "0 0 0 1px rgba(15, 118, 110, 0.22) inset",
-            }
-          : undefined
-      }
     >
-      <div className="row-actions" style={{ justifyContent: "space-between" }}>
+      <div className="row-actions row-actions-between">
         <strong>{title}</strong>
         <span className="badge">{selected ? "Selecionado" : "Selecionar"}</span>
       </div>
