@@ -1,6 +1,10 @@
+"use client";
+
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { useEditorTranslations } from "../use-editor-translations";
 import { resolveGraphNodeSemantic } from "@/src/modules/diagrams/domain";
 import type { EditorNodeData } from "../editor-graph-mappers";
+import type { EditorTranslationFn } from "../editor-i18n";
 import {
   resolveFlowHandlePosition,
   resolveFlowNodePresentation,
@@ -123,14 +127,14 @@ function toKindClassToken(kind: string) {
   return kind.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
 }
 
-function resolveDisplayLabel(nodeData: EditorNodeData) {
+function resolveDisplayLabel(nodeData: EditorNodeData, t?: EditorTranslationFn) {
   const fromPresentation = nodeData.displayLabel?.trim();
   if (fromPresentation) {
     return fromPresentation;
   }
 
   const fallback = nodeData.label?.trim();
-  return fallback || "Sem titulo";
+  return fallback || (t ? t("presentation.fallbacks.untitled") : "Sem titulo");
 }
 
 function resolveTreeRole(nodeData: EditorNodeData) {
@@ -153,18 +157,18 @@ function resolveMindmapRole(nodeData: EditorNodeData) {
   return "mindmap-branch";
 }
 
-function resolveMindmapLabel(nodeData: EditorNodeData) {
+function resolveMindmapLabel(nodeData: EditorNodeData, t?: EditorTranslationFn) {
   const role = resolveMindmapRole(nodeData);
 
   if (role === "mindmap-root") {
-    return "Tema central";
+    return t ? t("renderers.mindmap.root") : "Tema central";
   }
 
   if (role === "mindmap-reference") {
-    return "Referencia";
+    return t ? t("renderers.mindmap.reference") : "Referencia";
   }
 
-  return "Ramificacao";
+  return t ? t("renderers.mindmap.branch") : "Ramificacao";
 }
 
 function resolveErdRole(nodeData: EditorNodeData) {
@@ -214,7 +218,8 @@ function resolveTimelineRole(nodeData: EditorNodeData) {
 }
 
 function NodeTypeChip({ nodeData }: { nodeData: EditorNodeData }) {
-  const kindPresentation = getNodeKindPresentation(nodeData.kind);
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
+  const kindPresentation = getNodeKindPresentation(nodeData.kind, t);
 
   return (
     <span className={`diagram-node-type-chip tone-${kindPresentation.tone}`}>
@@ -240,19 +245,22 @@ function NodeTechnicalMeta({ nodeData }: { nodeData: EditorNodeData }) {
 }
 
 function NodeContent({ nodeData }: { nodeData: EditorNodeData }) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
+
   return (
     <>
       <div className="diagram-node__header-row">
         <NodeTypeChip nodeData={nodeData} />
       </div>
-      <strong className="diagram-node__title">{resolveDisplayLabel(nodeData)}</strong>
+      <strong className="diagram-node__title">{resolveDisplayLabel(nodeData, t)}</strong>
       <NodeTechnicalMeta nodeData={nodeData} />
     </>
   );
 }
 
 function useNodeVisualTokens(nodeData: EditorNodeData) {
-  const kindPresentation = getNodeKindPresentation(nodeData.kind);
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
+  const kindPresentation = getNodeKindPresentation(nodeData.kind, t);
   const kindToken = toKindClassToken(nodeData.kind);
 
   return {
@@ -266,6 +274,7 @@ function useNodeVisualTokens(nodeData: EditorNodeData) {
 }
 
 export function TreeNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const positions = resolveTreeHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
@@ -290,7 +299,9 @@ export function TreeNodeRenderer({ data }: NodeProps) {
       <div className="diagram-node-tree__content">
         <div className="diagram-node-tree__toolbar">
           <span className="diagram-node-tree__level-badge">
-            {treeRole === "tree-root" ? "Raiz" : "Hierarquia"}
+            {treeRole === "tree-root"
+              ? t("renderers.tree.rootBadge")
+              : t("renderers.tree.hierarchyBadge")}
           </span>
           {canToggleTreeSubtree ? (
             <button
@@ -305,7 +316,9 @@ export function TreeNodeRenderer({ data }: NodeProps) {
               }}
               data-testid="tree-node-collapse-toggle"
             >
-              {nodeData.rendererTreeCollapsed ? "Expandir" : "Colapsar"}
+              {nodeData.rendererTreeCollapsed
+                ? t("renderers.tree.expand")
+                : t("renderers.tree.collapse")}
             </button>
           ) : null}
         </div>
@@ -321,10 +334,11 @@ export function TreeNodeRenderer({ data }: NodeProps) {
 }
 
 export function FlowNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const positions = resolveFlowHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
-  const displayLabel = resolveDisplayLabel(nodeData);
+  const displayLabel = resolveDisplayLabel(nodeData, t);
   const flowPresentation = resolveFlowNodePresentation({
     diagramRole: nodeData.diagramRole,
     kind: nodeData.kind,
@@ -372,6 +386,7 @@ export function FlowNodeRenderer({ data }: NodeProps) {
 }
 
 export function MindmapNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const visual = useNodeVisualTokens(nodeData);
   const mindmapRole = resolveMindmapRole(nodeData);
@@ -386,7 +401,7 @@ export function MindmapNodeRenderer({ data }: NodeProps) {
     >
       <Handle type="target" position={Position.Left} className="diagram-port diagram-port-target" />
       <div className="diagram-node-mindmap__role">
-        {resolveMindmapLabel(nodeData)}
+        {resolveMindmapLabel(nodeData, t)}
       </div>
       <NodeContent nodeData={nodeData} />
       <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
@@ -395,6 +410,7 @@ export function MindmapNodeRenderer({ data }: NodeProps) {
 }
 
 export function ErdNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const fields = readEntityFields(nodeData.payload);
   const visual = useNodeVisualTokens(nodeData);
@@ -414,8 +430,8 @@ export function ErdNodeRenderer({ data }: NodeProps) {
           <div className="diagram-node__header-row">
             <NodeTypeChip nodeData={nodeData} />
           </div>
-          <strong className="diagram-node__title">{resolveDisplayLabel(nodeData)}</strong>
-          <span className="helper">Comentario ERD</span>
+          <strong className="diagram-node__title">{resolveDisplayLabel(nodeData, t)}</strong>
+          <span className="helper">{t("renderers.erd.comment")}</span>
           <NodeTechnicalMeta nodeData={nodeData} />
         </div>
         <Handle type="source" position={Position.Right} className="diagram-port diagram-port-source" />
@@ -436,7 +452,7 @@ export function ErdNodeRenderer({ data }: NodeProps) {
         <div className="diagram-node__header-row">
           <NodeTypeChip nodeData={nodeData} />
         </div>
-        <strong className="diagram-node__title">{resolveDisplayLabel(nodeData)}</strong>
+        <strong className="diagram-node__title">{resolveDisplayLabel(nodeData, t)}</strong>
         {nodeData.erdBadges && nodeData.erdBadges.length > 0 ? (
           <div className="diagram-node-erd__badges">
             {nodeData.erdBadges.slice(0, 3).map((badge, index) => (
@@ -453,9 +469,9 @@ export function ErdNodeRenderer({ data }: NodeProps) {
       </div>
       <div className="diagram-node-erd__rows" data-testid="erd-node-fields-table">
         <div className="diagram-node-erd__table-head">
-          <span>Campo</span>
-          <span>Tipo</span>
-          <span>Flags</span>
+          <span>{t("renderers.erd.table.field")}</span>
+          <span>{t("renderers.erd.table.type")}</span>
+          <span>{t("renderers.erd.table.flags")}</span>
         </div>
         {fields.length > 0 ? (
           fields.map((field) => (
@@ -467,7 +483,7 @@ export function ErdNodeRenderer({ data }: NodeProps) {
           ))
         ) : (
           <div className="diagram-node-erd__empty" data-testid="erd-node-fields-empty">
-            Sem campos
+            {t("renderers.erd.emptyFields")}
           </div>
         )}
       </div>
@@ -477,6 +493,7 @@ export function ErdNodeRenderer({ data }: NodeProps) {
 }
 
 export function SitemapNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const positions = resolveTreeHandlePosition(nodeData.rendererDirection);
   const visual = useNodeVisualTokens(nodeData);
@@ -496,7 +513,9 @@ export function SitemapNodeRenderer({ data }: NodeProps) {
         className="diagram-port diagram-port-target"
       />
       <div className="diagram-node-sitemap__role">
-        {sitemapRole === "sitemap-home" ? "Home" : "Secao"}
+        {sitemapRole === "sitemap-home"
+          ? t("renderers.sitemap.home")
+          : t("renderers.sitemap.section")}
       </div>
       <NodeContent nodeData={nodeData} />
       <Handle
@@ -509,14 +528,15 @@ export function SitemapNodeRenderer({ data }: NodeProps) {
 }
 
 export function GraphNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const visual = useNodeVisualTokens(nodeData);
   const graphSemantic = resolveGraphNodeSemantic({
     diagramRole: nodeData.diagramRole,
     kind: nodeData.kind,
-    label: resolveDisplayLabel(nodeData),
+    label: resolveDisplayLabel(nodeData, t),
     payload: nodeData.payload,
-  });
+  }, t);
 
   return (
     <div
@@ -554,7 +574,7 @@ export function GraphNodeRenderer({ data }: NodeProps) {
             <span />
           </span>
         </div>
-        <strong className="diagram-node-graph__title">{resolveDisplayLabel(nodeData)}</strong>
+        <strong className="diagram-node-graph__title">{resolveDisplayLabel(nodeData, t)}</strong>
         <p className="diagram-node-graph__summary" data-testid="graph-node-summary">
           {graphSemantic.summary}
         </p>
@@ -578,6 +598,7 @@ export function GraphNodeRenderer({ data }: NodeProps) {
 }
 
 export function TimelineNodeRenderer({ data }: NodeProps) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
   const nodeData = toEditorNodeData(data);
   const visual = useNodeVisualTokens(nodeData);
   const positions = resolveFlowHandlePosition(nodeData.rendererDirection);
@@ -593,7 +614,7 @@ export function TimelineNodeRenderer({ data }: NodeProps) {
     >
       <Handle type="target" position={positions.target} className="diagram-port diagram-port-target" />
       <div className="diagram-node-timeline__marker" aria-hidden="true" />
-      <div className="diagram-node-timeline__role">Marco</div>
+      <div className="diagram-node-timeline__role">{t("renderers.timeline.milestone")}</div>
       <NodeContent nodeData={nodeData} />
       <Handle type="source" position={positions.source} className="diagram-port diagram-port-source" />
     </div>

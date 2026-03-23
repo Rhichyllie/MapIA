@@ -1,15 +1,23 @@
-import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
+import { redirect } from "@/src/i18n/navigation";
 import { LoginForm } from "@/src/components/auth/login-form";
+import { appRoutes } from "@/src/lib/routes";
 import { getServerEnv } from "@/src/lib/env";
 import { getOptionalSession } from "@/src/server/auth/session";
 
-export default async function LoginPage() {
+type LoginPageProps = {
+  params: Promise<{ locale: (typeof import("@/src/i18n/routing").routing.locales)[number] }>;
+};
+
+export default async function LoginPage({ params }: LoginPageProps) {
+  const { locale } = await params;
+  const t = await getTranslations("Auth.page");
   const session = await getOptionalSession();
   const env = getServerEnv();
   const devCredentialsEnabled = env.NODE_ENV === "development";
 
   if (session) {
-    redirect("/dashboard");
+    redirect({ href: appRoutes.dashboard, locale });
   }
 
   return (
@@ -18,13 +26,10 @@ export default async function LoginPage() {
         <div className="stack-sm">
           <span className="badge">
             <span className="badge-dot" aria-hidden="true" />
-            Fase 0 / Bootstrap
+            {t("badge")}
           </span>
-          <h1 id="login-title">Entrar no MapIA</h1>
-          <p className="helper">
-            Auth atual usa credenciais de desenvolvimento para bootstrap local.
-            Em producao este provider fica desabilitado.
-          </p>
+          <h1 id="login-title">{t("title")}</h1>
+          <p className="helper">{t("description")}</p>
         </div>
         <LoginForm devCredentialsEnabled={devCredentialsEnabled} />
       </section>

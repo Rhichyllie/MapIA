@@ -1,15 +1,18 @@
 import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type GraphQlSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
   sourcePreview: { message: string } | null;
+  labels: CreationAssistantLabels;
 };
 
 export function GraphQlSourceForm({
   draft,
   setDraft,
   sourcePreview,
+  labels,
 }: GraphQlSourceFormProps) {
   if (draft.sourceConfig?.kind !== "graphql") {
     return null;
@@ -18,10 +21,12 @@ export function GraphQlSourceForm({
   return (
     <div className="dashboard-form">
       <div className="field">
-        <label htmlFor="origin-graphql-endpoint">Endpoint GraphQL (opcional)</label>
+        <label htmlFor="origin-graphql-endpoint">
+          {labels.sourceForms.graphQl.endpointLabel}
+        </label>
         <input
           id="origin-graphql-endpoint"
-          placeholder="https://api.exemplo.com/graphql"
+          placeholder={labels.sourceForms.graphQl.endpointPlaceholder}
           value={draft.sourceConfig.endpointUrl ?? ""}
           onChange={(event) =>
             setDraft((current) => ({
@@ -38,11 +43,13 @@ export function GraphQlSourceForm({
         />
       </div>
       <div className="field">
-        <label htmlFor="origin-graphql-schema">SDL GraphQL (opcional)</label>
+        <label htmlFor="origin-graphql-schema">
+          {labels.sourceForms.graphQl.schemaLabel}
+        </label>
         <textarea
           id="origin-graphql-schema"
           rows={6}
-          placeholder="type Query { ... }"
+          placeholder={labels.sourceForms.graphQl.schemaPlaceholder}
           value={draft.sourceConfig.schemaText ?? ""}
           onChange={(event) =>
             setDraft((current) => ({
@@ -59,7 +66,7 @@ export function GraphQlSourceForm({
         />
       </div>
       {sourcePreview ? <p className="helper">{sourcePreview.message}</p> : null}
-      <p className="helper">Informe endpoint ou SDL para verificacao inicial da fonte.</p>
+      <p className="helper">{labels.sourceForms.graphQl.verificationHint}</p>
     </div>
   );
 }

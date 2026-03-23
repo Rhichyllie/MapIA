@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import "@xyflow/react/dist/style.css";
+import { IntlErrorHandlingProvider } from "@/src/i18n/intl-error-handling-provider";
+import { formats } from "@/src/i18n/request";
 import "./globals.css";
 import { AppProviders } from "./providers";
 
@@ -51,19 +55,25 @@ const ibmPlexMono = localFont({
   display: "swap",
 });
 
-export const metadata: Metadata = {
-  title: "MapIA",
-  description:
-    "Mapeamento de arquitetura da informacao com assistente de criacao e editor nodal",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("Metadata");
 
-export default function RootLayout({
+  return {
+    title: t("title"),
+    description: t("description"),
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="pt-BR" data-theme="light" suppressHydrationWarning>
+    <html lang={locale} data-theme="light" suppressHydrationWarning>
       <head>
         <script
           id="mapia-theme-init"
@@ -71,7 +81,11 @@ export default function RootLayout({
         />
       </head>
       <body className={`${manrope.variable} ${ibmPlexMono.variable}`}>
-        <AppProviders>{children}</AppProviders>
+        <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
+          <IntlErrorHandlingProvider>
+            <AppProviders>{children}</AppProviders>
+          </IntlErrorHandlingProvider>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

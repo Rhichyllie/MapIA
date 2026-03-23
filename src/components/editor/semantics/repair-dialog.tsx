@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useEditorTranslations } from "../use-editor-translations";
 
 type RepairDialogProps = {
   open: boolean;
@@ -22,6 +23,7 @@ export function RepairDialog(props: RepairDialogProps) {
     summary,
     title,
   } = props;
+  const t = useEditorTranslations("semantics.repairDialog");
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -57,13 +59,13 @@ export function RepairDialog(props: RepairDialogProps) {
         className="semantic-dialog semantic-repair-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="Reparo semantico"
+        aria-label={t("dialogAria")}
         tabIndex={-1}
         data-testid="semantic-repair-dialog"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="semantic-dialog-header">
-          <h3>{title ?? "Reparo semantico necessario"}</h3>
+          <h3>{title ?? t("defaultTitle")}</h3>
           <p className="helper">{summary}</p>
         </header>
 
@@ -82,7 +84,7 @@ export function RepairDialog(props: RepairDialogProps) {
             onClick={onApplyAndRepair}
             data-testid="semantic-repair-apply-fix"
           >
-            Aplicar e corrigir
+            {t("applyRepair")}
           </button>
           <button
             className="btn"
@@ -90,7 +92,7 @@ export function RepairDialog(props: RepairDialogProps) {
             onClick={onApplyAndRemoveInvalid}
             data-testid="semantic-repair-apply-remove"
           >
-            Aplicar e remover invalidas
+            {t("applyRemoveInvalid")}
           </button>
           <button
             className="btn"
@@ -98,7 +100,7 @@ export function RepairDialog(props: RepairDialogProps) {
             onClick={onCancel}
             data-testid="semantic-repair-cancel"
           >
-            Cancelar
+            {t("cancel")}
           </button>
         </div>
       </div>

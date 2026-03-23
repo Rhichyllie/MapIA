@@ -1,4 +1,5 @@
 import type { Session } from "next-auth";
+import { getTranslations } from "next-intl/server";
 import { SignOutButton } from "@/src/components/auth/sign-out-button";
 import { NavLink } from "@/src/components/layout/nav-link";
 import { ThemeToggle } from "@/src/components/ui/theme-toggle";
@@ -8,38 +9,44 @@ type ProtectedShellProps = {
   session: Session;
 };
 
-export function ProtectedShell({ children, session }: ProtectedShellProps) {
+export async function ProtectedShell({
+  children,
+  session,
+}: ProtectedShellProps) {
+  const t = await getTranslations("Shell");
+  const commonT = await getTranslations("Common");
+
   return (
     <div className="app-shell">
       <header className="top-bar">
-        <div className="brand" aria-label="MapIA">
+        <div className="brand" aria-label={commonT("appName")}>
           <span className="brand-mark" aria-hidden="true" />
           <div>
-            <h1>MapIA</h1>
-            <p>Arquitetura da informacao e diagramas</p>
+            <h1>{commonT("appName")}</h1>
+            <p>{t("brand.subtitle")}</p>
           </div>
         </div>
         <div className="row-actions">
           <ThemeToggle />
-          <span className="badge" aria-label="Usuario autenticado">
+          <span className="badge" aria-label={t("authenticatedUser")}>
             <span className="badge-dot" aria-hidden="true" />
-            {session.user?.email ?? "Usuario"}
+            {session.user?.email ?? commonT("userFallback")}
           </span>
           <SignOutButton />
         </div>
       </header>
 
       <div className="shell-body">
-        <aside className="side-nav" aria-label="Navegacao principal">
+        <aside className="side-nav" aria-label={t("navigation.ariaLabel")}>
           <ul className="nav-list">
             <li>
-              <NavLink href="/dashboard" label="Area de trabalho" />
+              <NavLink href="/dashboard" label={t("navigation.dashboard")} />
             </li>
             <li>
-              <NavLink href="/create" label="Assistente de criacao" />
+              <NavLink href="/create" label={t("navigation.create")} />
             </li>
             <li>
-              <NavLink href="/editor" label="Editor" />
+              <NavLink href="/editor" label={t("navigation.editor")} />
             </li>
           </ul>
         </aside>

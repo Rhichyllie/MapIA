@@ -1,5 +1,6 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
 import type { DiagramRole } from "@/src/modules/diagrams/domain";
+import type { EditorTranslationFn } from "../editor-i18n";
 import {
   buildProcessEdgeOverview,
   buildProcessNodeOverview,
@@ -30,14 +31,14 @@ export function resolveProcessNodeInspectorViewModel(input: {
   kind: NodeKind;
   label: string;
   relations: ProcessRelationsViewModel;
-}): ProcessNodeInspectorViewModel {
-  const copy = getProcessInspectorCopy();
+}, t?: EditorTranslationFn): ProcessNodeInspectorViewModel {
+  const copy = getProcessInspectorCopy(t);
   const role = resolveProcessNodeRole({
     diagramRole: input.diagramRole,
     kind: input.kind,
     label: input.label,
   });
-  const roleMeta = getProcessRoleMeta(role);
+  const roleMeta = getProcessRoleMeta(role, t);
 
   return {
     copy,
@@ -48,7 +49,7 @@ export function resolveProcessNodeInspectorViewModel(input: {
       incomingCount: input.relations.incomingCount,
       outgoingCount: input.relations.outgoingCount,
       relations: input.relations,
-    }),
+    }, t),
   };
 }
 
@@ -57,14 +58,14 @@ export function resolveProcessEdgeInspectorViewModel(input: {
   label?: string;
   sourceLabel: string;
   targetLabel: string;
-}): ProcessEdgeInspectorViewModel {
+}, t?: EditorTranslationFn): ProcessEdgeInspectorViewModel {
   return {
-    copy: getProcessInspectorCopy(),
+    copy: getProcessInspectorCopy(t),
     overview: buildProcessEdgeOverview({
       kind: input.kind,
       label: input.label,
       sourceLabel: input.sourceLabel,
       targetLabel: input.targetLabel,
-    }),
+    }, t),
   };
 }

@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { memo } from "react";
+import { Link } from "@/src/i18n/navigation";
+import type { DashboardCopy } from "./dashboard-copy";
 import type {
   DashboardProject,
   WorkspaceDensity,
@@ -11,11 +12,7 @@ import {
   buildEditorHref,
   buildVersionsHref,
   buildWizardHref,
-  formatDateLabel,
-  getDiagramTypeLabel,
-  getSnapshotStatusLabel,
   getSnapshotStatusTone,
-  getTemplateLabel,
 } from "./workspace-projects";
 
 type ProjectsGridProps = {
@@ -24,6 +21,7 @@ type ProjectsGridProps = {
   workspaceMode: WorkspaceMode;
   highlightedProjectId: string | null;
   onCopyTechnicalId: (project: DashboardProject) => void;
+  copy: DashboardCopy;
 };
 
 type ProjectCardProps = {
@@ -32,6 +30,7 @@ type ProjectCardProps = {
   workspaceMode: WorkspaceMode;
   highlighted: boolean;
   onCopyTechnicalId: (project: DashboardProject) => void;
+  copy: DashboardCopy;
 };
 
 const ProjectCard = memo(function ProjectCard({
@@ -40,6 +39,7 @@ const ProjectCard = memo(function ProjectCard({
   workspaceMode,
   highlighted,
   onCopyTechnicalId,
+  copy,
 }: ProjectCardProps) {
   const snapshotTone = getSnapshotStatusTone(project.hasInitialSnapshot);
   const canShowVersions = project.snapshotVersionCount > 0;
@@ -57,23 +57,23 @@ const ProjectCard = memo(function ProjectCard({
           {project.name}
         </h3>
         <span className={`badge workspace-status-badge workspace-status-${snapshotTone}`}>
-          {getSnapshotStatusLabel(project.hasInitialSnapshot)}
+          {copy.getSnapshotStatusLabel(project.hasInitialSnapshot)}
         </span>
       </header>
 
       <p className="workspace-project-description" title={project.description ?? ""}>
-        {project.description?.trim() || "Sem finalidade informada"}
+        {project.description?.trim() || copy.project.fallbackDescription}
       </p>
 
       <div className="workspace-project-meta-row">
         <span className="workspace-project-meta-item">
-          {getDiagramTypeLabel(project.selectedDiagramType)}
+          {copy.getDiagramTypeLabel(project.selectedDiagramType)}
         </span>
         <span className="workspace-project-meta-item">
-          {getTemplateLabel(project.template, workspaceMode)}
+          {copy.getTemplateLabel(project.template, workspaceMode)}
         </span>
         <span className="workspace-project-meta-item">
-          Atualizado em {formatDateLabel(project.updatedAt)}
+          {copy.getProjectUpdatedLabel(project.updatedAt)}
         </span>
       </div>
 
@@ -83,11 +83,14 @@ const ProjectCard = memo(function ProjectCard({
           href={buildEditorHref(project.id)}
           data-testid={`dashboard-open-editor-${project.id}`}
         >
-          Abrir
+          {copy.project.open}
         </Link>
 
         <details className="workspace-project-actions-menu">
-          <summary className="btn" aria-label={`Mais acoes para ${project.name}`}>
+          <summary
+            className="btn"
+            aria-label={copy.getMoreActionsAriaLabel(project.name)}
+          >
             ...
           </summary>
           <div className="workspace-project-actions-popover">
@@ -96,14 +99,14 @@ const ProjectCard = memo(function ProjectCard({
               href={buildWizardHref(project.id, "wizard")}
               data-testid={`dashboard-open-wizard-${project.id}`}
             >
-              Abrir Assistente
+              {copy.project.openAssistant}
             </Link>
             <Link
               className="btn"
               href={buildEditorHref(project.id)}
               data-testid={`dashboard-open-editor-menu-${project.id}`}
             >
-              Abrir Editor
+              {copy.project.openEditor}
             </Link>
             <Link
               className="btn"
@@ -116,7 +119,7 @@ const ProjectCard = memo(function ProjectCard({
                 }
               }}
             >
-              Ver versoes
+              {copy.project.viewVersions}
             </Link>
             {workspaceMode === "technical" ? (
               <button
@@ -125,7 +128,7 @@ const ProjectCard = memo(function ProjectCard({
                 onClick={() => onCopyTechnicalId(project)}
                 data-testid={`dashboard-copy-technical-id-${project.id}`}
               >
-                Copiar ID tecnico
+                {copy.project.copyTechnicalId}
               </button>
             ) : null}
           </div>
@@ -141,6 +144,7 @@ export const ProjectsGrid = memo(function ProjectsGrid({
   workspaceMode,
   highlightedProjectId,
   onCopyTechnicalId,
+  copy,
 }: ProjectsGridProps) {
   return (
     <div
@@ -157,6 +161,7 @@ export const ProjectsGrid = memo(function ProjectsGrid({
           workspaceMode={workspaceMode}
           highlighted={highlightedProjectId === project.id}
           onCopyTechnicalId={onCopyTechnicalId}
+          copy={copy}
         />
       ))}
     </div>

@@ -3,15 +3,14 @@ import {
   buildDefaultSourceConfigForSource,
   getAllowedStartSourcesForProfile,
   getAllowedTemplatePresetsForProfile,
-  getStartSourceLabel,
-  getTemplatePresetLabel,
   type AssistantDraft,
   type SourceConfigPreview,
   type StartSource,
   type StartStrategyRecommendation,
   type TemplatePreset,
 } from "@/src/modules/creation-assistant/domain";
-import { START_STRATEGIES } from "../shared";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
+import { START_STRATEGY_VALUES } from "../shared";
 import { GenericSourceForm } from "../source-forms/generic-source-form";
 import { GraphQlSourceForm } from "../source-forms/graph-ql-source-form";
 import { OpenApiSourceForm } from "../source-forms/open-api-source-form";
@@ -32,11 +31,13 @@ type OriginStepProps = {
   fromProjectId?: string;
   isBusy: boolean;
   validatePrismaSource: () => Promise<void>;
+  labels: CreationAssistantLabels;
 };
 
 export function OriginStep({
   draft,
   setDraft,
+  labels,
   recommendedStartStrategy,
   startSources,
   templatePresets,
@@ -53,7 +54,9 @@ export function OriginStep({
     <div className="stack-sm">
       <div className="tile">
         <div className="row-actions row-actions-between">
-          <p className="helper">Recomendado porque: {recommendedStartStrategy.reason}</p>
+          <p className="helper">
+            {labels.shell.recommendedBecause(recommendedStartStrategy.reason)}
+          </p>
           {draft.startStrategy !== recommendedStartStrategy.strategy ? (
             <button
               className="btn"
@@ -102,37 +105,37 @@ export function OriginStep({
                 })
               }
             >
-              Usar recomendado
+              {labels.shell.useRecommended}
             </button>
           ) : (
-            <span className="badge">Recomendado ativo</span>
+            <span className="badge">{labels.shell.recommendedActive}</span>
           )}
         </div>
       </div>
 
       <div className="tile">
         <div className="row-actions row-actions-between">
-          <p className="helper">Status da fonte</p>
+          <p className="helper">{labels.shell.sourceStatusTitle}</p>
           <span className="badge">{sourceStatusLabel}</span>
         </div>
         <p>{sourceStatusSummary}</p>
       </div>
 
       <div className="grid-tiles">
-        {START_STRATEGIES.map((strategy) => (
+        {START_STRATEGY_VALUES.map((strategy) => (
           <CardOption
-            key={strategy.value}
-            title={strategy.title}
+            key={strategy}
+            title={labels.getStartStrategy(strategy).title}
             description={
-              strategy.value === recommendedStartStrategy.strategy
-                ? `${strategy.description} Recomendado para este escopo.`
-                : strategy.description
+              strategy === recommendedStartStrategy.strategy
+                ? `${labels.getStartStrategy(strategy).description} ${labels.originStep.strategyRecommendedDescription}`
+                : labels.getStartStrategy(strategy).description
             }
-            selected={draft.startStrategy === strategy.value}
+            selected={draft.startStrategy === strategy}
             onSelect={() => {
               const allowedSources = getAllowedStartSourcesForProfile(draft.profile);
               const allowedTemplates = getAllowedTemplatePresetsForProfile(draft.profile);
-              if (strategy.value === "manual") {
+              if (strategy === "manual") {
                 setDraft((current) => ({
                   ...current,
                   startStrategy: "manual",
@@ -142,7 +145,7 @@ export function OriginStep({
                 }));
                 return;
               }
-              if (strategy.value === "template") {
+              if (strategy === "template") {
                 setDraft((current) => ({
                   ...current,
                   startStrategy: "template",
@@ -157,14 +160,14 @@ export function OriginStep({
               const source = draft.startSource ?? allowedSources[0];
               setDraft((current) => ({
                 ...current,
-                startStrategy: strategy.value,
+                startStrategy: strategy,
                 startSource: source,
                 templatePreset:
-                  strategy.value === "import" ? undefined : current.templatePreset,
+                  strategy === "import" ? undefined : current.templatePreset,
                 sourceConfig:
                   source && current.sourceConfig?.kind === source
                     ? current.sourceConfig
-                    : strategy.value === "import" && source
+                    : strategy === "import" && source
                       ? buildDefaultSourceConfigForSource(source)
                       : undefined,
               }));
@@ -178,8 +181,8 @@ export function OriginStep({
           {templatePresets.map((preset) => (
             <CardOption
               key={preset}
-              title={getTemplatePresetLabel(preset)}
-              description="Preset inicial para o perfil escolhido."
+              title={labels.getTemplatePresetLabel(preset)}
+              description={labels.originStep.templatePresetDescription}
               selected={draft.templatePreset === preset}
               onSelect={() =>
                 setDraft((current) => ({
@@ -198,8 +201,8 @@ export function OriginStep({
             {startSources.map((source) => (
               <CardOption
                 key={source}
-                title={getStartSourceLabel(source)}
-                description="Fonte de origem."
+                title={labels.getStartSourceLabel(source)}
+                description={labels.originStep.sourceDescription}
                 selected={draft.startSource === source}
                 onSelect={() =>
                   setDraft((current) => ({
@@ -219,9 +222,11 @@ export function OriginStep({
           {draft.startSource ? (
             <div className="tile">
               <div className="row-actions row-actions-between">
-                <p className="helper">Conexao da fonte</p>
+                <p className="helper">{labels.shell.sourceConnectionTitle}</p>
                 <span className="badge">
-                  {isConnectLaterSelected ? "Conectar depois" : "Configurar agora"}
+                  {isConnectLaterSelected
+                    ? labels.shell.connectLater
+                    : labels.shell.configureNow}
                 </span>
               </div>
               <div className="row-actions">
@@ -237,7 +242,7 @@ export function OriginStep({
                     }))
                   }
                 >
-                  Configurar fonte agora
+                  {labels.shell.configureSourceNow}
                 </button>
                 <button
                   className="btn"
@@ -253,19 +258,17 @@ export function OriginStep({
                     }))
                   }
                 >
-                  Conectar depois
+                  {labels.shell.connectLaterButton}
                 </button>
               </div>
-              <p className="helper">
-                Conectar depois mantem o fluxo honesto: o mapa inicial sera criado sem importar dados automaticamente.
-              </p>
+              <p className="helper">{labels.shell.connectLaterDescription}</p>
             </div>
           ) : null}
           {draft.sourceConfig ? (
             <div className="tile">
               {draft.startStrategy === "hybrid" ? (
                 <div className="row-actions row-actions-between">
-                  <span className="helper">Configuracao opcional no modo hibrido.</span>
+                  <span className="helper">{labels.shell.hybridOptionalConfiguration}</span>
                   <button
                     className="btn"
                     type="button"
@@ -276,7 +279,7 @@ export function OriginStep({
                       }))
                     }
                   >
-                    Conectar depois
+                    {labels.shell.hybridConnectLater}
                   </button>
                 </div>
               ) : null}
@@ -289,30 +292,35 @@ export function OriginStep({
                 fromProjectId={fromProjectId}
                 validatePrismaSource={validatePrismaSource}
                 isBusy={isBusy}
+                labels={labels}
               />
 
               <PostgresSourceForm
                 draft={draft}
                 setDraft={setDraft}
                 sourcePreview={sourcePreview}
+                labels={labels}
               />
 
               <OpenApiSourceForm
                 draft={draft}
                 setDraft={setDraft}
                 sourcePreview={sourcePreview}
+                labels={labels}
               />
 
               <GraphQlSourceForm
                 draft={draft}
                 setDraft={setDraft}
                 sourcePreview={sourcePreview}
+                labels={labels}
               />
 
               <GenericSourceForm
                 draft={draft}
                 setDraft={setDraft}
                 sourcePreview={sourcePreview}
+                labels={labels}
               />
             </div>
           ) : null}

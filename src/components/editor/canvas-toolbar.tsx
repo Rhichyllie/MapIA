@@ -1,5 +1,7 @@
 "use client";
 
+import { useEditorTranslations } from "./use-editor-translations";
+
 type CanvasToolbarProps = {
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -13,18 +15,20 @@ export function CanvasToolbar({
   onCenterView,
   isInFocusMode,
 }: CanvasToolbarProps) {
+  const t = useEditorTranslations("canvasToolbar");
+
   return (
     <div
       className={`canvas-toolbar ${isInFocusMode ? "is-focus-mode" : ""}`}
       role="toolbar"
-      aria-label="Ferramentas do canvas"
+      aria-label={t("toolbarAria")}
       data-testid="canvas-toolbar"
     >
       <button
         className="btn canvas-toolbar-icon-btn"
         type="button"
         onClick={onZoomOut}
-        aria-label="Reduzir zoom"
+        aria-label={t("zoomOutAria")}
         data-testid="canvas-toolbar-zoom-out"
       >
         <span aria-hidden="true">-</span>
@@ -33,7 +37,7 @@ export function CanvasToolbar({
         className="btn canvas-toolbar-icon-btn"
         type="button"
         onClick={onZoomIn}
-        aria-label="Aumentar zoom"
+        aria-label={t("zoomInAria")}
         data-testid="canvas-toolbar-zoom-in"
       >
         <span aria-hidden="true">+</span>
@@ -42,7 +46,7 @@ export function CanvasToolbar({
         className="btn canvas-toolbar-icon-btn"
         type="button"
         onClick={onCenterView}
-        aria-label="Centralizar selecao"
+        aria-label={t("centerAria")}
         data-testid="canvas-toolbar-center"
       >
         <span aria-hidden="true">◎</span>

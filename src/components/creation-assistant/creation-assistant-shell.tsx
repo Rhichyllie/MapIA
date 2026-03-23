@@ -1,12 +1,23 @@
 "use client";
-
-import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { Stepper } from "@/src/components/ui/stepper";
-import { automationHumanLabels, type AssistantDraft } from "@/src/modules/creation-assistant/domain";
-import { useCreationAssistantState, useCreationDraftSync, useRecipeRuntime, useSourcePreview, useSourceStatus } from "./hooks";
-import { InitialViewStep, OriginStep, ProjectStep, ReviewStep, ScopeStep, SettingsStep } from "./steps";
-import { STEPS, type CreationAssistantShellProps } from "./shared";
+import { useRouter } from "@/src/i18n/navigation";
+import { useCreationAssistantLabels } from "./creation-assistant-i18n";
+import {
+  useCreationAssistantState,
+  useCreationDraftSync,
+  useRecipeRuntime,
+  useSourcePreview,
+  useSourceStatus,
+} from "./hooks";
+import {
+  InitialViewStep,
+  OriginStep,
+  ProjectStep,
+  ReviewStep,
+  ScopeStep,
+  SettingsStep,
+} from "./steps";
+import { STEP_IDS, type CreationAssistantShellProps } from "./shared";
 
 export function CreationAssistantShell({
   mode,
@@ -17,6 +28,7 @@ export function CreationAssistantShell({
   snapshotDiagramType,
 }: CreationAssistantShellProps) {
   const router = useRouter();
+  const labels = useCreationAssistantLabels();
 
   const state = useCreationAssistantState({
     mode,
@@ -24,6 +36,7 @@ export function CreationAssistantShell({
     initialSettings,
     initialDraftState,
     snapshotDiagramType,
+    labels: labels.defaults,
   });
 
   const recipeRuntime = useRecipeRuntime({
@@ -34,7 +47,7 @@ export function CreationAssistantShell({
   });
 
   const sourcePreview = useSourcePreview(state.draft);
-  const sourceStatus = useSourceStatus(state.draft);
+  const sourceStatus = useSourceStatus(state.draft, labels);
 
   const draftSync = useCreationDraftSync({
     mode,
@@ -50,34 +63,37 @@ export function CreationAssistantShell({
     setStepIndex: state.setStepIndex,
     setUnlocked: state.setUnlocked,
     onCreated: (redirectUrl) => router.push(redirectUrl),
+    copy: labels.hooks,
   });
 
-  const enabledAutomationLabels = useMemo(
-    () =>
-      Object.entries(state.draft.automation)
-        .filter(([, enabled]) => enabled)
-        .map(
-          ([key]) =>
-            automationHumanLabels[key as keyof typeof state.draft.automation].label,
-        ),
-    [state.draft.automation],
-  );
+  const enabledAutomationLabels = Object.entries(state.draft.automation)
+    .filter(([, enabled]) => enabled)
+    .map(
+      ([key]) => labels.getAutomationCopy(key as keyof typeof state.draft.automation).label,
+    );
 
-  const currentStep = STEPS[state.stepIndex];
-  const progress = ((state.stepIndex + 1) / STEPS.length) * 100;
+  const steps = STEP_IDS.map((stepId) => ({ id: stepId, ...labels.getStep(stepId) }));
+  const currentStep = steps[state.stepIndex];
+  const progress = ((state.stepIndex + 1) / steps.length) * 100;
 
   return (
     <div className="stepper" data-testid="creation-assistant-shell">
       <div className="tile">
         <div className="row-actions row-actions-between">
           <span className="badge">
-            {mode === "new" ? "Novo projeto guiado" : "Configuracao inicial do projeto"}
+            {mode === "new"
+              ? labels.shell.modeBadge.new
+              : labels.shell.modeBadge.existing}
           </span>
           <div className="row-actions">
             {mode === "existing" && state.draftVersion ? (
-              <span className="badge">{`Rascunho v${state.draftVersion}`}</span>
+              <span className="badge">
+                {labels.shell.draftVersion(state.draftVersion)}
+              </span>
             ) : null}
-            <span className="badge">{`Passo ${state.stepIndex + 1} de ${STEPS.length}`}</span>
+            <span className="badge">
+              {labels.shell.stepCounter(state.stepIndex + 1, steps.length)}
+            </span>
           </div>
         </div>
         <div className="creation-progress-track" aria-hidden="true">
@@ -86,8 +102,8 @@ export function CreationAssistantShell({
       </div>
 
       <Stepper
-        ariaLabel="Progresso do Assistente de criacao"
-        items={STEPS.map((step, index) => ({
+        ariaLabel={labels.shell.progressAriaLabel}
+        items={steps.map((step, index) => ({
           id: step.id,
           index: index + 1,
           title: step.title,
@@ -115,13 +131,14 @@ export function CreationAssistantShell({
 
         <div className="panel-body">
           {currentStep.id === "project" ? (
-            <ProjectStep draft={state.draft} setDraft={state.setDraft} />
+            <ProjectStep draft={state.draft} setDraft={state.setDraft} labels={labels} />
           ) : null}
 
           {currentStep.id === "scope" ? (
             <ScopeStep
               draft={state.draft}
               setDraft={state.setDraft}
+              labels={labels}
               synchronizeDirectionalContext={state.synchronizeDirectionalContext}
             />
           ) : null}
@@ -130,6 +147,7 @@ export function CreationAssistantShell({
             <OriginStep
               draft={state.draft}
               setDraft={state.setDraft}
+              labels={labels}
               recommendedStartStrategy={recipeRuntime.recommendedStartStrategy}
               startSources={recipeRuntime.startSources}
               templatePresets={recipeRuntime.templatePresets}
@@ -147,6 +165,7 @@ export function CreationAssistantShell({
           {currentStep.id === "view" ? (
             <InitialViewStep
               draft={state.draft}
+              labels={labels}
               recommendedViews={recipeRuntime.recommendedViews}
               selectInitialView={state.selectInitialView}
             />
@@ -156,6 +175,7 @@ export function CreationAssistantShell({
             <SettingsStep
               draft={state.draft}
               setDraft={state.setDraft}
+              labels={labels}
               layoutCatalog={recipeRuntime.layoutCatalog}
               contextBlocks={recipeRuntime.contextBlocks}
               showAdvancedLayouts={state.showAdvancedLayouts}
@@ -169,6 +189,7 @@ export function CreationAssistantShell({
           {currentStep.id === "review" ? (
             <ReviewStep
               draft={state.draft}
+              labels={labels}
               sourceStatusSummary={sourceStatus.sourceStatusSummary}
               sourceStatusCode={sourceStatus.sourceLifecycle.sourceStatus}
               recommendedStartStrategy={recipeRuntime.recommendedStartStrategy}
@@ -189,7 +210,7 @@ export function CreationAssistantShell({
           onClick={() => state.setStepIndex((current) => Math.max(0, current - 1))}
           disabled={state.stepIndex === 0 || state.isBusy}
         >
-          Voltar
+          {labels.shell.back}
         </button>
         <button
           className="btn"
@@ -197,16 +218,16 @@ export function CreationAssistantShell({
           onClick={draftSync.saveDraft}
           disabled={state.isBusy}
         >
-          Salvar rascunho
+          {labels.shell.saveDraft}
         </button>
-        {state.stepIndex < STEPS.length - 1 ? (
+        {state.stepIndex < steps.length - 1 ? (
           <button
             className="btn btn-primary"
             type="button"
             onClick={draftSync.moveNext}
             disabled={state.isBusy}
           >
-            Continuar
+            {labels.shell.continue}
           </button>
         ) : (
           <button
@@ -215,7 +236,7 @@ export function CreationAssistantShell({
             onClick={draftSync.finishCreation}
             disabled={state.isBusy}
           >
-            {mode === "new" ? "Criar mapa inicial" : "Aplicar e criar mapa inicial"}
+            {mode === "new" ? labels.shell.finishNew : labels.shell.finishExisting}
           </button>
         )}
       </nav>

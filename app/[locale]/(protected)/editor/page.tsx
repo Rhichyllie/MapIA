@@ -1,5 +1,7 @@
-import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { Link } from "@/src/i18n/navigation";
 import { AppError } from "@/src/lib/app-error";
+import { appRoutes } from "@/src/lib/routes";
 import { EditorShell } from "@/src/components/editor/editor-shell";
 import { PageHeader } from "@/src/components/ui/page-header";
 import type {
@@ -31,6 +33,7 @@ function getStringParam(
 }
 
 export default async function EditorPage({ searchParams }: EditorPageProps) {
+  const t = await getTranslations("Editor.page");
   const params = await searchParams;
   const projectId = getStringParam(params, "projectId");
 
@@ -38,13 +41,11 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
     return (
       <section className="panel">
         <PageHeader
-          title="Editor visual"
-          description="Selecione um projeto na area de trabalho para abrir o editor."
+          title={t("title")}
+          description={t("emptyProjectSelectionDescription")}
         />
         <div className="panel-body">
-          <p className="muted">
-            O editor trabalha sobre o snapshot de trabalho persistido do projeto.
-          </p>
+          <p className="muted">{t("emptyProjectSelectionBody")}</p>
         </div>
       </section>
     );
@@ -136,15 +137,15 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
     loadErrorMessage =
       error instanceof AppError
         ? error.message
-        : "Nao foi possivel carregar o editor deste projeto.";
+        : t("loadErrorFallback");
   }
 
   if (!viewModel) {
     return (
       <section className="panel">
         <PageHeader
-          title="Editor visual"
-          description="Falha ao carregar o projeto solicitado."
+          title={t("title")}
+          description={t("loadErrorDescription")}
         />
         <div className="panel-body">
           <div className="error-box">{loadErrorMessage}</div>
@@ -156,8 +157,8 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
   return (
     <section className="panel">
       <PageHeader
-        title="Editor visual"
-        description="Ambiente de trabalho diario com salvamento, versoes e inspetor tecnico."
+        title={t("title")}
+        description={t("description")}
         actions={<span className="badge">{viewModel.project.name}</span>}
       />
       <div className="panel-body">
@@ -169,16 +170,14 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
           />
         ) : (
           <div className="tile">
-            <h3>Mapa inicial ainda nao criado</h3>
-            <p>
-              Execute o Assistente de criacao para gerar o mapa inicial antes de editar.
-            </p>
+            <h3>{t("emptyInitialMapTitle")}</h3>
+            <p>{t("emptyInitialMapDescription")}</p>
             <div className="row-actions">
               <Link
                 className="btn btn-primary"
-                href={`/create?fromProjectId=${viewModel.project.id}`}
+                href={`${appRoutes.create}?fromProjectId=${viewModel.project.id}`}
               >
-                Abrir Assistente
+                {t("openAssistant")}
               </Link>
             </div>
           </div>

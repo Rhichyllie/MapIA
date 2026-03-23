@@ -1,3 +1,4 @@
+import type { EditorTranslationFn } from "./editor-i18n";
 import type { RFNode } from "./editor-graph-mappers";
 import type { PresentationMode } from "./presentation/kinds";
 import { getNodeKindLabel, getOperationalDisplayLabel } from "./presentation/kinds";
@@ -31,6 +32,7 @@ export function filterNodeQuickFindOptions(
   nodes: RFNode[],
   query: string,
   mode: PresentationMode,
+  t?: EditorTranslationFn,
   limit = 40,
 ) {
   const normalizedQuery = query.trim().toLowerCase();
@@ -42,9 +44,9 @@ export function filterNodeQuickFindOptions(
         ? getOperationalDisplayLabel({
             label: node.data.label,
             payload: node.data.payload,
-          })
-        : node.data.label?.trim() || "No sem titulo",
-    kindLabel: getNodeKindLabel(node.data.kind, mode),
+          }, t)
+        : node.data.label?.trim() || (t ? t("presentation.fallbacks.untitledNode") : "No sem titulo"),
+    kindLabel: getNodeKindLabel(node.data.kind, mode, t),
     kindRaw: node.data.kind,
   }));
 

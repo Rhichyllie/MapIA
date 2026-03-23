@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useEditorTranslations } from "../use-editor-translations";
 import type { EdgeKind } from "@/src/domain";
 import { getEdgeKindDescription, getEdgeKindLabel } from "../presentation/kinds";
 
@@ -30,6 +31,7 @@ export function ConnectionAssistant(props: ConnectionAssistantProps) {
     sourceLabel,
     targetLabel,
   } = props;
+  const t = useEditorTranslations("semantics.connectionAssistant");
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const orderedKinds = useMemo(() => {
@@ -109,24 +111,22 @@ export function ConnectionAssistant(props: ConnectionAssistantProps) {
         className="semantic-dialog semantic-connection-assistant"
         role="dialog"
         aria-modal="true"
-        aria-label="Assistente de conexao"
+        aria-label={t("dialogAria")}
         tabIndex={-1}
         data-testid="semantic-connection-assistant"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="semantic-dialog-header">
-          <h3>Conexao invalida</h3>
+          <h3>{t("title")}</h3>
           <p className="helper">{message}</p>
           {details ? <p className="helper">{details}</p> : null}
           {sourceLabel && targetLabel ? (
             <p className="helper">
-              Tentativa: <strong>{sourceLabel}</strong> →{" "}
+              {t("attemptLabel")} <strong>{sourceLabel}</strong> →{" "}
               <strong>{targetLabel}</strong>
             </p>
           ) : null}
-          <p className="helper">
-            Use setas para navegar e Enter para confirmar uma relacao.
-          </p>
+          <p className="helper">{t("keyboardHint")}</p>
         </header>
 
         <div className="semantic-kind-grid">
@@ -144,18 +144,18 @@ export function ConnectionAssistant(props: ConnectionAssistantProps) {
               >
                 <span className="semantic-kind-title">
                   {getEdgeKindLabel(kind, "operational")}
-                  {mode === "technical" ? ` (kind: ${kind})` : ""}
+                  {mode === "technical" ? t("technicalKind", { kind }) : ""}
                 </span>
                 <span className="helper">{getEdgeKindDescription(kind)}</span>
                 {isRecommended ? (
-                  <span className="badge badge-soft">Recomendado</span>
+                  <span className="badge badge-soft">{t("recommendedBadge")}</span>
                 ) : null}
               </button>
             );
           })}
         </div>
         {orderedKinds.length === 0 ? (
-          <p className="helper">Nenhuma relacao valida disponivel para esta conexao.</p>
+          <p className="helper">{t("emptyState")}</p>
         ) : null}
 
         <div className="row-actions semantic-dialog-actions">
@@ -165,7 +165,7 @@ export function ConnectionAssistant(props: ConnectionAssistantProps) {
             onClick={onCancel}
             data-testid="semantic-connection-cancel"
           >
-            Cancelar
+            {t("cancel")}
           </button>
         </div>
       </div>

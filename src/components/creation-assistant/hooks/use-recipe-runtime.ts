@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
   getAllowedStartSourcesForProfile,
   getAllowedTemplatePresetsForProfile,
@@ -85,13 +84,5 @@ export function resolveRecipeRuntimeState(input: UseRecipeRuntimeInput) {
 }
 
 export function useRecipeRuntime(input: UseRecipeRuntimeInput) {
-  return useMemo(
-    () => resolveRecipeRuntimeState(input),
-    [
-      input.draft,
-      input.fromProjectId,
-      input.initialDraftSourceConfig,
-      input.initialSettings,
-    ],
-  );
+  return resolveRecipeRuntimeState(input);
 }

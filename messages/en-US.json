@@ -1,0 +1,683 @@
+{
+  "Metadata": {
+    "title": "MapIA",
+    "description": "Information architecture mapping with a creation assistant and node-based editor"
+  },
+  "Common": {
+    "appName": "MapIA",
+    "userFallback": "User",
+    "buttons": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "back": "Back",
+      "continue": "Continue",
+      "saveDraft": "Save draft",
+      "create": "Create",
+      "open": "Open",
+      "refresh": "Refresh"
+    },
+    "theme": {
+      "toggleToLightAria": "Switch theme to light",
+      "toggleToDarkAria": "Switch theme to dark",
+      "currentDarkTitle": "Current theme: Dark",
+      "currentLightTitle": "Current theme: Light",
+      "switchToLight": "Theme: Light",
+      "switchToDark": "Theme: Dark"
+    },
+    "stepper": {
+      "currentStepAria": "Current step: {title}",
+      "goToStepAria": "Go to step: {title}",
+      "currentStepButton": "Current",
+      "goToStepButton": "Go to step"
+    },
+    "cardOption": {
+      "selected": "Selected",
+      "select": "Select"
+    }
+  },
+  "Auth": {
+    "page": {
+      "badge": "Phase 0 / Bootstrap",
+      "title": "Sign in to MapIA",
+      "description": "The current auth flow uses development credentials for local bootstrap. This provider is disabled in production."
+    },
+    "form": {
+      "emailLabel": "Email",
+      "passwordLabel": "Password",
+      "credentialsHint": "Default credentials can be configured with DEV_LOGIN_EMAIL and DEV_LOGIN_PASSWORD.",
+      "submit": "Sign in",
+      "submitting": "Signing in...",
+      "disabledMessage": "Development credential sign-in is disabled outside NODE_ENV=development."
+    },
+    "errors": {
+      "credentialsSignin": "Invalid credentials. Check the development email and password.",
+      "default": "Authentication failed. Please try again."
+    },
+    "signOut": "Sign out"
+  },
+  "Shell": {
+    "brand": {
+      "subtitle": "Information architecture and diagrams"
+    },
+    "authenticatedUser": "Authenticated user",
+    "navigation": {
+      "ariaLabel": "Primary navigation",
+      "dashboard": "Workspace",
+      "create": "Creation assistant",
+      "editor": "Editor"
+    }
+  },
+  "Dashboard": {
+    "page": {
+      "title": "Workspace hub",
+      "description": "Manage projects and move through the Workspace -> Creation assistant -> Editor flow.",
+      "projectListTitle": "Projects",
+      "projectListDescription": "{count} project(s) in the current view."
+    },
+    "stats": {
+      "projects": "Projects",
+      "generated": "Generated snapshot",
+      "pending": "Pending snapshot"
+    },
+    "emptyStates": {
+      "noneCreatedTitle": "No projects created yet",
+      "noneCreatedDescription": "Create your first project to start the workspace -> creation assistant -> editor flow.",
+      "noneFilteredTitle": "No projects found",
+      "noneFilteredDescription": "Adjust search, filters or sorting to find projects."
+    },
+    "filters": {
+      "searchLabel": "Search",
+      "searchPlaceholder": "Search by name, description, type...",
+      "searchAriaLabel": "Search project",
+      "clearSearchAriaLabel": "Clear search",
+      "clearSearchButton": "Clear",
+      "diagramLabel": "Diagram type",
+      "templateLabelOperational": "Model",
+      "templateLabelTechnical": "Legacy template",
+      "snapshotLabel": "Snapshot status",
+      "sortLabel": "Sort by",
+      "allOption": "All",
+      "generatedOption": "Generated",
+      "pendingOption": "Pending",
+      "sortNameAsc": "Name (A-Z)",
+      "sortUpdatedDesc": "Updated (most recent)",
+      "sortCreatedDesc": "Created (most recent)",
+      "viewModeAriaLabel": "Switch view",
+      "densityAriaLabel": "View density",
+      "workspaceModeAriaLabel": "Workspace mode",
+      "clearFiltersButton": "Clear filters",
+      "newProjectButton": "New project",
+      "counterLabel": "Showing {filteredCount} of {totalCount} projects"
+    },
+    "viewMode": {
+      "grid": "Grid",
+      "list": "List"
+    },
+    "density": {
+      "compact": "Compact",
+      "comfortable": "Comfortable"
+    },
+    "workspaceMode": {
+      "operational": "Operational",
+      "technical": "Technical"
+    },
+    "project": {
+      "fallbackDescription": "No objective provided",
+      "updatedAtLabel": "Updated on {date}",
+      "updatedFallback": "—",
+      "open": "Open",
+      "openAssistant": "Open assistant",
+      "openEditor": "Open editor",
+      "viewVersions": "View versions",
+      "copyTechnicalId": "Copy technical ID",
+      "moreActionsAriaLabel": "More actions for {projectName}",
+      "listAriaLabel": "Project list",
+      "headers": {
+        "project": "Project",
+        "type": "Type",
+        "status": "Status",
+        "updated": "Updated",
+        "actions": "Actions"
+      }
+    },
+    "createDrawer": {
+      "title": "New project",
+      "description": "Create the project with the essentials. You can refine details in the assistant and editor later.",
+      "closeAriaLabel": "Close project creation",
+      "closeButton": "Close",
+      "nameLabel": "Project name",
+      "namePlaceholder": "E.g. Onboarding map",
+      "nameHelper": "Use a short, objective name to make search and listings easier.",
+      "descriptionLabel": "Objective (optional)",
+      "descriptionPlaceholder": "E.g. Map the flow between HR, IT and leadership.",
+      "initialDiagramTypeLabel": "Initial diagram type",
+      "templateLabel": "Legacy template",
+      "createButton": "Create project",
+      "createSubmittingButton": "Creating...",
+      "cancelButton": "Cancel"
+    },
+    "diagramTypes": {
+      "wizard": {
+        "label": "Decide in assistant",
+        "description": "Choose the type during the guided creation flow."
+      },
+      "tree": {
+        "label": "Hierarchy",
+        "description": "Structures with levels and parent-child relationships."
+      },
+      "flow": {
+        "label": "Process",
+        "description": "Process steps in sequence."
+      },
+      "mindmap": {
+        "label": "Mind map",
+        "description": "Radial exploration of ideas and topics."
+      },
+      "undefined": {
+        "label": "Define during creation",
+        "description": "Type not defined yet."
+      }
+    },
+    "templates": {
+      "graph": {
+        "operationalLabel": "Free structure",
+        "technicalLabel": "graph (legacy)",
+        "description": "Generic structure kept for compatibility."
+      },
+      "sitemap": {
+        "operationalLabel": "Navigation map",
+        "technicalLabel": "sitemap (legacy)",
+        "description": "Page and section navigation."
+      },
+      "flowchart": {
+        "operationalLabel": "Flowchart",
+        "technicalLabel": "flowchart (legacy)",
+        "description": "Classic process flowchart."
+      },
+      "erd": {
+        "operationalLabel": "Data model",
+        "technicalLabel": "erd (legacy)",
+        "description": "Entity and data relationships."
+      },
+      "fallbackDescription": "Legacy template kept for compatibility."
+    },
+    "snapshotStatus": {
+      "generated": "Generated snapshot",
+      "pending": "Pending snapshot"
+    },
+    "messages": {
+      "nameRequired": "Provide a name to create the project.",
+      "nameTooShort": "Use at least 3 characters in the name.",
+      "nameTooLong": "Use at most 120 characters in the name.",
+      "copyTechnicalIdSuccess": "Technical ID copied: {id}",
+      "copyTechnicalIdError": "The technical ID could not be copied.",
+      "createSuccess": "Project \"{projectName}\" created successfully.",
+      "createError": "The project could not be created.",
+      "networkError": "Network failure while creating the project."
+    }
+  },
+  "Create": {
+    "page": {
+      "title": "Creation assistant",
+      "newDescription": "Guided flow to create a project and a coherent initial map.",
+      "existingDescription": "Apply initial configuration to an existing project.",
+      "loadErrorFallback": "The project could not be loaded for the initial configuration flow.",
+      "backToDashboard": "Back to dashboard"
+    },
+    "defaults": {
+      "projectName": "New project",
+      "rootName": "Core"
+    },
+    "steps": {
+      "project": {
+        "title": "Project",
+        "description": "Project name and objective."
+      },
+      "scope": {
+        "title": "Scope",
+        "description": "What profile you want to map."
+      },
+      "origin": {
+        "title": "Origin",
+        "description": "How to start the initial map."
+      },
+      "view": {
+        "title": "Initial view",
+        "description": "Initial reading mode."
+      },
+      "adjustments": {
+        "title": "Adjustments",
+        "description": "Layout, detail, automation and context."
+      },
+      "review": {
+        "title": "Review",
+        "description": "Final summary before creating."
+      }
+    },
+    "shell": {
+      "modeBadge": {
+        "new": "Guided new project",
+        "existing": "Project initial setup"
+      },
+      "draftVersion": "Draft v{version}",
+      "stepCounter": "Step {current} of {total}",
+      "progressAriaLabel": "Creation assistant progress",
+      "recommendedBecause": "Recommended because: {reason}",
+      "useRecommended": "Use recommendation",
+      "recommendedActive": "Recommendation active",
+      "sourceStatusTitle": "Source status",
+      "sourceConnectionTitle": "Source connection",
+      "connectLater": "Connect later",
+      "configureNow": "Configure now",
+      "configureSourceNow": "Configure source now",
+      "connectLaterButton": "Connect later",
+      "connectLaterDescription": "Connect later keeps the flow honest: the initial map will be created without importing data automatically.",
+      "hybridOptionalConfiguration": "Optional setup in hybrid mode.",
+      "hybridConnectLater": "Connect later",
+      "back": "Back",
+      "saveDraft": "Save draft",
+      "continue": "Continue",
+      "finishNew": "Create initial map",
+      "finishExisting": "Apply and create initial map"
+    },
+    "projectStep": {
+      "projectNameLabel": "Project name",
+      "objectiveLabel": "Project objective (optional)",
+      "helper": "You can refine structure, origin and view in the next steps."
+    },
+    "initialViewStep": {
+      "recommendedLabel": "Recommended for this profile",
+      "otherViewsLabel": "Other possible views"
+    },
+    "originStep": {
+      "strategyRecommendedDescription": "Recommended for this scope.",
+      "templatePresetDescription": "Initial preset for the chosen profile.",
+      "sourceDescription": "Source of truth."
+    },
+    "settingsStep": {
+      "structureTitle": "Initial structure",
+      "createExamples": "Create automatic examples",
+      "suggestedBlocksLabel": "Initial number of suggested blocks",
+      "suggestedBlocksValue": "{count} blocks",
+      "showAdvanced": "Show advanced",
+      "hideAdvanced": "Hide advanced",
+      "createInitialRoot": "Create an initial root node",
+      "initialRootNameLabel": "Initial root node name",
+      "layoutTitle": "Layout",
+      "recommendedLayoutsLabel": "Recommended",
+      "recommendedLayoutDescription": "Recommended for the initial view.",
+      "advancedLayoutDescription": "Advanced option for specific cases.",
+      "detailLevelTitle": "Detail level",
+      "detailLevelDescription": "Initial depth level.",
+      "automationTitle": "Automation",
+      "contextTitle": "Context",
+      "orientation": {
+        "horizontal": "Horizontal",
+        "vertical": "Vertical"
+      },
+      "erd": {
+        "useDefaultIdPk": "Use \"id\" as the default PK",
+        "autoCreateFk": "Create FKs automatically when possible",
+        "suggestAssociativeForNN": "Suggest an associative table for N:N",
+        "showFieldTypes": "Show field types",
+        "enableDataSemantics": "Enable data semantic validation",
+        "generateTimestamps": "Generate initial timestamps (createdAt, updatedAt)",
+        "suggestIndexes": "Suggest initial indexes"
+      },
+      "flow": {
+        "autoCreateStartEnd": "Create start and end automatically",
+        "allowDecisions": "Allow decisions",
+        "directionLabel": "Flow direction",
+        "allowMultipleOutputs": "Allow multiple outputs per step"
+      },
+      "sitemap": {
+        "autoCreateHome": "Create Home automatically",
+        "generateMainSections": "Generate main sections",
+        "showNavDepth": "Show navigation depth"
+      },
+      "hierarchy": {
+        "createRoot": "Create root node",
+        "directionLabel": "Direction",
+        "initialDepthHintLabel": "Suggested initial depth"
+      },
+      "graph": {
+        "autoGroup": "Group automatically",
+        "reduceCrossing": "Reduce line crossings",
+        "showEdgeLabels": "Show relationship labels"
+      }
+    },
+    "reviewStep": {
+      "nameLabel": "Name:",
+      "profileLabel": "Profile:",
+      "originLabel": "Origin:",
+      "viewLabel": "View:",
+      "layoutLabel": "Layout:",
+      "detailLabel": "Detail:",
+      "suggestedBlocksLabel": "Suggested blocks:",
+      "initialRootLabel": "Initial root node:",
+      "enabledAutomationLabel": "Automation:",
+      "sourceLabel": "Source:",
+      "sourceStatusLabel": "Source status:",
+      "recommendedStrategyLabel": "Recommended strategy:",
+      "rootEnabledFallback": "Enabled",
+      "rootDisabledFallback": "Disabled",
+      "noAutomation": "No active automations",
+      "noTemplateSelected": "Not selected",
+      "noSourceSelected": "Not selected"
+    },
+    "sourceForms": {
+      "prisma": {
+        "inputLabel": "Input",
+        "pasteOption": "Paste schema",
+        "uploadOption": "Upload (coming soon)",
+        "schemaLabel": "Prisma schema",
+        "schemaPlaceholder": "model User ...",
+        "validateNowButton": "Run initial validation and import now",
+        "validateOnCreateHint": "The initial validation will run when the initial map is created."
+      },
+      "postgres": {
+        "connectionModeLabel": "Connection mode",
+        "connectionStringOption": "Connection string",
+        "separateFieldsOption": "Separate fields",
+        "connectionStringLabel": "Connection string",
+        "connectionStringPlaceholder": "postgresql://user:***@host:5432/database",
+        "hostLabel": "Host",
+        "hostPlaceholder": "db.example.internal",
+        "portLabel": "Port",
+        "portPlaceholder": "5432",
+        "databaseLabel": "Database",
+        "databasePlaceholder": "mapia",
+        "schemaLabel": "Schema (optional)",
+        "schemaPlaceholder": "public",
+        "authModeLabel": "Authentication",
+        "userPassOption": "Username and password",
+        "iamOption": "IAM/Temporary token",
+        "usernameLabel": "Username",
+        "usernamePlaceholder": "readonly_user",
+        "passwordLabel": "Password (optional)",
+        "passwordPlaceholder": "Provide only for immediate testing",
+        "draftSafetyHint": "Credentials are not saved in the draft or in applied settings. Enter them again when you run a connected import.",
+        "securityHint": "Security: prefer a technical read-only user and connect production credentials only at integration time."
+      },
+      "openApi": {
+        "inputLabel": "OpenAPI input",
+        "urlOption": "URL",
+        "pasteOption": "Paste",
+        "uploadOption": "Upload (coming soon)",
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://api.example.com/openapi.json",
+        "specLabel": "Specification",
+        "specPlaceholder": "Paste OpenAPI JSON/YAML here",
+        "verificationHint": "Online validation will be enabled when the remote connector is available."
+      },
+      "graphQl": {
+        "endpointLabel": "GraphQL endpoint (optional)",
+        "endpointPlaceholder": "https://api.example.com/graphql",
+        "schemaLabel": "GraphQL SDL (optional)",
+        "schemaPlaceholder": "type Query ...",
+        "verificationHint": "Provide an endpoint or SDL for the initial source validation."
+      },
+      "generic": {
+        "inputLabel": "Input",
+        "pasteOption": "Paste content",
+        "uploadOption": "Upload (coming soon)",
+        "delimiterLabel": "CSV delimiter",
+        "delimiterComma": "Comma (,)",
+        "delimiterSemicolon": "Semicolon (;)",
+        "delimiterTab": "Tab",
+        "contentLabel": "Source content",
+        "readyPreview": "Assisted source preview is ready.",
+        "partialPreview": "Partial assisted source preview.",
+        "idFieldLabel": "ID field (optional)",
+        "labelFieldLabel": "Label field",
+        "parentFieldLabel": "Parent/dependency field",
+        "noMapping": "Do not map",
+        "sampleLabel": "Sample",
+        "previewHint": "This source supports setup and an initial preview. Full automated import can happen later."
+      }
+    },
+    "hooks": {
+      "localDraftSaved": "Draft saved locally.",
+      "serverDraftSaved": "Draft saved on the server.",
+      "serverDraftConflict": "A newer draft version was found on the server. The latest version was loaded so you can continue.",
+      "saveDraftFallbackError": "The draft could not be saved.",
+      "currentStepInvalid": "Review the data in the current step.",
+      "moveNextFallbackError": "The step could not be advanced.",
+      "prismaSourceRequired": "Paste a valid Prisma schema for initial validation/import.",
+      "prismaValidationFallbackError": "The initial Prisma schema validation failed.",
+      "prismaValidationSuccess": "Initial validation completed and the import was executed on the current project.",
+      "sourceValidationFallbackError": "The initial source validation failed.",
+      "finishCreationFallbackError": "The initial map could not be created."
+    },
+    "labels": {
+      "projectProfiles": {
+        "blank": {
+          "title": "Blank",
+          "description": "Start without a fixed structure.",
+          "summary": "blank"
+        },
+        "information-structure": {
+          "title": "Information structure",
+          "description": "Content and navigation.",
+          "summary": "information structure"
+        },
+        "process": {
+          "title": "Process",
+          "description": "Steps and decisions.",
+          "summary": "process"
+        },
+        "data-model": {
+          "title": "Data model",
+          "description": "Entities and relationships.",
+          "summary": "data model"
+        },
+        "system-architecture": {
+          "title": "System architecture",
+          "description": "Services and dependencies.",
+          "summary": "system architecture"
+        },
+        "documents-governance": {
+          "title": "Documents and governance",
+          "description": "Policies and trails.",
+          "summary": "documents and governance"
+        },
+        "mixed": {
+          "title": "Mixed",
+          "description": "Hybrid scenario.",
+          "summary": "mixed"
+        }
+      },
+      "startStrategies": {
+        "manual": {
+          "title": "Create manually",
+          "description": "Clean canvas with manual editing."
+        },
+        "import": {
+          "title": "Import from system",
+          "description": "Start from a structured source."
+        },
+        "template": {
+          "title": "Use starter template",
+          "description": "Recommended starter preset."
+        },
+        "hybrid": {
+          "title": "Combine import and manual editing",
+          "description": "Import and complement manually."
+        }
+      },
+      "startSources": {
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL",
+        "sqlserver": "SQL Server",
+        "prisma-schema": "Prisma schema",
+        "sql-file": "SQL file",
+        "relational-json": "Relational JSON",
+        "openapi": "OpenAPI",
+        "graphql": "GraphQL",
+        "code-routes": "Code routes",
+        "folder-structure": "Folder structure",
+        "events": "Events",
+        "yaml-json": "YAML/JSON",
+        "csv": "CSV",
+        "json": "JSON",
+        "spreadsheet": "Spreadsheet",
+        "cms-export": "CMS export",
+        "existing-map": "Existing map",
+        "document-repository": "Document repository",
+        "custom-import": "Custom import"
+      },
+      "templatePresets": {
+        "erd-basic": "Basic ERD",
+        "process-basic": "Basic process",
+        "sitemap-basic": "Basic sitemap",
+        "architecture-basic": "Basic architecture",
+        "blank-canvas": "Blank canvas"
+      },
+      "initialViews": {
+        "free": {
+          "label": "Free",
+          "description": "Free canvas to organize ideas without initial constraints."
+        },
+        "hierarchy": {
+          "label": "Hierarchy",
+          "description": "Layered structure for parent-child organization."
+        },
+        "flow": {
+          "label": "Flow",
+          "description": "Flow of steps with transitions and decisions."
+        },
+        "graph": {
+          "label": "Graph",
+          "description": "Network of relationships between connected elements."
+        },
+        "erd": {
+          "label": "ERD",
+          "description": "Entity-relationship model for data."
+        },
+        "sitemap": {
+          "label": "Sitemap",
+          "description": "Map of pages and information navigation."
+        },
+        "timeline": {
+          "label": "Timeline",
+          "description": "Temporal sequence of milestones and events."
+        },
+        "mindmap": {
+          "label": "Mind map",
+          "description": "Mind map with branches from a central topic."
+        }
+      },
+      "layouts": {
+        "auto": "Automatic",
+        "vertical": "Vertical",
+        "horizontal": "Horizontal",
+        "radial": "Radial",
+        "relational": "Relational",
+        "free": "Free"
+      },
+      "detailLevels": {
+        "essential": "Essential",
+        "intermediate": "Intermediate",
+        "detailed": "Detailed"
+      },
+      "automation": {
+        "inferRelations": {
+          "label": "Infer relationships",
+          "help": "Suggests coherent initial relationships based on the profile and source."
+        },
+        "createLinkFields": {
+          "label": "Create link fields",
+          "help": "Suggests helper fields for links and references."
+        },
+        "applySuggestedNames": {
+          "label": "Apply suggested names",
+          "help": "Normalizes initial names to reduce rework in the editor."
+        },
+        "autoOrganizeOnCreate": {
+          "label": "Auto-organize on create",
+          "help": "Applies the recommended initial layout when the map is generated."
+        },
+        "detectInconsistenciesEarly": {
+          "label": "Detect inconsistencies early",
+          "help": "Runs initial semantic validations during creation."
+        }
+      },
+      "sourceStatus": {
+        "not_configured": "Source not configured",
+        "configured": "Configured for import",
+        "precheck_ok": "Precheck OK",
+        "ready_to_attempt_import": "Ready to attempt import",
+        "imported": "Imported successfully",
+        "failed": "Source configuration failed"
+      },
+      "sourceStatusSummary": {
+        "notSelected": "Source not selected.",
+        "selected": "Source selected.",
+        "withPrecheck": "{status} ({summary})"
+      },
+      "viewCompatibility": {
+        "primary": "Primary",
+        "secondary": "Secondary",
+        "experimental": "Experimental",
+        "incompatible": "Incompatible"
+      },
+      "summary": {
+        "semanticValidationEnabled": "enabled",
+        "semanticValidationDisabled": "disabled",
+        "sourceStatusSentence": " Source status: {status}.",
+        "created": "A {profile} project will be created with {initialView} as the initial view, a {layout} layout and semantic validation {semanticValidation}.{sourceStatusSummary}"
+      }
+    }
+  },
+  "Editor": {
+    "page": {
+      "title": "Visual editor",
+      "description": "Daily workspace with saving, versions and a technical inspector.",
+      "emptyProjectSelectionDescription": "Select a project in the workspace to open the editor.",
+      "emptyProjectSelectionBody": "The editor works on the project's persisted working snapshot.",
+      "loadErrorFallback": "The editor for this project could not be loaded.",
+      "loadErrorDescription": "Failed to load the requested project.",
+      "emptyInitialMapTitle": "Initial map not created yet",
+      "emptyInitialMapDescription": "Run the creation assistant to generate the initial map before editing.",
+      "openAssistant": "Open assistant"
+    },
+    "canvasToolbar": {
+      "toolbarAria": "Canvas tools",
+      "zoomOutAria": "Zoom out",
+      "zoomInAria": "Zoom in",
+      "centerAria": "Center selection"
+    },
+    "commandPalette": {
+      "dialogAria": "Search canvas node",
+      "label": "Search node",
+      "placeholder": "Type to find by name",
+      "emptyState": "No node found.",
+      "technicalKind": " (kind: {kind})"
+    },
+    "selectionHud": {
+      "moreActions": "More actions",
+      "center": "Center",
+      "duplicate": "Duplicate",
+      "remove": "Remove"
+    },
+    "semantics": {
+      "connectionAssistant": {
+        "dialogAria": "Connection assistant",
+        "title": "Invalid connection",
+        "attemptLabel": "Attempt:",
+        "keyboardHint": "Use the arrow keys to navigate and Enter to confirm a relationship.",
+        "technicalKind": " (kind: {kind})",
+        "recommendedBadge": "Recommended",
+        "emptyState": "No valid relationship is available for this connection.",
+        "cancel": "Cancel"
+      },
+      "repairDialog": {
+        "dialogAria": "Semantic repair",
+        "defaultTitle": "Semantic repair required",
+        "applyRepair": "Apply and repair",
+        "applyRemoveInvalid": "Apply and remove invalid items",
+        "cancel": "Cancel"
+      }
+    }
+  }
+}

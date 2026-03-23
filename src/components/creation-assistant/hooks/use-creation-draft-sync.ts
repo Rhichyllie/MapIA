@@ -8,9 +8,30 @@ import {
 import {
   LOCAL_DRAFT_KEY,
   parseError,
-  STEPS,
+  STEP_IDS,
   type CreationAssistantMode,
 } from "../shared";
+
+const DEFAULT_COPY = {
+  localDraftSaved: "Rascunho salvo localmente.",
+  serverDraftSaved: "Rascunho salvo no servidor.",
+  serverDraftConflict:
+    "Havia uma versao mais recente do rascunho no servidor. Carregamos a ultima versao para continuar.",
+  saveDraftFallbackError: "Falha ao salvar rascunho.",
+  currentStepInvalid: "Revise os dados da etapa atual.",
+  moveNextFallbackError: "Falha ao avancar etapa.",
+  prismaSourceRequired:
+    "Cole um schema Prisma valido para verificacao inicial/importacao.",
+  prismaValidationFallbackError: "Falha na verificacao inicial do schema Prisma.",
+  prismaValidationSuccess:
+    "Verificacao inicial concluida e importacao executada no projeto atual.",
+  sourceValidationFallbackError: "Falha na verificacao inicial da fonte.",
+  finishCreationFallbackError: "Falha ao criar mapa inicial.",
+} as const;
+
+type CreationDraftSyncCopy = {
+  [Key in keyof typeof DEFAULT_COPY]: string;
+};
 
 type UseCreationDraftSyncInput = {
   mode: CreationAssistantMode;
@@ -26,9 +47,12 @@ type UseCreationDraftSyncInput = {
   setStepIndex: React.Dispatch<React.SetStateAction<number>>;
   setUnlocked: React.Dispatch<React.SetStateAction<number>>;
   onCreated: (redirectUrl: string) => void;
+  copy?: Partial<CreationDraftSyncCopy>;
 };
 
 export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
+  const copy = { ...DEFAULT_COPY, ...input.copy };
+
   async function persistDraft(silent: boolean) {
     const resolvedDraft = applyResolvedSourceLifecycleToDraft(input.draft);
     const redactedDraft = redactAssistantDraft(resolvedDraft);
@@ -38,7 +62,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
         window.localStorage.setItem(LOCAL_DRAFT_KEY, JSON.stringify(redactedDraft));
       }
       if (!silent) {
-        input.setSuccess("Rascunho salvo localmente.");
+        input.setSuccess(copy.localDraftSaved);
       }
       return;
     }
@@ -93,11 +117,9 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
             input.setDraftVersion(payload.actualVersion);
           }
         }
-        throw new Error(
-          "Havia uma versao mais recente do rascunho no servidor. Carregamos a ultima versao para continuar.",
-        );
+        throw new Error(copy.serverDraftConflict);
       }
-      throw new Error(parseError(payload, "Falha ao salvar rascunho."));
+      throw new Error(parseError(payload, copy.saveDraftFallbackError));
     }
 
     const nextVersion =
@@ -114,7 +136,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
     }
 
     if (!silent) {
-      input.setSuccess("Rascunho salvo no servidor.");
+      input.setSuccess(copy.serverDraftSaved);
     }
   }
 
@@ -123,18 +145,18 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
     input.setSuccess(null);
     const valid = AssistantDraftSchema.safeParse(input.draft).success;
     if (!valid) {
-      input.setError("Revise os dados da etapa atual.");
+      input.setError(copy.currentStepInvalid);
       return;
     }
     input.setIsBusy(true);
     try {
       await persistDraft(true);
-      const next = Math.min(input.stepIndex + 1, STEPS.length - 1);
+      const next = Math.min(input.stepIndex + 1, STEP_IDS.length - 1);
       input.setStepIndex(next);
       input.setUnlocked((current) => Math.max(current, next));
     } catch (reason) {
       input.setError(
-        reason instanceof Error ? reason.message : "Falha ao avancar etapa.",
+        reason instanceof Error ? reason.message : copy.moveNextFallbackError,
       );
     } finally {
       input.setIsBusy(false);
@@ -149,7 +171,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       await persistDraft(false);
     } catch (reason) {
       input.setError(
-        reason instanceof Error ? reason.message : "Falha ao salvar rascunho.",
+        reason instanceof Error ? reason.message : copy.saveDraftFallbackError,
       );
     } finally {
       input.setIsBusy(false);
@@ -163,9 +185,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       input.draft.sourceConfig?.kind !== "prisma-schema" ||
       !input.draft.sourceConfig.schemaText?.trim()
     ) {
-      input.setError(
-        "Cole um schema Prisma valido para verificacao inicial/importacao.",
-      );
+      input.setError(copy.prismaSourceRequired);
       return;
     }
 
@@ -186,7 +206,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       const payload = (await response.json()) as unknown;
       if (!response.ok) {
         throw new Error(
-          parseError(payload, "Falha na verificacao inicial do schema Prisma."),
+          parseError(payload, copy.prismaValidationFallbackError),
         );
       }
 
@@ -196,14 +216,12 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
           checkedAt: new Date(),
         }),
       );
-      input.setSuccess(
-        "Verificacao inicial concluida e importacao executada no projeto atual.",
-      );
+      input.setSuccess(copy.prismaValidationSuccess);
     } catch (reason) {
       const message =
         reason instanceof Error
           ? reason.message
-          : "Falha na verificacao inicial da fonte.";
+          : copy.sourceValidationFallbackError;
       input.setDraft((current) =>
         applyResolvedSourceLifecycleToDraft(current, {
           markAsFailed: message,
@@ -241,7 +259,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       });
       const payload = (await response.json()) as { data?: { redirectUrl?: string } };
       if (!response.ok) {
-        throw new Error(parseError(payload, "Falha ao criar mapa inicial."));
+        throw new Error(parseError(payload, copy.finishCreationFallbackError));
       }
       if (input.mode === "new" && typeof window !== "undefined") {
         window.localStorage.removeItem(LOCAL_DRAFT_KEY);
@@ -251,7 +269,7 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       }
     } catch (reason) {
       input.setError(
-        reason instanceof Error ? reason.message : "Falha ao criar mapa inicial.",
+        reason instanceof Error ? reason.message : copy.finishCreationFallbackError,
       );
     } finally {
       input.setIsBusy(false);

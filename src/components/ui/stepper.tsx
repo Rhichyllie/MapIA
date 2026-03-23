@@ -1,3 +1,5 @@
+import { useTranslations } from "next-intl";
+
 type StepperItem = {
   id: string;
   index: number;
@@ -14,6 +16,8 @@ type StepperProps = {
 };
 
 export function Stepper({ items, ariaLabel }: StepperProps) {
+  const t = useTranslations("Common.stepper");
+
   return (
     <ol className="stepper-list" aria-label={ariaLabel}>
       {items.map((step) => (
@@ -35,11 +39,13 @@ export function Stepper({ items, ariaLabel }: StepperProps) {
             onClick={step.onSelect}
             aria-label={
               step.state === "current"
-                ? `Passo atual: ${step.title}`
-                : `Ir para passo: ${step.title}`
+                ? t("currentStepAria", { title: step.title })
+                : t("goToStepAria", { title: step.title })
             }
           >
-            {step.state === "current" ? "Atual" : "Ir para passo"}
+            {step.state === "current"
+              ? t("currentStepButton")
+              : t("goToStepButton")}
           </button>
         </li>
       ))}

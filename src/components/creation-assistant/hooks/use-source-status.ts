@@ -1,12 +1,21 @@
 import { useMemo } from "react";
 import {
-  getSourceStatusLabel,
-  getSourceStatusSummary,
   resolveSourceLifecycle,
   type AssistantDraft,
 } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
+import { createCreationAssistantLabels } from "../creation-assistant-i18n";
+import ptBRMessages from "@/messages/pt-BR.json";
 
-export function resolveSourceStatusState(draft: AssistantDraft) {
+const defaultLabels = createCreationAssistantLabels(ptBRMessages, "pt-BR");
+
+export function resolveSourceStatusState(
+  draft: AssistantDraft,
+  labels: Pick<
+    CreationAssistantLabels,
+    "getSourceStatusLabel" | "getSourceStatusSummary"
+  > = defaultLabels,
+) {
   const sourceLifecycle = resolveSourceLifecycle({
     startStrategy: draft.startStrategy,
     startSource: draft.startSource,
@@ -17,8 +26,8 @@ export function resolveSourceStatusState(draft: AssistantDraft) {
     lastCheckedAt: draft.lastCheckedAt,
   });
 
-  const sourceStatusLabel = getSourceStatusLabel(sourceLifecycle.sourceStatus);
-  const sourceStatusSummary = getSourceStatusSummary({
+  const sourceStatusLabel = labels.getSourceStatusLabel(sourceLifecycle.sourceStatus);
+  const sourceStatusSummary = labels.getSourceStatusSummary({
     sourceStatus: sourceLifecycle.sourceStatus,
     precheckResult: sourceLifecycle.precheckResult,
     sourceSelected: Boolean(draft.startSource),
@@ -32,18 +41,16 @@ export function resolveSourceStatusState(draft: AssistantDraft) {
   };
 }
 
-export function useSourceStatus(draft: AssistantDraft) {
+export function useSourceStatus(
+  draft: AssistantDraft,
+  labels: Pick<
+    CreationAssistantLabels,
+    "getSourceStatusLabel" | "getSourceStatusSummary"
+  > = defaultLabels,
+) {
   const sourceStatusState = useMemo(
-    () => resolveSourceStatusState(draft),
-    [
-      draft.lastCheckedAt,
-      draft.lastError,
-      draft.precheckResult,
-      draft.sourceConfig,
-      draft.sourceStatus,
-      draft.startSource,
-      draft.startStrategy,
-    ],
+    () => resolveSourceStatusState(draft, labels),
+    [draft, labels],
   );
 
   return {

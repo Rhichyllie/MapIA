@@ -1,15 +1,18 @@
 import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type OpenApiSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
   sourcePreview: { message: string } | null;
+  labels: CreationAssistantLabels;
 };
 
 export function OpenApiSourceForm({
   draft,
   setDraft,
   sourcePreview,
+  labels,
 }: OpenApiSourceFormProps) {
   if (draft.sourceConfig?.kind !== "openapi") {
     return null;
@@ -18,7 +21,7 @@ export function OpenApiSourceForm({
   return (
     <div className="dashboard-form">
       <div className="field">
-        <label htmlFor="origin-openapi-mode">Entrada OpenAPI</label>
+        <label htmlFor="origin-openapi-mode">{labels.sourceForms.openApi.inputLabel}</label>
         <select
           id="origin-openapi-mode"
           value={draft.sourceConfig.inputMode}
@@ -35,17 +38,17 @@ export function OpenApiSourceForm({
             }))
           }
         >
-          <option value="url">URL</option>
-          <option value="paste">Colar</option>
-          <option value="upload">Upload (em breve)</option>
+          <option value="url">{labels.sourceForms.openApi.urlOption}</option>
+          <option value="paste">{labels.sourceForms.openApi.pasteOption}</option>
+          <option value="upload">{labels.sourceForms.openApi.uploadOption}</option>
         </select>
       </div>
       {draft.sourceConfig.inputMode === "url" ? (
         <div className="field">
-          <label htmlFor="origin-openapi-url">URL</label>
+          <label htmlFor="origin-openapi-url">{labels.sourceForms.openApi.urlLabel}</label>
           <input
             id="origin-openapi-url"
-            placeholder="https://api.exemplo.com/openapi.json"
+            placeholder={labels.sourceForms.openApi.urlPlaceholder}
             value={draft.sourceConfig.url ?? ""}
             onChange={(event) =>
               setDraft((current) => ({
@@ -63,11 +66,11 @@ export function OpenApiSourceForm({
         </div>
       ) : (
         <div className="field">
-          <label htmlFor="origin-openapi-text">Especificacao</label>
+          <label htmlFor="origin-openapi-text">{labels.sourceForms.openApi.specLabel}</label>
           <textarea
             id="origin-openapi-text"
             rows={6}
-            placeholder="Cole JSON/YAML OpenAPI aqui"
+            placeholder={labels.sourceForms.openApi.specPlaceholder}
             value={draft.sourceConfig.specText ?? ""}
             onChange={(event) =>
               setDraft((current) => ({
@@ -85,9 +88,7 @@ export function OpenApiSourceForm({
         </div>
       )}
       {sourcePreview ? <p className="helper">{sourcePreview.message}</p> : null}
-      <p className="helper">
-        Verificacao online sera habilitada quando o conector remoto estiver disponivel.
-      </p>
+      <p className="helper">{labels.sourceForms.openApi.verificationHint}</p>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useEditorTranslations } from "./use-editor-translations";
 import type { NodeQuickFindOption } from "./editor-quick-find";
 import type { InspectorMode } from "./editor-inspector-personas";
 
@@ -27,6 +28,7 @@ export function CommandPalette({
   onMoveActiveIndex,
   onClose,
 }: CommandPaletteProps) {
+  const t = useEditorTranslations("commandPalette");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -53,10 +55,10 @@ export function CommandPalette({
         className="command-palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Buscar no do canvas"
+        aria-label={t("dialogAria")}
         onClick={(event) => event.stopPropagation()}
       >
-        <label htmlFor="editor-quick-find-input">Buscar no</label>
+        <label htmlFor="editor-quick-find-input">{t("label")}</label>
         <input
           id="editor-quick-find-input"
           ref={inputRef}
@@ -88,13 +90,13 @@ export function CommandPalette({
               }
             }
           }}
-          placeholder="Digite para localizar por nome"
+          placeholder={t("placeholder")}
           data-testid="editor-quick-find-input"
         />
 
         <div className="command-palette-list" role="listbox">
           {options.length === 0 ? (
-            <p className="helper">Nenhum no encontrado.</p>
+            <p className="helper">{t("emptyState")}</p>
           ) : (
             options.map((option, index) => (
               <button
@@ -111,7 +113,9 @@ export function CommandPalette({
                 <strong>{option.label}</strong>
                 <span className="muted">
                   {option.kindLabel}
-                  {mode === "technical" ? ` (kind: ${option.kindRaw})` : ""}
+                  {mode === "technical"
+                    ? t("technicalKind", { kind: option.kindRaw })
+                    : ""}
                 </span>
               </button>
             ))

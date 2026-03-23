@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import {
   AssistantDraftSchema,
   buildDefaultContextForView,
@@ -49,12 +49,17 @@ export function resolveInitialAssistantState(input: {
   initialSettings?: CreationAssistantShellProps["initialSettings"];
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
+  labels?: {
+    projectName: string;
+    rootName: string;
+  };
 }) {
   const hydratedInitialDraftState = buildInitialDraft({
     initialProject: input.initialProject,
     initialSettings: input.initialSettings,
     initialDraftState: input.initialDraftState,
     snapshotDiagramType: input.snapshotDiagramType,
+    labels: input.labels,
   });
   const stepState = resolveInitialStepState(input.mode);
 
@@ -71,21 +76,27 @@ export function useCreationAssistantState(input: {
   initialSettings?: CreationAssistantShellProps["initialSettings"];
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
+  labels?: {
+    projectName: string;
+    rootName: string;
+  };
 }) {
-  const restoredRef = useRef(false);
-  const initialAssistantState = useMemo(
-    () => resolveInitialAssistantState(input),
-    [
-      input.mode,
-      input.initialDraftState,
-      input.initialProject,
-      input.initialSettings,
-      input.snapshotDiagramType,
-    ],
-  );
+  const initialAssistantState = resolveInitialAssistantState(input);
   const hydratedInitialDraftState = initialAssistantState.hydratedInitialDraftState;
 
-  const [draft, setDraft] = useState<AssistantDraft>(hydratedInitialDraftState.draft);
+  const [draft, setDraft] = useState<AssistantDraft>(() => {
+    if (input.mode !== "new" || typeof window === "undefined") {
+      return hydratedInitialDraftState.draft;
+    }
+
+    const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
+    if (!raw) {
+      return hydratedInitialDraftState.draft;
+    }
+
+    const parsed = AssistantDraftSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : hydratedInitialDraftState.draft;
+  });
   const [legacyLayoutWarning] = useState<string | null>(
     hydratedInitialDraftState.layoutWarning,
   );
@@ -97,25 +108,6 @@ export function useCreationAssistantState(input: {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [draftVersion, setDraftVersion] = useState<number | null>(initialAssistantState.draftVersion);
-
-  useEffect(() => {
-    if (
-      input.mode !== "new" ||
-      restoredRef.current ||
-      typeof window === "undefined"
-    ) {
-      return;
-    }
-    restoredRef.current = true;
-    const raw = window.localStorage.getItem(LOCAL_DRAFT_KEY);
-    if (!raw) {
-      return;
-    }
-    const parsed = AssistantDraftSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) {
-      setDraft(parsed.data);
-    }
-  }, [input.mode]);
 
   function synchronizeDirectionalContext(nextDraft: AssistantDraft): AssistantDraft {
     if (nextDraft.initialView === "flow") {

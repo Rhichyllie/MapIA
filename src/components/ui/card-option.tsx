@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 type CardOptionProps = {
   title: string;
@@ -17,6 +18,8 @@ export function CardOption({
   onSelect,
   dataTestId,
 }: CardOptionProps) {
+  const t = useTranslations("Common.cardOption");
+
   return (
     <button
       type="button"
@@ -28,7 +31,7 @@ export function CardOption({
     >
       <div className="row-actions row-actions-between">
         <strong>{title}</strong>
-        <span className="badge">{selected ? "Selecionado" : "Selecionar"}</span>
+        <span className="badge">{selected ? t("selected") : t("select")}</span>
       </div>
       <p className="helper">{description}</p>
       {preview ? <div aria-hidden="true">{preview}</div> : null}

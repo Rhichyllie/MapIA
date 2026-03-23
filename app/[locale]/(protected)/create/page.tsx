@@ -1,5 +1,7 @@
-import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { Link } from "@/src/i18n/navigation";
 import { AppError } from "@/src/lib/app-error";
+import { appRoutes } from "@/src/lib/routes";
 import { CreationAssistantShell } from "@/src/components/creation-assistant/creation-assistant-shell";
 import { PageHeader } from "@/src/components/ui/page-header";
 import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
@@ -28,6 +30,7 @@ function getStringParam(
 }
 
 export default async function CreatePage({ searchParams }: CreatePageProps) {
+  const t = await getTranslations("Create.page");
   const params = await searchParams;
   const fromProjectId = getStringParam(params, "fromProjectId");
   const mode = fromProjectId ? "existing" : "new";
@@ -128,18 +131,18 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
       loadErrorMessage =
         error instanceof AppError
           ? error.message
-          : "Nao foi possivel carregar o projeto para configuracao inicial.";
+          : t("loadErrorFallback");
     }
   }
 
   return (
     <section className="panel">
       <PageHeader
-        title="Assistente de criacao"
+        title={t("title")}
         description={
           mode === "new"
-            ? "Fluxo guiado para criar projeto e mapa inicial coerente."
-            : "Aplicar configuracao inicial em um projeto existente."
+            ? t("newDescription")
+            : t("existingDescription")
         }
       />
       <div className="panel-body">
@@ -147,8 +150,8 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
           <div className="stack-sm">
             <div className="error-box">{loadErrorMessage}</div>
             <div className="row-actions">
-              <Link className="btn" href="/dashboard">
-                Voltar para Dashboard
+              <Link className="btn" href={appRoutes.dashboard}>
+                {t("backToDashboard")}
               </Link>
             </div>
           </div>

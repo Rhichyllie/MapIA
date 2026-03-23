@@ -1,4 +1,8 @@
+"use client";
+
+import { useEditorTranslations } from "../use-editor-translations";
 import type { EdgeKind } from "@/src/domain";
+import type { EditorTranslationFn } from "../editor-i18n";
 import {
   getEdgeKindDescriptionForDiagram,
   getEdgeKindLabelForDiagram,
@@ -58,6 +62,8 @@ export function ProcessOperationalEdgeInspector({
   onReset: () => void;
   onRemove: () => void;
 }) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
+
   return (
     <div className="stack-sm inspector-process-stack inspector-process-edge">
       <section
@@ -68,7 +74,7 @@ export function ProcessOperationalEdgeInspector({
           <span className="badge">{overview.badgeLabel}</span>
           <span className="badge">{overview.transitionTypeLabel}</span>
         </div>
-        <h4>Leitura da transicao</h4>
+        <h4>{t("processInspector.edge.transitionReadingTitle")}</h4>
         <p className="helper">{overview.summary}</p>
         <ul className="summary-list">
           {overview.guidance.map((tip) => (
@@ -118,12 +124,12 @@ export function ProcessOperationalEdgeInspector({
             >
               {edgeKindOptions.map((kind) => (
                 <option key={kind} value={kind}>
-                  {getEdgeKindLabelForDiagram("flow", kind, "operational")}
+                  {getEdgeKindLabelForDiagram("flow", kind, "operational", t)}
                 </option>
               ))}
             </select>
             <span className="helper">
-              {getEdgeKindDescriptionForDiagram("flow", draft.kind)}
+              {getEdgeKindDescriptionForDiagram("flow", draft.kind, t)}
             </span>
           </div>
         </section>
@@ -141,8 +147,8 @@ export function ProcessOperationalEdgeInspector({
               <dd>{targetLabel}</dd>
             </div>
             <div>
-              <dt>Leitura</dt>
-              <dd>{getEdgeKindLabelForDiagram("flow", edgeReadingKind, "operational")}</dd>
+              <dt>{t("processInspector.edge.readingLabel")}</dt>
+              <dd>{getEdgeKindLabelForDiagram("flow", edgeReadingKind, "operational", t)}</dd>
             </div>
           </dl>
         </section>
@@ -176,13 +182,13 @@ export function ProcessOperationalEdgeInspector({
           onClick={onApply}
           disabled={isSaving}
         >
-          Aplicar alteracoes
+          {t("shell.applyChanges")}
         </button>
         <button className="btn" type="button" onClick={onReset}>
-          Reverter
+          {t("shell.revert")}
         </button>
         <button className="btn" type="button" onClick={onRemove} disabled={isSaving}>
-          Remover transicao
+          {t("processInspector.edge.removeTransition")}
         </button>
       </div>
     </div>

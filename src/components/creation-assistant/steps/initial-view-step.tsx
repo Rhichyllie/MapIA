@@ -1,10 +1,9 @@
 import { CardOption } from "@/src/components/ui/card-option";
 import {
-  getInitialViewLabel,
   type AssistantDraft,
   type InitialView,
 } from "@/src/modules/creation-assistant/domain";
-import { rankLabel, VIEW_DESCRIPTIONS } from "../shared";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type InitialViewStepProps = {
   draft: AssistantDraft;
@@ -14,23 +13,25 @@ type InitialViewStepProps = {
     incompatible: InitialView[];
   };
   selectInitialView: (view: InitialView) => void;
+  labels: CreationAssistantLabels;
 };
 
 export function InitialViewStep({
   draft,
+  labels,
   recommendedViews,
   selectInitialView,
 }: InitialViewStepProps) {
   return (
     <div className="stack-sm">
       <div className="field">
-        <label>Recomendado para este perfil</label>
+        <label>{labels.initialViewStep.recommendedLabel}</label>
         <div className="grid-tiles">
           {recommendedViews.recommended.map((view) => (
             <CardOption
               key={view}
-              title={getInitialViewLabel(view)}
-              description={VIEW_DESCRIPTIONS[view]}
+              title={labels.getInitialView(view).label}
+              description={labels.getInitialView(view).description}
               selected={draft.initialView === view}
               onSelect={() => selectInitialView(view)}
             />
@@ -38,13 +39,13 @@ export function InitialViewStep({
         </div>
       </div>
       <div className="field">
-        <label>Outras visoes possiveis</label>
+        <label>{labels.initialViewStep.otherViewsLabel}</label>
         <div className="grid-tiles">
           {recommendedViews.other.map((view) => (
             <CardOption
               key={view}
-              title={`${getInitialViewLabel(view)} (${rankLabel(draft.profile, view)})`}
-              description={VIEW_DESCRIPTIONS[view]}
+              title={`${labels.getInitialView(view).label} (${labels.getRankLabel(draft.profile, view)})`}
+              description={labels.getInitialView(view).description}
               selected={draft.initialView === view}
               onSelect={() => selectInitialView(view)}
             />

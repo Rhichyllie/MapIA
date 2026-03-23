@@ -6,48 +6,51 @@ import {
   normalizeLayoutForView,
   type AssistantDraft,
 } from "@/src/modules/creation-assistant/domain";
-import { PROFILES } from "../shared";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
+import { PROJECT_PROFILES } from "../shared";
 
 type ScopeStepProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
   synchronizeDirectionalContext: (draft: AssistantDraft) => AssistantDraft;
+  labels: CreationAssistantLabels;
 };
 
 export function ScopeStep({
   draft,
   setDraft,
   synchronizeDirectionalContext,
+  labels,
 }: ScopeStepProps) {
   return (
     <div className="grid-tiles">
-      {PROFILES.map((profile) => (
+      {PROJECT_PROFILES.map((profile) => (
         <CardOption
-          key={profile.value}
-          title={profile.title}
-          description={profile.description}
-          selected={draft.profile === profile.value}
+          key={profile}
+          title={labels.getProjectProfile(profile).title}
+          description={labels.getProjectProfile(profile).description}
+          selected={draft.profile === profile}
           onSelect={() => {
-            const nextViews = getRecommendedViewsForProfile(profile.value);
+            const nextViews = getRecommendedViewsForProfile(profile);
             const compatible =
-              getViewCompatibilityRank(profile.value, draft.initialView) !==
+              getViewCompatibilityRank(profile, draft.initialView) !==
               "incompatible";
             const nextView = compatible
               ? draft.initialView
               : (nextViews.recommended[0] ?? "free");
             const normalized = normalizeLayoutForView({
-              profile: profile.value,
+              profile,
               initialView: nextView,
               layout: draft.layout,
             });
             setDraft((current) =>
               synchronizeDirectionalContext({
                 ...current,
-                profile: profile.value,
+                profile,
                 initialView: nextView,
                 layout: normalized.layout,
                 context: {
-                  ...buildDefaultContextForView(nextView, profile.value),
+                  ...buildDefaultContextForView(nextView, profile),
                   ...current.context,
                 },
               }),

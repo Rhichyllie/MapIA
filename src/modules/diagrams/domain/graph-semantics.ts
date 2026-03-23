@@ -1,4 +1,8 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
+import {
+  translateEditor,
+  type EditorTranslationFn,
+} from "@/src/components/editor/editor-i18n";
 
 export type GraphDiagramRole = "graph-core" | "graph-topic" | "graph-supporting";
 export type GraphNodeVariant = "core" | "component" | "supporting";
@@ -201,30 +205,76 @@ export function mapGraphRoleToNodeKind(
   return fallbackKind === "note" ? "note" : "page";
 }
 
-export function listGraphQuickAddRoleOptions() {
-  return [...GRAPH_QUICK_ADD_ROLE_OPTIONS];
+export function listGraphQuickAddRoleOptions(t?: EditorTranslationFn) {
+  return GRAPH_QUICK_ADD_ROLE_OPTIONS.map((option) => ({
+    ...option,
+    label: translateEditor(
+      t,
+      `graph.quickAddRoles.${option.role}.label`,
+      option.label,
+    ),
+    description: translateEditor(
+      t,
+      `graph.quickAddRoles.${option.role}.description`,
+      option.description,
+    ),
+  }));
 }
 
-export function resolveGraphNodeKindCopy(kind: NodeKind): GraphNodeKindCopy {
-  return (
-    GRAPH_NODE_KIND_COPY[kind] ?? {
-      labelOperational: "Componente",
-      description: "Elemento utilizado na leitura arquitetural da rede.",
-    }
-  );
+export function resolveGraphNodeKindCopy(
+  kind: NodeKind,
+  t?: EditorTranslationFn,
+): GraphNodeKindCopy {
+  const fallback = GRAPH_NODE_KIND_COPY[kind] ?? {
+    labelOperational: "Componente",
+    description: "Elemento utilizado na leitura arquitetural da rede.",
+  };
+
+  return {
+    labelOperational: translateEditor(
+      t,
+      `graph.nodeKinds.${kind}.labelOperational`,
+      fallback.labelOperational,
+    ),
+    description: translateEditor(
+      t,
+      `graph.nodeKinds.${kind}.description`,
+      fallback.description,
+    ),
+  };
 }
 
-export function resolveGraphEdgeSemantic(kind: EdgeKind): GraphEdgeSemanticRuntime {
-  return (
-    GRAPH_EDGE_COPY[kind] ?? {
-      labelOperational: "Conexao",
-      description: "Ligacao contextual entre itens do grafo.",
-      markerStyle: "open",
-      strokeStyle: "solid",
-      emphasis: "secondary",
-      defaultVerbLabel: "Integra com",
-    }
-  );
+export function resolveGraphEdgeSemantic(
+  kind: EdgeKind,
+  t?: EditorTranslationFn,
+): GraphEdgeSemanticRuntime {
+  const fallback = GRAPH_EDGE_COPY[kind] ?? {
+    labelOperational: "Conexao",
+    description: "Ligacao contextual entre itens do grafo.",
+    markerStyle: "open",
+    strokeStyle: "solid",
+    emphasis: "secondary",
+    defaultVerbLabel: "Integra com",
+  };
+
+  return {
+    ...fallback,
+    labelOperational: translateEditor(
+      t,
+      `graph.edgeKinds.${kind}.labelOperational`,
+      fallback.labelOperational,
+    ),
+    description: translateEditor(
+      t,
+      `graph.edgeKinds.${kind}.description`,
+      fallback.description,
+    ),
+    defaultVerbLabel: translateEditor(
+      t,
+      `graph.edgeKinds.${kind}.defaultVerbLabel`,
+      fallback.defaultVerbLabel,
+    ),
+  };
 }
 
 export function resolveGraphNodeSemantic(input: {
@@ -234,48 +284,91 @@ export function resolveGraphNodeSemantic(input: {
   payload?: Record<string, unknown>;
   incomingCount?: number;
   outgoingCount?: number;
-}): GraphNodeSemanticRuntime {
+}, t?: EditorTranslationFn): GraphNodeSemanticRuntime {
   const role = resolveGraphDiagramRole({
     diagramRole: input.diagramRole,
     nodeKind: input.kind,
     nodeLabel: input.label,
   });
   const roleCopy = GRAPH_ROLE_COPY[role];
-  const kindCopy = resolveGraphNodeKindCopy(input.kind);
+  const kindCopy = resolveGraphNodeKindCopy(input.kind, t);
   const incomingCount = input.incomingCount ?? 0;
   const outgoingCount = input.outgoingCount ?? 0;
-  const summary = readPayloadText(input.payload, "description") ?? roleCopy.summaryFallback;
+  const summary =
+    readPayloadText(input.payload, "description") ??
+    translateEditor(
+      t,
+      `graph.roles.${role}.summaryFallback`,
+      roleCopy.summaryFallback,
+    );
   const structureTips = [
-    `Leitura da rede: ${incomingCount} entrada(s) e ${outgoingCount} saida(s).`,
+    translateEditor(
+      t,
+      "graph.structureTips.connectivity",
+      `Leitura da rede: ${incomingCount} entrada(s) e ${outgoingCount} saida(s).`,
+      { incomingCount, outgoingCount },
+    ),
     role === "graph-core"
-      ? "Use este item para orientar a rede principal e evitar dependencias difusas."
+      ? translateEditor(
+          t,
+          "graph.structureTips.core",
+          "Use este item para orientar a rede principal e evitar dependencias difusas.",
+        )
       : role === "graph-topic"
-        ? "Revise integracoes laterais e dependencias diretas deste componente."
-        : "Use este item para apoio, contexto, adaptacao ou fronteira do sistema.",
+        ? translateEditor(
+            t,
+            "graph.structureTips.topic",
+            "Revise integracoes laterais e dependencias diretas deste componente.",
+          )
+        : translateEditor(
+            t,
+            "graph.structureTips.supporting",
+            "Use este item para apoio, contexto, adaptacao ou fronteira do sistema.",
+          ),
   ];
 
   return {
     role,
     variant: roleCopy.variant,
-    roleBadgeLabel: roleCopy.roleBadgeLabel,
-    selectionBadgeLabel: roleCopy.selectionBadgeLabel,
+    roleBadgeLabel: translateEditor(
+      t,
+      `graph.roles.${role}.roleBadgeLabel`,
+      roleCopy.roleBadgeLabel,
+    ),
+    selectionBadgeLabel: translateEditor(
+      t,
+      `graph.roles.${role}.selectionBadgeLabel`,
+      roleCopy.selectionBadgeLabel,
+    ),
     kindLabel: kindCopy.labelOperational,
     kindDescription: kindCopy.description,
     summary,
-    footprintLabel: roleCopy.footprintLabel,
+    footprintLabel: translateEditor(
+      t,
+      `graph.roles.${role}.footprintLabel`,
+      roleCopy.footprintLabel,
+    ),
     structureTips,
-    connectivityLabel: `Recebe ${incomingCount} conexao(oes) e envia ${outgoingCount}.`,
+    connectivityLabel: translateEditor(
+      t,
+      "graph.connectivityLabel",
+      `Recebe ${incomingCount} conexao(oes) e envia ${outgoingCount}.`,
+      { incomingCount, outgoingCount },
+    ),
   };
 }
 
-export function resolveGraphActionEdgeVerb(actionId: string) {
+export function resolveGraphActionEdgeVerb(
+  actionId: string,
+  t?: EditorTranslationFn,
+) {
   if (actionId === "graph-add-dependency") {
-    return resolveGraphEdgeSemantic("depends-on").defaultVerbLabel;
+    return resolveGraphEdgeSemantic("depends-on", t).defaultVerbLabel;
   }
 
   if (actionId === "graph-add-supporting-service") {
-    return resolveGraphEdgeSemantic("references").defaultVerbLabel;
+    return resolveGraphEdgeSemantic("references", t).defaultVerbLabel;
   }
 
-  return resolveGraphEdgeSemantic("relates-to").defaultVerbLabel;
+  return resolveGraphEdgeSemantic("relates-to", t).defaultVerbLabel;
 }

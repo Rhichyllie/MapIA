@@ -1,7 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { memo } from "react";
+import { Link } from "@/src/i18n/navigation";
+import type { DashboardCopy } from "./dashboard-copy";
 import type {
   DashboardProject,
   WorkspaceDensity,
@@ -11,11 +12,7 @@ import {
   buildEditorHref,
   buildVersionsHref,
   buildWizardHref,
-  formatDateLabel,
-  getDiagramTypeLabel,
-  getSnapshotStatusLabel,
   getSnapshotStatusTone,
-  getTemplateLabel,
 } from "./workspace-projects";
 
 type ProjectsListProps = {
@@ -25,6 +22,7 @@ type ProjectsListProps = {
   highlightedProjectId: string | null;
   onOpenProject: (projectId: string) => void;
   onCopyTechnicalId: (project: DashboardProject) => void;
+  copy: DashboardCopy;
 };
 
 export const ProjectsList = memo(function ProjectsList({
@@ -34,6 +32,7 @@ export const ProjectsList = memo(function ProjectsList({
   highlightedProjectId,
   onOpenProject,
   onCopyTechnicalId,
+  copy,
 }: ProjectsListProps) {
   return (
     <div
@@ -42,14 +41,14 @@ export const ProjectsList = memo(function ProjectsList({
       data-view="list"
       data-density={density}
       role="table"
-      aria-label="Lista de projetos"
+      aria-label={copy.project.listAriaLabel}
     >
       <div className="workspace-project-list-header" role="row">
-        <span role="columnheader">Projeto</span>
-        <span role="columnheader">Tipo</span>
-        <span role="columnheader">Status</span>
-        <span role="columnheader">Atualizado</span>
-        <span role="columnheader">Acoes</span>
+        <span role="columnheader">{copy.project.headers.project}</span>
+        <span role="columnheader">{copy.project.headers.type}</span>
+        <span role="columnheader">{copy.project.headers.status}</span>
+        <span role="columnheader">{copy.project.headers.updated}</span>
+        <span role="columnheader">{copy.project.headers.actions}</span>
       </div>
 
       <div className="workspace-project-list-body" role="rowgroup">
@@ -82,23 +81,23 @@ export const ProjectsList = memo(function ProjectsList({
                   className="workspace-project-list-project-description"
                   title={project.description ?? ""}
                 >
-                  {project.description?.trim() || "Sem finalidade informada"}
+                  {project.description?.trim() || copy.project.fallbackDescription}
                 </span>
               </div>
 
               <span className="workspace-project-list-type" role="cell">
-                {getTemplateLabel(project.template, workspaceMode)}
-                <small>{getDiagramTypeLabel(project.selectedDiagramType)}</small>
+                {copy.getTemplateLabel(project.template, workspaceMode)}
+                <small>{copy.getDiagramTypeLabel(project.selectedDiagramType)}</small>
               </span>
 
               <span className="workspace-project-list-status" role="cell">
                 <span className={`badge workspace-status-badge workspace-status-${snapshotTone}`}>
-                  {getSnapshotStatusLabel(project.hasInitialSnapshot)}
+                  {copy.getSnapshotStatusLabel(project.hasInitialSnapshot)}
                 </span>
               </span>
 
               <span className="workspace-project-list-updated" role="cell">
-                {formatDateLabel(project.updatedAt)}
+                {copy.getProjectUpdatedLabel(project.updatedAt)}
               </span>
 
               <div
@@ -111,11 +110,14 @@ export const ProjectsList = memo(function ProjectsList({
                   href={buildEditorHref(project.id)}
                   data-testid={`dashboard-open-editor-${project.id}`}
                 >
-                  Abrir
+                  {copy.project.open}
                 </Link>
 
                 <details className="workspace-project-actions-menu">
-                  <summary className="btn" aria-label={`Mais acoes para ${project.name}`}>
+                  <summary
+                    className="btn"
+                    aria-label={copy.getMoreActionsAriaLabel(project.name)}
+                  >
                     ...
                   </summary>
                   <div className="workspace-project-actions-popover">
@@ -124,7 +126,7 @@ export const ProjectsList = memo(function ProjectsList({
                       href={buildWizardHref(project.id, "wizard")}
                       data-testid={`dashboard-open-wizard-${project.id}`}
                     >
-                      Abrir Assistente
+                      {copy.project.openAssistant}
                     </Link>
                     <Link
                       className="btn"
@@ -137,7 +139,7 @@ export const ProjectsList = memo(function ProjectsList({
                         }
                       }}
                     >
-                      Ver versoes
+                      {copy.project.viewVersions}
                     </Link>
                     {workspaceMode === "technical" ? (
                       <button
@@ -146,7 +148,7 @@ export const ProjectsList = memo(function ProjectsList({
                         onClick={() => onCopyTechnicalId(project)}
                         data-testid={`dashboard-copy-technical-id-${project.id}`}
                       >
-                        Copiar ID tecnico
+                        {copy.project.copyTechnicalId}
                       </button>
                     ) : null}
                   </div>

@@ -1,15 +1,18 @@
 import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type PostgresSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
   sourcePreview: { message: string } | null;
+  labels: CreationAssistantLabels;
 };
 
 export function PostgresSourceForm({
   draft,
   setDraft,
   sourcePreview,
+  labels,
 }: PostgresSourceFormProps) {
   if (
     !draft.sourceConfig ||
@@ -23,7 +26,9 @@ export function PostgresSourceForm({
   return (
     <div className="dashboard-form">
       <div className="field">
-        <label htmlFor="origin-db-mode">Modo de conexao</label>
+        <label htmlFor="origin-db-mode">
+          {labels.sourceForms.postgres.connectionModeLabel}
+        </label>
         <select
           id="origin-db-mode"
           value={draft.sourceConfig.connectionMode}
@@ -43,16 +48,18 @@ export function PostgresSourceForm({
             }))
           }
         >
-          <option value="string">Connection string</option>
-          <option value="fields">Campos separados</option>
+          <option value="string">{labels.sourceForms.postgres.connectionStringOption}</option>
+          <option value="fields">{labels.sourceForms.postgres.separateFieldsOption}</option>
         </select>
       </div>
       {draft.sourceConfig.connectionMode === "string" ? (
         <div className="field">
-          <label htmlFor="origin-db-connection-string">Connection string</label>
+          <label htmlFor="origin-db-connection-string">
+            {labels.sourceForms.postgres.connectionStringLabel}
+          </label>
           <input
             id="origin-db-connection-string"
-            placeholder="postgresql://usuario:***@host:5432/banco"
+            placeholder={labels.sourceForms.postgres.connectionStringPlaceholder}
             value={draft.sourceConfig.connectionString ?? ""}
             onChange={(event) =>
               setDraft((current) => ({
@@ -74,10 +81,10 @@ export function PostgresSourceForm({
       ) : (
         <>
           <div className="field">
-            <label htmlFor="origin-db-host">Host</label>
+            <label htmlFor="origin-db-host">{labels.sourceForms.postgres.hostLabel}</label>
             <input
               id="origin-db-host"
-              placeholder="db.exemplo.internal"
+              placeholder={labels.sourceForms.postgres.hostPlaceholder}
               value={draft.sourceConfig.host ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -97,13 +104,13 @@ export function PostgresSourceForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="origin-db-port">Porta</label>
+            <label htmlFor="origin-db-port">{labels.sourceForms.postgres.portLabel}</label>
             <input
               id="origin-db-port"
               type="number"
               min={1}
               max={65535}
-              placeholder="5432"
+              placeholder={labels.sourceForms.postgres.portPlaceholder}
               value={draft.sourceConfig.port ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -125,10 +132,12 @@ export function PostgresSourceForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="origin-db-name">Banco</label>
+            <label htmlFor="origin-db-name">
+              {labels.sourceForms.postgres.databaseLabel}
+            </label>
             <input
               id="origin-db-name"
-              placeholder="mapia"
+              placeholder={labels.sourceForms.postgres.databasePlaceholder}
               value={draft.sourceConfig.database ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -148,10 +157,12 @@ export function PostgresSourceForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="origin-db-schema">Schema (opcional)</label>
+            <label htmlFor="origin-db-schema">
+              {labels.sourceForms.postgres.schemaLabel}
+            </label>
             <input
               id="origin-db-schema"
-              placeholder="public"
+              placeholder={labels.sourceForms.postgres.schemaPlaceholder}
               value={draft.sourceConfig.schema ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -173,7 +184,9 @@ export function PostgresSourceForm({
         </>
       )}
       <div className="field">
-        <label htmlFor="origin-db-auth-mode">Autenticacao</label>
+        <label htmlFor="origin-db-auth-mode">
+          {labels.sourceForms.postgres.authModeLabel}
+        </label>
         <select
           id="origin-db-auth-mode"
           value={draft.sourceConfig.authMode}
@@ -193,17 +206,19 @@ export function PostgresSourceForm({
             }))
           }
         >
-          <option value="userpass">Usuario e senha</option>
-          <option value="iam">IAM/Token temporario</option>
+          <option value="userpass">{labels.sourceForms.postgres.userPassOption}</option>
+          <option value="iam">{labels.sourceForms.postgres.iamOption}</option>
         </select>
       </div>
       {draft.sourceConfig.authMode === "userpass" ? (
         <>
           <div className="field">
-            <label htmlFor="origin-db-username">Usuario</label>
+            <label htmlFor="origin-db-username">
+              {labels.sourceForms.postgres.usernameLabel}
+            </label>
             <input
               id="origin-db-username"
-              placeholder="readonly_user"
+              placeholder={labels.sourceForms.postgres.usernamePlaceholder}
               value={draft.sourceConfig.username ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -223,11 +238,13 @@ export function PostgresSourceForm({
             />
           </div>
           <div className="field">
-            <label htmlFor="origin-db-password">Senha (opcional)</label>
+            <label htmlFor="origin-db-password">
+              {labels.sourceForms.postgres.passwordLabel}
+            </label>
             <input
               id="origin-db-password"
               type="password"
-              placeholder="Digite apenas para teste imediato"
+              placeholder={labels.sourceForms.postgres.passwordPlaceholder}
               value={draft.sourceConfig.password ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({
@@ -250,12 +267,8 @@ export function PostgresSourceForm({
       ) : null}
 
       {sourcePreview ? <p className="helper">{sourcePreview.message}</p> : null}
-      <p className="helper">
-        Credenciais nao sao salvas no rascunho nem nas configuracoes aplicadas. Informe novamente quando executar importacao conectada.
-      </p>
-      <p className="helper">
-        Seguranca: prefira usuario tecnico de leitura e conecte credenciais definitivas apenas no momento da integracao.
-      </p>
+      <p className="helper">{labels.sourceForms.postgres.draftSafetyHint}</p>
+      <p className="helper">{labels.sourceForms.postgres.securityHint}</p>
     </div>
   );
 }

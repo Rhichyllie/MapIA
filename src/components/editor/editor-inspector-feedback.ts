@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { translateEditor, type EditorTranslationFn } from "./editor-i18n";
 
 export type InspectorFieldErrors = Partial<
   Record<"label" | "kind" | "dataJson", string>
@@ -52,14 +53,23 @@ function isLikelySerializedErrorMessage(message: string) {
 function normalizeIssueMessage(
   field: keyof InspectorFieldErrors,
   issue: InspectorIssue,
+  t?: EditorTranslationFn,
 ): string {
   if (field === "kind") {
-    return KIND_INVALID_MESSAGE;
+    return translateEditor(
+      t,
+      "inspectorFeedback.invalidKind",
+      KIND_INVALID_MESSAGE,
+    );
   }
 
   if (field === "dataJson" && isJsonRelatedMessage(issue.message)) {
     if (issue.message.toLowerCase().includes("objeto json")) {
-      return "Dados devem ser um objeto JSON (chave/valor).";
+      return translateEditor(
+        t,
+        "inspectorFeedback.jsonObjectRequired",
+        "Dados devem ser um objeto JSON (chave/valor).",
+      );
     }
 
     if (
@@ -69,18 +79,31 @@ function normalizeIssueMessage(
       return issue.message;
     }
 
-    return JSON_INVALID_MESSAGE;
+    return translateEditor(
+      t,
+      "inspectorFeedback.invalidJson",
+      JSON_INVALID_MESSAGE,
+    );
   }
 
   if (field === "label" && issue.code === "too_small") {
-    return LABEL_REQUIRED_MESSAGE;
+    return translateEditor(
+      t,
+      "inspectorFeedback.labelRequired",
+      LABEL_REQUIRED_MESSAGE,
+    );
   }
 
-  return issue.message || REVIEW_FIELDS_MESSAGE;
+  return issue.message || translateEditor(
+    t,
+    "inspectorFeedback.reviewFields",
+    REVIEW_FIELDS_MESSAGE,
+  );
 }
 
 export function extractFriendlyInspectorFieldErrors(
   error: unknown,
+  t?: EditorTranslationFn,
 ): InspectorFieldErrors {
   if (!(error instanceof ZodError)) {
     return {};
@@ -95,7 +118,7 @@ export function extractFriendlyInspectorFieldErrors(
       continue;
     }
 
-    next[field] ??= normalizeIssueMessage(field, issue);
+    next[field] ??= normalizeIssueMessage(field, issue, t);
   }
 
   return next;
@@ -104,9 +127,10 @@ export function extractFriendlyInspectorFieldErrors(
 export function getFriendlyInspectorMessage(
   error: unknown,
   fallback = DEFAULT_INSPECTOR_VALIDATION_MESSAGE,
+  t?: EditorTranslationFn,
 ): string {
   if (error instanceof ZodError) {
-    const fieldErrors = extractFriendlyInspectorFieldErrors(error);
+    const fieldErrors = extractFriendlyInspectorFieldErrors(error, t);
     const messages = Object.values(fieldErrors);
 
     if (fieldErrors.dataJson) {
@@ -118,10 +142,14 @@ export function getFriendlyInspectorMessage(
     }
 
     if (messages.length > 1) {
-      return REVIEW_FIELDS_MESSAGE;
+      return translateEditor(t, "inspectorFeedback.reviewFields", REVIEW_FIELDS_MESSAGE);
     }
 
-    return fallback;
+    return translateEditor(
+      t,
+      "inspectorFeedback.defaultValidationMessage",
+      fallback,
+    );
   }
 
   if (
@@ -132,15 +160,20 @@ export function getFriendlyInspectorMessage(
     return error.message;
   }
 
-  return fallback;
+  return translateEditor(
+    t,
+    "inspectorFeedback.defaultValidationMessage",
+    fallback,
+  );
 }
 
 export function getFriendlyInspectorFeedback(
   error: unknown,
   fallback = DEFAULT_INSPECTOR_VALIDATION_MESSAGE,
+  t?: EditorTranslationFn,
 ) {
   return {
-    fieldErrors: extractFriendlyInspectorFieldErrors(error),
-    message: getFriendlyInspectorMessage(error, fallback),
+    fieldErrors: extractFriendlyInspectorFieldErrors(error, t),
+    message: getFriendlyInspectorMessage(error, fallback, t),
   };
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import type { DashboardCopy } from "./dashboard-copy";
+
 export type DashboardWorkspace = {
   id: string;
   slug: string;
@@ -40,108 +42,17 @@ export type WorkspaceFilters = {
 
 type LegacyTemplateOption = {
   value: DashboardProject["template"];
-  operationalLabel: string;
-  technicalLabel: string;
-  description: string;
 };
 
 export const SEARCH_DEBOUNCE_MS = 250;
 export const CARD_HIGHLIGHT_MS = 4_000;
 
-export const diagramTypeOptions: Array<{
-  value: InitialDiagramChoice;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "wizard",
-    label: "Decidir no Assistente",
-    description: "Defina o tipo durante o fluxo guiado de criacao.",
-  },
-  {
-    value: "tree",
-    label: "Hierarquia",
-    description: "Estruturas com niveis e relacao pai-filho.",
-  },
-  {
-    value: "flow",
-    label: "Processo",
-    description: "Etapas de processo com sequencia.",
-  },
-  {
-    value: "mindmap",
-    label: "Mapa mental",
-    description: "Exploracao radial de ideias e temas.",
-  },
-];
-
 export const legacyTemplateOptions: LegacyTemplateOption[] = [
-  {
-    value: "graph",
-    operationalLabel: "Estrutura livre",
-    technicalLabel: "graph (legado)",
-    description: "Estrutura generica para compatibilidade.",
-  },
-  {
-    value: "sitemap",
-    operationalLabel: "Mapa de navegacao",
-    technicalLabel: "sitemap (legado)",
-    description: "Navegacao de paginas e secoes.",
-  },
-  {
-    value: "flowchart",
-    operationalLabel: "Fluxograma",
-    technicalLabel: "flowchart (legado)",
-    description: "Fluxograma classico de processos.",
-  },
-  {
-    value: "erd",
-    operationalLabel: "Modelo de dados",
-    technicalLabel: "erd (legado)",
-    description: "Relacionamento de entidades e dados.",
-  },
+  { value: "graph" },
+  { value: "sitemap" },
+  { value: "flowchart" },
+  { value: "erd" },
 ];
-
-export function getDiagramTypeLabel(diagramType: DashboardProject["selectedDiagramType"]) {
-  if (diagramType === "tree") {
-    return "Hierarquia";
-  }
-
-  if (diagramType === "flow") {
-    return "Processo";
-  }
-
-  if (diagramType === "mindmap") {
-    return "Mapa mental";
-  }
-
-  return "Definir durante a criacao";
-}
-
-export function getTemplateLabel(
-  template: DashboardProject["template"],
-  workspaceMode: WorkspaceMode,
-) {
-  const found = legacyTemplateOptions.find((option) => option.value === template);
-  if (!found) {
-    return template;
-  }
-
-  return workspaceMode === "technical"
-    ? found.technicalLabel
-    : found.operationalLabel;
-}
-
-export function getTemplateDescription(template: DashboardProject["template"]) {
-  return (
-    legacyTemplateOptions.find((option) => option.value === template)?.description ??
-    "Template legado para compatibilidade."
-  );
-}
-
-export function getSnapshotStatusLabel(hasInitialSnapshot: boolean) {
-  return hasInitialSnapshot ? "Snapshot gerado" : "Snapshot pendente";
-}
 
 export function getSnapshotStatusTone(hasInitialSnapshot: boolean) {
   return hasInitialSnapshot ? "success" : "warning";
@@ -177,22 +88,17 @@ export function parseDateToTimestamp(dateInput: string | undefined) {
   return Number.isNaN(timestamp) ? null : timestamp;
 }
 
-export function formatDateLabel(dateInput: string | undefined) {
-  const timestamp = parseDateToTimestamp(dateInput);
-  if (timestamp === null) {
-    return "—";
-  }
-
-  return new Date(timestamp).toLocaleDateString("pt-BR");
-}
-
-function buildSearchIndex(project: DashboardProject, workspaceMode: WorkspaceMode) {
+function buildSearchIndex(
+  project: DashboardProject,
+  workspaceMode: WorkspaceMode,
+  copy: DashboardCopy,
+) {
   return [
     project.name,
     project.slug,
     project.description ?? "",
-    getDiagramTypeLabel(project.selectedDiagramType),
-    getTemplateLabel(project.template, workspaceMode),
+    copy.getDiagramTypeLabel(project.selectedDiagramType),
+    copy.getTemplateLabel(project.template, workspaceMode),
     project.template,
   ]
     .join(" ")
@@ -202,11 +108,12 @@ function buildSearchIndex(project: DashboardProject, workspaceMode: WorkspaceMod
 export function filterAndSortProjects(
   projects: DashboardProject[],
   filters: WorkspaceFilters,
+  copy: DashboardCopy,
 ) {
   const normalizedSearchTerm = filters.searchTerm.trim().toLowerCase();
   const filtered = projects.filter((project) => {
     if (normalizedSearchTerm.length > 0) {
-      const searchableText = buildSearchIndex(project, filters.workspaceMode);
+      const searchableText = buildSearchIndex(project, filters.workspaceMode, copy);
       if (!searchableText.includes(normalizedSearchTerm)) {
         return false;
       }
@@ -248,7 +155,7 @@ export function filterAndSortProjects(
 
   filtered.sort((projectA, projectB) => {
     if (filters.sortOption === "name-asc") {
-      return projectA.name.localeCompare(projectB.name, "pt-BR", {
+      return projectA.name.localeCompare(projectB.name, copy.locale, {
         sensitivity: "base",
       });
     }
@@ -283,7 +190,7 @@ export function filterAndSortProjects(
       }
     }
 
-    return projectA.name.localeCompare(projectB.name, "pt-BR", {
+    return projectA.name.localeCompare(projectB.name, copy.locale, {
       sensitivity: "base",
     });
   });

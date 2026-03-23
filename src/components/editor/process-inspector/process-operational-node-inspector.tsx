@@ -1,4 +1,8 @@
+"use client";
+
+import { useEditorTranslations } from "../use-editor-translations";
 import type { NodeKind } from "@/src/domain";
+import type { EditorTranslationFn } from "../editor-i18n";
 import type { OperationalNodeDraft } from "../editor-inspector-personas";
 import {
   getNodeKindDescriptionForDiagram,
@@ -29,20 +33,23 @@ type InspectorSectionState = {
   relations: boolean;
 };
 
-function resolveRelationOpenLabel(relation: ProcessNodeRelation) {
+function resolveRelationOpenLabel(
+  relation: ProcessNodeRelation,
+  t: EditorTranslationFn,
+) {
   if (relation.direction === "incoming") {
-    return "Abrir anterior";
+    return t("processInspector.node.openPrevious");
   }
 
   if (relation.lane === "branch") {
-    return "Abrir desvio";
+    return t("processInspector.node.openBranch");
   }
 
   if (relation.lane === "note") {
-    return "Abrir observacao";
+    return t("processInspector.node.openNote");
   }
 
-  return "Abrir proximo";
+  return t("processInspector.node.openNext");
 }
 
 export function ProcessOperationalNodeInspector({
@@ -97,6 +104,8 @@ export function ProcessOperationalNodeInspector({
   onApply: () => void;
   onReset: () => void;
 }) {
+  const t = useEditorTranslations() as unknown as EditorTranslationFn;
+
   return (
     <div className="stack-sm inspector-process-stack inspector-process-node">
       <section
@@ -114,16 +123,16 @@ export function ProcessOperationalNodeInspector({
         </div>
         <div className="inspector-process-overview__body">
           <div className="inspector-process-overview__copy">
-            <h4>Leitura do fluxo</h4>
+            <h4>{t("processInspector.node.flowReadingTitle")}</h4>
             <p className="helper inspector-process-overview__summary">{overview.summary}</p>
           </div>
           <dl className="inspector-meta-list inspector-meta-list--process">
             <div>
-              <dt>Posicao no processo</dt>
+              <dt>{t("processInspector.node.positionLabel")}</dt>
               <dd>{overview.positionLabel}</dd>
             </div>
             <div>
-              <dt>Conectividade</dt>
+              <dt>{t("processInspector.node.connectivityLabel")}</dt>
               <dd>{overview.connectivityLabel}</dd>
             </div>
           </dl>
@@ -192,8 +201,7 @@ export function ProcessOperationalNodeInspector({
           <div className="inspector-process-section__header">
             <h4>{copy.generalSectionTitle}</h4>
             <p className="helper">
-              Nomeie o ponto selecionado e ajuste o formato que melhor representa sua
-              funcao no fluxo.
+              {t("processInspector.node.generalHelper")}
             </p>
           </div>
 
@@ -219,13 +227,13 @@ export function ProcessOperationalNodeInspector({
             >
               {nodeKindOptions.map((option) => (
                 <option key={option.kind} value={option.kind}>
-                  {getNodeKindLabelForDiagram("flow", option.kind, "operational")}
-                  {option.outOfProfile ? " (fora do perfil)" : ""}
+                  {getNodeKindLabelForDiagram("flow", option.kind, "operational", t)}
+                  {option.outOfProfile ? t("processInspector.node.outOfProfile") : ""}
                 </option>
               ))}
             </select>
             <span className="helper">
-              {getNodeKindDescriptionForDiagram("flow", draft.kind)}
+              {getNodeKindDescriptionForDiagram("flow", draft.kind, t)}
             </span>
           </div>
         </section>
@@ -239,8 +247,7 @@ export function ProcessOperationalNodeInspector({
           <div className="inspector-process-section__header">
             <h4>{copy.detailsSectionTitle}</h4>
             <p className="helper">
-              Registre leitura operacional, contexto e marcadores sem transformar o fluxo
-              em um formulario apertado.
+              {t("processInspector.node.detailsHelper")}
             </p>
           </div>
 
@@ -299,7 +306,10 @@ export function ProcessOperationalNodeInspector({
           <div className="inspector-process-section__header">
             <h4>{copy.relationsSectionTitle}</h4>
             <p className="helper">
-              {`${relations.incomingCount} entrada(s), ${relations.outgoingCount} saida(s) e leitura imediata do antes/depois.`}
+              {t("processInspector.node.relationsHelper", {
+                incomingCount: relations.incomingCount,
+                outgoingCount: relations.outgoingCount,
+              })}
             </p>
           </div>
           {relations.summaryChips.length > 0 ? (
@@ -336,21 +346,21 @@ export function ProcessOperationalNodeInspector({
                       type="button"
                       onClick={() => onOpenRelatedNode(relation.id, relation.otherNodeId)}
                     >
-                      {resolveRelationOpenLabel(relation)}
+                      {resolveRelationOpenLabel(relation, t)}
                     </button>
                     <button
                       className="btn btn-link"
                       type="button"
                       onClick={() => onOpenTransition(relation.id)}
                     >
-                      Abrir transicao
+                      {t("processInspector.node.openTransition")}
                     </button>
                     <button
                       className="btn btn-link btn-danger"
                       type="button"
                       onClick={() => onRemoveRelation(relation.id)}
                     >
-                      Remover
+                      {t("selectionHud.remove")}
                     </button>
                   </div>
                 </li>
@@ -380,7 +390,7 @@ export function ProcessOperationalNodeInspector({
           disabled={isSaving}
           data-testid="inspector-apply-node"
         >
-          Aplicar alteracoes
+          {t("shell.applyChanges")}
         </button>
         <button
           className="btn"
@@ -388,7 +398,7 @@ export function ProcessOperationalNodeInspector({
           onClick={onReset}
           data-testid="inspector-reset-node"
         >
-          Reverter
+          {t("shell.revert")}
         </button>
       </div>
     </div>

@@ -5,6 +5,7 @@ import {
   resolveGraphEdgeSemantic,
   resolveGraphNodeKindCopy,
 } from "@/src/modules/diagrams/domain/graph-semantics";
+import { translateEditor, type EditorTranslationFn } from "../editor-i18n";
 import {
   getProcessEdgeCopy,
   getProcessNodeKindCopy,
@@ -187,16 +188,54 @@ const OPERATIONAL_NODE_KIND_OPTIONS: NodeKind[] = [
   "note",
 ];
 
-export function getNodeKindPresentation(kind: NodeKind) {
-  return NODE_KIND_PRESENTATION[kind];
+export function getNodeKindPresentation(
+  kind: NodeKind,
+  t?: EditorTranslationFn,
+) {
+  const presentation = NODE_KIND_PRESENTATION[kind];
+
+  return {
+    ...presentation,
+    labelOperational: translateEditor(
+      t,
+      `presentation.nodeKinds.${kind}.labelOperational`,
+      presentation.labelOperational,
+    ),
+    description: translateEditor(
+      t,
+      `presentation.nodeKinds.${kind}.description`,
+      presentation.description,
+    ),
+  };
 }
 
-export function getEdgeKindPresentation(kind: EdgeKind) {
-  return EDGE_KIND_PRESENTATION[kind];
+export function getEdgeKindPresentation(
+  kind: EdgeKind,
+  t?: EditorTranslationFn,
+) {
+  const presentation = EDGE_KIND_PRESENTATION[kind];
+
+  return {
+    ...presentation,
+    labelOperational: translateEditor(
+      t,
+      `presentation.edgeKinds.${kind}.labelOperational`,
+      presentation.labelOperational,
+    ),
+    description: translateEditor(
+      t,
+      `presentation.edgeKinds.${kind}.description`,
+      presentation.description,
+    ),
+  };
 }
 
-export function getNodeKindLabel(kind: NodeKind, mode: PresentationMode) {
-  const presentation = getNodeKindPresentation(kind);
+export function getNodeKindLabel(
+  kind: NodeKind,
+  mode: PresentationMode,
+  t?: EditorTranslationFn,
+) {
+  const presentation = getNodeKindPresentation(kind, t);
   return mode === "technical"
     ? presentation.labelTechnical
     : presentation.labelOperational;
@@ -206,23 +245,28 @@ export function getNodeKindLabelForDiagram(
   diagramType: ContextualDiagramType,
   kind: NodeKind,
   mode: PresentationMode,
+  t?: EditorTranslationFn,
 ) {
   if (diagramType === "flow" && mode === "operational") {
-    const processCopy = getProcessNodeKindCopy(kind);
+    const processCopy = getProcessNodeKindCopy(kind, t);
     if (processCopy) {
       return processCopy.labelOperational;
     }
   }
 
   if (diagramType === "graph" && mode === "operational") {
-    return resolveGraphNodeKindCopy(kind).labelOperational;
+    return resolveGraphNodeKindCopy(kind, t).labelOperational;
   }
 
-  return getNodeKindLabel(kind, mode);
+  return getNodeKindLabel(kind, mode, t);
 }
 
-export function getEdgeKindLabel(kind: EdgeKind, mode: PresentationMode) {
-  const presentation = getEdgeKindPresentation(kind);
+export function getEdgeKindLabel(
+  kind: EdgeKind,
+  mode: PresentationMode,
+  t?: EditorTranslationFn,
+) {
+  const presentation = getEdgeKindPresentation(kind, t);
   return mode === "technical"
     ? presentation.labelTechnical
     : presentation.labelOperational;
@@ -232,57 +276,60 @@ export function getEdgeKindLabelForDiagram(
   diagramType: ContextualDiagramType,
   kind: EdgeKind,
   mode: PresentationMode,
+  t?: EditorTranslationFn,
 ) {
   if (diagramType === "flow" && mode === "operational") {
-    return getProcessEdgeCopy(kind).labelOperational;
+    return getProcessEdgeCopy(kind, t).labelOperational;
   }
 
   if (diagramType === "graph" && mode === "operational") {
-    return resolveGraphEdgeSemantic(kind).labelOperational;
+    return resolveGraphEdgeSemantic(kind, t).labelOperational;
   }
 
-  return getEdgeKindLabel(kind, mode);
+  return getEdgeKindLabel(kind, mode, t);
 }
 
-export function getNodeKindDescription(kind: NodeKind) {
-  return getNodeKindPresentation(kind).description;
+export function getNodeKindDescription(kind: NodeKind, t?: EditorTranslationFn) {
+  return getNodeKindPresentation(kind, t).description;
 }
 
 export function getNodeKindDescriptionForDiagram(
   diagramType: ContextualDiagramType,
   kind: NodeKind,
+  t?: EditorTranslationFn,
 ) {
   if (diagramType === "flow") {
-    const processCopy = getProcessNodeKindCopy(kind);
+    const processCopy = getProcessNodeKindCopy(kind, t);
     if (processCopy) {
       return processCopy.description;
     }
   }
 
   if (diagramType === "graph") {
-    return resolveGraphNodeKindCopy(kind).description;
+    return resolveGraphNodeKindCopy(kind, t).description;
   }
 
-  return getNodeKindDescription(kind);
+  return getNodeKindDescription(kind, t);
 }
 
-export function getEdgeKindDescription(kind: EdgeKind) {
-  return getEdgeKindPresentation(kind).description;
+export function getEdgeKindDescription(kind: EdgeKind, t?: EditorTranslationFn) {
+  return getEdgeKindPresentation(kind, t).description;
 }
 
 export function getEdgeKindDescriptionForDiagram(
   diagramType: ContextualDiagramType,
   kind: EdgeKind,
+  t?: EditorTranslationFn,
 ) {
   if (diagramType === "flow") {
-    return getProcessEdgeCopy(kind).description;
+    return getProcessEdgeCopy(kind, t).description;
   }
 
   if (diagramType === "graph") {
-    return resolveGraphEdgeSemantic(kind).description;
+    return resolveGraphEdgeSemantic(kind, t).description;
   }
 
-  return getEdgeKindDescription(kind);
+  return getEdgeKindDescription(kind, t);
 }
 
 export function getNodeKindOptions(mode: PresentationMode) {
@@ -363,20 +410,29 @@ export function getDefaultEdgeKindForDiagram(
 
 export function getContextualActionsForDiagram(
   diagramType: ContextualDiagramType,
+  t?: EditorTranslationFn,
 ): DiagramContextualAction[] {
   if (diagramType === "tree") {
     return [
       {
         id: "tree-add-child",
         type: "add-connected-node",
-        label: "Adicionar filho",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.treeAddChild",
+          "Adicionar filho",
+        ),
         nodeKind: "page",
         edgeKind: "contains",
       },
       {
         id: "tree-add-sibling",
         type: "add-connected-node",
-        label: "Adicionar irmao",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.treeAddSibling",
+          "Adicionar irmao",
+        ),
         nodeKind: "page",
         edgeKind: "contains",
       },
@@ -384,7 +440,7 @@ export function getContextualActionsForDiagram(
   }
 
   if (diagramType === "flow") {
-    return getProcessQuickActions().map((action) => ({
+    return getProcessQuickActions(t).map((action) => ({
       ...action,
       type: "add-connected-node" as const,
     }));
@@ -395,14 +451,22 @@ export function getContextualActionsForDiagram(
       {
         id: "sitemap-add-page",
         type: "add-connected-node",
-        label: "Adicionar pagina",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.sitemapAddPage",
+          "Adicionar pagina",
+        ),
         nodeKind: "page",
         edgeKind: "contains",
       },
       {
         id: "sitemap-add-subpage",
         type: "add-connected-node",
-        label: "Adicionar subpagina",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.sitemapAddSubpage",
+          "Adicionar subpagina",
+        ),
         nodeKind: "page",
         edgeKind: "contains",
       },
@@ -414,14 +478,22 @@ export function getContextualActionsForDiagram(
       {
         id: "mindmap-add-branch",
         type: "add-connected-node",
-        label: "Adicionar ramificacao",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.mindmapAddBranch",
+          "Adicionar ramificacao",
+        ),
         nodeKind: "note",
         edgeKind: "relates-to",
       },
       {
         id: "mindmap-add-reference",
         type: "add-connected-node",
-        label: "Adicionar referencia",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.mindmapAddReference",
+          "Adicionar referencia",
+        ),
         nodeKind: "note",
         edgeKind: "references",
       },
@@ -433,14 +505,22 @@ export function getContextualActionsForDiagram(
       {
         id: "erd-add-relation",
         type: "add-connected-node",
-        label: "Adicionar relacao",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.erdAddRelation",
+          "Adicionar relacao",
+        ),
         nodeKind: "entity",
         edgeKind: "references",
       },
       {
         id: "erd-add-field",
         type: "add-field",
-        label: "Adicionar campo",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.erdAddField",
+          "Adicionar campo",
+        ),
       },
     ];
   }
@@ -450,26 +530,38 @@ export function getContextualActionsForDiagram(
       {
         id: "graph-add-component",
         type: "add-connected-node",
-        label: "Adicionar componente",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.graphAddComponent",
+          "Adicionar componente",
+        ),
         nodeKind: "entity",
         edgeKind: "relates-to",
-        edgeLabel: resolveGraphActionEdgeVerb("graph-add-component"),
+        edgeLabel: resolveGraphActionEdgeVerb("graph-add-component", t),
       },
       {
         id: "graph-add-dependency",
         type: "add-connected-node",
-        label: "Adicionar dependencia",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.graphAddDependency",
+          "Adicionar dependencia",
+        ),
         nodeKind: "entity",
         edgeKind: "depends-on",
-        edgeLabel: resolveGraphActionEdgeVerb("graph-add-dependency"),
+        edgeLabel: resolveGraphActionEdgeVerb("graph-add-dependency", t),
       },
       {
         id: "graph-add-supporting-service",
         type: "add-connected-node",
-        label: "Adicionar servico auxiliar",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.graphAddSupportingService",
+          "Adicionar servico auxiliar",
+        ),
         nodeKind: "page",
         edgeKind: "references",
-        edgeLabel: resolveGraphActionEdgeVerb("graph-add-supporting-service"),
+        edgeLabel: resolveGraphActionEdgeVerb("graph-add-supporting-service", t),
       },
     ];
   }
@@ -479,18 +571,34 @@ export function getContextualActionsForDiagram(
       {
         id: "timeline-add-milestone",
         type: "add-connected-node",
-        label: "Adicionar marco",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.timelineAddMilestone",
+          "Adicionar marco",
+        ),
         nodeKind: "note",
         edgeKind: "flows-to",
-        edgeLabel: "Proximo",
+        edgeLabel: translateEditor(
+          t,
+          "presentation.contextualActionEdgeLabels.timelineNext",
+          "Proximo",
+        ),
       },
       {
         id: "timeline-add-dependency",
         type: "add-connected-node",
-        label: "Adicionar dependencia temporal",
+        label: translateEditor(
+          t,
+          "presentation.contextualActions.timelineAddDependency",
+          "Adicionar dependencia temporal",
+        ),
         nodeKind: "note",
         edgeKind: "depends-on",
-        edgeLabel: "Dependencia",
+        edgeLabel: translateEditor(
+          t,
+          "presentation.contextualActionEdgeLabels.timelineDependency",
+          "Dependencia",
+        ),
       },
     ];
   }
@@ -499,7 +607,11 @@ export function getContextualActionsForDiagram(
     {
       id: "mindmap-add-branch",
       type: "add-connected-node",
-      label: "Adicionar relacionado",
+      label: translateEditor(
+        t,
+        "presentation.contextualActions.defaultAddRelated",
+        "Adicionar relacionado",
+      ),
       nodeKind: "note",
       edgeKind: "relates-to",
     },
@@ -508,8 +620,9 @@ export function getContextualActionsForDiagram(
 
 export function getContextualAddActionForDiagram(
   diagramType: ContextualDiagramType,
+  t?: EditorTranslationFn,
 ): DiagramContextualAddAction {
-  const firstAddAction = getContextualActionsForDiagram(diagramType).find(
+  const firstAddAction = getContextualActionsForDiagram(diagramType, t).find(
     (action): action is DiagramContextualAction & {
       type: "add-connected-node";
       nodeKind: NodeKind;
@@ -527,7 +640,11 @@ export function getContextualAddActionForDiagram(
   }
 
   return {
-    label: "Adicionar relacionado",
+    label: translateEditor(
+      t,
+      "presentation.contextualActions.defaultAddRelated",
+      "Adicionar relacionado",
+    ),
     nodeKind: getDefaultNodeKindForDiagram(diagramType),
     edgeKind: getDefaultEdgeKindForDiagram(diagramType),
   };
@@ -536,18 +653,22 @@ export function getContextualAddActionForDiagram(
 export function getOperationalDisplayLabel(input: {
   label: string;
   payload: Record<string, unknown>;
-}) {
+}, t?: EditorTranslationFn) {
   const rawLabel = input.label.trim();
 
   if (!rawLabel) {
-    return "Sem titulo";
+    return translateEditor(t, "presentation.fallbacks.untitled", "Sem titulo");
   }
 
   if (
     rawLabel.toLowerCase() === "manual source" &&
     input.payload.sourceMode === "manual"
   ) {
-    return "Fonte manual";
+    return translateEditor(
+      t,
+      "presentation.fallbacks.manualSource",
+      "Fonte manual",
+    );
   }
 
   return input.label;

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLocale } from "next-intl";
 import {
   useCallback,
   useEffect,
@@ -204,6 +205,8 @@ import {
 } from "./versions/diff-summary";
 import { ConnectionAssistant } from "./semantics/connection-assistant";
 import { RepairDialog } from "./semantics/repair-dialog";
+import { translateEditor, type EditorTranslationFn } from "./editor-i18n";
+import { useEditorTranslations } from "./use-editor-translations";
 import {
   hasMinimumSemanticOverrideReason,
   MIN_SEMANTIC_OVERRIDE_REASON_LENGTH,
@@ -457,64 +460,107 @@ function formatErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-function formatVersionCreatedAtLabel(createdAt: string) {
+function formatVersionCreatedAtLabel(createdAt: string, locale: string) {
   const parsed = new Date(createdAt);
 
   if (Number.isNaN(parsed.getTime())) {
     return createdAt;
   }
 
-  return parsed.toLocaleString("pt-BR");
+  return parsed.toLocaleString(locale);
 }
 
-function formatVersionOriginLabel(origin: EditorSnapshotVersionSummary["origin"]) {
+function formatVersionOriginLabel(
+  origin: EditorSnapshotVersionSummary["origin"],
+  t?: EditorTranslationFn,
+) {
   if (origin === "manual") {
-    return "Manual";
+    return t ? t("shell.versions.origin.manual") : "Manual";
   }
 
   return origin;
 }
 
-function buildVersionDiffFeedbackMessage(diff: EditorSnapshotVersionDiff) {
+function buildVersionDiffFeedbackMessage(
+  diff: EditorSnapshotVersionDiff,
+  t?: EditorTranslationFn,
+) {
   if (!diff.hasChanges) {
-    return "Sem alteracoes entre a versao selecionada e o snapshot de trabalho.";
+    return t
+      ? t("shell.versions.diff.noChanges")
+      : "Sem alteracoes entre a versao selecionada e o snapshot de trabalho.";
   }
 
   const parts: string[] = [];
 
   if (diff.nodesAdded.length > 0) {
-    parts.push(`${diff.nodesAdded.length} no(s) adicionados`);
+    parts.push(
+      t
+        ? t("shell.versions.diff.nodesAdded", { count: diff.nodesAdded.length })
+        : `${diff.nodesAdded.length} no(s) adicionados`,
+    );
   }
   if (diff.nodesRemoved.length > 0) {
-    parts.push(`${diff.nodesRemoved.length} no(s) removidos`);
+    parts.push(
+      t
+        ? t("shell.versions.diff.nodesRemoved", { count: diff.nodesRemoved.length })
+        : `${diff.nodesRemoved.length} no(s) removidos`,
+    );
   }
   if (diff.nodesChanged.length > 0) {
-    parts.push(`${diff.nodesChanged.length} no(s) alterados`);
+    parts.push(
+      t
+        ? t("shell.versions.diff.nodesChanged", { count: diff.nodesChanged.length })
+        : `${diff.nodesChanged.length} no(s) alterados`,
+    );
   }
   if (diff.edgesAdded.length > 0) {
-    parts.push(`${diff.edgesAdded.length} aresta(s) adicionadas`);
+    parts.push(
+      t
+        ? t("shell.versions.diff.edgesAdded", { count: diff.edgesAdded.length })
+        : `${diff.edgesAdded.length} aresta(s) adicionadas`,
+    );
   }
   if (diff.edgesRemoved.length > 0) {
-    parts.push(`${diff.edgesRemoved.length} aresta(s) removidas`);
+    parts.push(
+      t
+        ? t("shell.versions.diff.edgesRemoved", { count: diff.edgesRemoved.length })
+        : `${diff.edgesRemoved.length} aresta(s) removidas`,
+    );
   }
   if (diff.edgesChanged.length > 0) {
-    parts.push(`${diff.edgesChanged.length} aresta(s) alteradas`);
+    parts.push(
+      t
+        ? t("shell.versions.diff.edgesChanged", { count: diff.edgesChanged.length })
+        : `${diff.edgesChanged.length} aresta(s) alteradas`,
+    );
   }
   if (diff.viewportChanged) {
-    parts.push("viewport alterado");
+    parts.push(t ? t("shell.versions.diff.viewportChanged") : "viewport alterado");
   }
 
-  return `Resumo: ${parts.join("; ")}.`;
+  return t
+    ? t("shell.versions.diff.summary", { parts: parts.join("; ") })
+    : `Resumo: ${parts.join("; ")}.`;
 }
 
 function buildPrismaSchemaImportFeedbackMessage(
   summary: EditorPrismaSchemaImportSummary | undefined,
+  t?: EditorTranslationFn,
 ) {
   if (!summary) {
-    return "Schema Prisma importado com sucesso para o snapshot de trabalho.";
+    return t
+      ? t("shell.prisma.feedbackSuccess")
+      : "Schema Prisma importado com sucesso para o snapshot de trabalho.";
   }
 
-  return `Schema Prisma importado com sucesso (${summary.modelsCount} modelo(s), ${summary.relationsCount} relacao(oes), ${summary.scalarFieldsCount} campo(s) escalar(es)).`;
+  return t
+    ? t("shell.prisma.feedbackSuccessWithCounts", {
+        modelsCount: summary.modelsCount,
+        relationsCount: summary.relationsCount,
+        scalarFieldsCount: summary.scalarFieldsCount,
+      })
+    : `Schema Prisma importado com sucesso (${summary.modelsCount} modelo(s), ${summary.relationsCount} relacao(oes), ${summary.scalarFieldsCount} campo(s) escalar(es)).`;
 }
 
 function resolveDiagramTypeForQuickActions(
@@ -618,10 +664,11 @@ function buildDefaultNodeTitle(
   kind: NodeKind,
   nextIndex: number,
   diagramType?: ContextualDiagramType,
+  t?: EditorTranslationFn,
 ) {
   const nodeKindLabel = diagramType
-    ? getNodeKindLabelForDiagram(diagramType, kind, "operational")
-    : getNodeKindLabel(kind, "operational");
+    ? getNodeKindLabelForDiagram(diagramType, kind, "operational", t)
+    : getNodeKindLabel(kind, "operational", t);
   return `${nodeKindLabel} ${nextIndex}`;
 }
 
@@ -707,23 +754,28 @@ function toRoleAwareSemanticNodeRef(input: {
 
 function resolveQuickAddRoleOptions(
   diagramType: ContextualDiagramType,
+  t?: EditorTranslationFn,
 ): QuickAddRoleOption[] {
   if (diagramType === "flow") {
-    return getProcessQuickAddRoleOptions();
+    return getProcessQuickAddRoleOptions(t);
   }
 
   if (diagramType === "tree") {
     return [
       {
         role: "hierarchy-root",
-        label: "No raiz",
-        description: "Ponto principal da hierarquia.",
+        label: t ? t("shell.quickAdd.roles.hierarchyRoot.label") : "No raiz",
+        description: t
+          ? t("shell.quickAdd.roles.hierarchyRoot.description")
+          : "Ponto principal da hierarquia.",
         baseKind: "page",
       },
       {
         role: "hierarchy-node",
-        label: "No hierarquico",
-        description: "Nivel da estrutura em arvore.",
+        label: t ? t("shell.quickAdd.roles.hierarchyNode.label") : "No hierarquico",
+        description: t
+          ? t("shell.quickAdd.roles.hierarchyNode.description")
+          : "Nivel da estrutura em arvore.",
         baseKind: "page",
       },
     ];
@@ -733,29 +785,35 @@ function resolveQuickAddRoleOptions(
     return [
       {
         role: "sitemap-home",
-        label: "Home",
-        description: "Pagina inicial de navegacao.",
+        label: t ? t("shell.quickAdd.roles.sitemapHome.label") : "Home",
+        description: t
+          ? t("shell.quickAdd.roles.sitemapHome.description")
+          : "Pagina inicial de navegacao.",
         baseKind: "page",
       },
       {
         role: "sitemap-section",
-        label: "Secao",
-        description: "Secao navegavel do sitemap.",
+        label: t ? t("shell.quickAdd.roles.sitemapSection.label") : "Secao",
+        description: t
+          ? t("shell.quickAdd.roles.sitemapSection.description")
+          : "Secao navegavel do sitemap.",
         baseKind: "page",
       },
     ];
   }
 
   if (diagramType === "graph") {
-    return listGraphQuickAddRoleOptions();
+    return listGraphQuickAddRoleOptions(t);
   }
 
   if (diagramType === "timeline") {
     return [
       {
         role: "timeline-milestone",
-        label: "Marco",
-        description: "Evento em uma sequencia temporal.",
+        label: t ? t("shell.quickAdd.roles.timelineMilestone.label") : "Marco",
+        description: t
+          ? t("shell.quickAdd.roles.timelineMilestone.description")
+          : "Evento em uma sequencia temporal.",
         baseKind: "note",
       },
     ];
@@ -801,8 +859,9 @@ function resolveDefaultRoleForKind(input: {
 
 function buildContextualActionsFromDiagramType(
   diagramType: ContextualDiagramType,
+  t?: EditorTranslationFn,
 ): SelectionHudQuickAction[] {
-  return getContextualActionsForDiagram(diagramType)
+  return getContextualActionsForDiagram(diagramType, t)
     .filter((action): action is DiagramContextualAction & {
       type: "add-connected-node";
       nodeKind: NodeKind;
@@ -819,10 +878,11 @@ function buildContextualActionsFromDiagramType(
 
 function buildQuickActionFromDiagramType(
   diagramType: ContextualDiagramType,
+  t?: EditorTranslationFn,
 ): SelectionHudQuickAction {
-  const action = getContextualAddActionForDiagram(diagramType);
+  const action = getContextualAddActionForDiagram(diagramType, t);
   return {
-    id: getContextualActionsForDiagram(diagramType)[0]?.id ?? "mindmap-add-branch",
+    id: getContextualActionsForDiagram(diagramType, t)[0]?.id ?? "mindmap-add-branch",
     label: action.label,
     nodeKind: action.nodeKind,
     edgeKind: action.edgeKind,
@@ -908,9 +968,9 @@ function resolveErdEdgeClassSuffix(
   return preset.replace(":", "-").toLowerCase();
 }
 
-function getDiagramRoleLabel(role: DiagramRole | undefined) {
+function getDiagramRoleLabel(role: DiagramRole | undefined, t?: EditorTranslationFn) {
   if (!role) {
-    return "Sem papel definido";
+    return t ? t("shell.roles.undefined") : "Sem papel definido";
   }
 
   if (
@@ -920,7 +980,7 @@ function getDiagramRoleLabel(role: DiagramRole | undefined) {
     role === "flow-end" ||
     role === "flow-decision"
   ) {
-    return getProcessRoleMeta(role).kindLabel;
+    return getProcessRoleMeta(role, t).kindLabel;
   }
 
   if (
@@ -931,30 +991,38 @@ function getDiagramRoleLabel(role: DiagramRole | undefined) {
     return resolveGraphNodeSemantic({
       diagramRole: role,
       kind: role === "graph-supporting" ? "page" : "entity",
-    }).roleBadgeLabel;
+    }, t).roleBadgeLabel;
   }
 
   const map: Partial<Record<DiagramRole, string>> = {
-    "meta-workspace": "Workspace",
-    "meta-project": "Projeto",
-    "tree-root": "Raiz",
-    "tree-node": "No de hierarquia",
-    "hierarchy-root": "No raiz",
-    "hierarchy-node": "No hierarquico",
-    "sitemap-home": "Pagina Home",
-    "sitemap-section": "Secao navegavel",
-    "mindmap-root": "Tema central",
-    "mindmap-branch": "Ramificacao",
-    "mindmap-reference": "Referencia",
-    "graph-core": "Nucleo da rede",
-    "graph-topic": "Componente conectado",
-    "graph-supporting": "Apoio arquitetural",
-    "timeline-milestone": "Marco temporal",
-    "erd-entity": "Entidade",
-    "erd-comment": "Comentario ERD",
+    "meta-workspace": translateEditor(t, "shell.roles.metaWorkspace", "Workspace"),
+    "meta-project": translateEditor(t, "shell.roles.metaProject", "Projeto"),
+    "tree-root": translateEditor(t, "shell.roles.treeRoot", "Raiz"),
+    "tree-node": translateEditor(t, "shell.roles.treeNode", "No de hierarquia"),
+    "hierarchy-root": translateEditor(t, "shell.roles.hierarchyRoot", "No raiz"),
+    "hierarchy-node": translateEditor(t, "shell.roles.hierarchyNode", "No hierarquico"),
+    "sitemap-home": translateEditor(t, "shell.roles.sitemapHome", "Pagina Home"),
+    "sitemap-section": translateEditor(t, "shell.roles.sitemapSection", "Secao navegavel"),
+    "mindmap-root": translateEditor(t, "shell.roles.mindmapRoot", "Tema central"),
+    "mindmap-branch": translateEditor(t, "shell.roles.mindmapBranch", "Ramificacao"),
+    "mindmap-reference": translateEditor(t, "shell.roles.mindmapReference", "Referencia"),
+    "graph-core": translateEditor(t, "shell.roles.graphCore", "Nucleo da rede"),
+    "graph-topic": translateEditor(t, "shell.roles.graphTopic", "Componente conectado"),
+    "graph-supporting": translateEditor(
+      t,
+      "shell.roles.graphSupporting",
+      "Apoio arquitetural",
+    ),
+    "timeline-milestone": translateEditor(
+      t,
+      "shell.roles.timelineMilestone",
+      "Marco temporal",
+    ),
+    "erd-entity": translateEditor(t, "shell.roles.erdEntity", "Entidade"),
+    "erd-comment": translateEditor(t, "shell.roles.erdComment", "Comentario ERD"),
   };
 
-  return map[role] ?? "Sem papel definido";
+  return map[role] ?? (t ? t("shell.roles.undefined") : "Sem papel definido");
 }
 
 function buildNodeStructureTips(input: {
@@ -964,7 +1032,7 @@ function buildNodeStructureTips(input: {
   nodeLabel?: string;
   incomingCount: number;
   outgoingCount: number;
-}) {
+}, t?: EditorTranslationFn) {
   const tips: string[] = [];
 
   if (input.diagramType === "graph") {
@@ -973,14 +1041,14 @@ function buildNodeStructureTips(input: {
       kind: input.diagramRole === "graph-supporting" ? "page" : "entity",
       incomingCount: input.incomingCount,
       outgoingCount: input.outgoingCount,
-    }).structureTips;
+    }, t).structureTips;
   } else if (input.diagramType === "flow") {
     const role = resolveProcessNodeRole({
       diagramRole: input.diagramRole,
       kind: input.nodeKind ?? (input.diagramRole === "flow-note" ? "note" : "flow-step"),
       label: input.nodeLabel,
     });
-    const roleMeta = getProcessRoleMeta(role);
+    const roleMeta = getProcessRoleMeta(role, t);
     tips.push(roleMeta.summary);
     if (input.incomingCount + input.outgoingCount === 0) {
       tips.push(roleMeta.guidanceWhenSparse);
@@ -988,21 +1056,40 @@ function buildNodeStructureTips(input: {
       tips.push(roleMeta.guidanceWhenConnected);
     }
     if (role === "flow-decision") {
-      tips.push("Destaque saídas com nomes curtos para deixar a bifurcacao didatica.");
+      tips.push(
+        t
+          ? t("process.guidance.decisionNeedsShortLabels")
+          : "Destaque saídas com nomes curtos para deixar a bifurcacao didatica.",
+      );
     }
   } else if (input.diagramType === "tree" || input.diagramType === "sitemap") {
-    tips.push("Foco em pai, filhos, nivel e ordem.");
     tips.push(
-      `Estrutura atual: ${input.incomingCount} vinculo(s) acima e ${input.outgoingCount} abaixo.`,
+      t ? t("shell.structureTips.treeSitemapFocus") : "Foco em pai, filhos, nivel e ordem.",
+    );
+    tips.push(
+      t
+        ? t("shell.structureTips.treeSitemapCurrent", {
+            incomingCount: input.incomingCount,
+            outgoingCount: input.outgoingCount,
+          })
+        : `Estrutura atual: ${input.incomingCount} vinculo(s) acima e ${input.outgoingCount} abaixo.`,
     );
   } else if (input.diagramType === "erd") {
-    tips.push("Foco em campos, chaves e cardinalidade.");
+    tips.push(t ? t("shell.structureTips.erd") : "Foco em campos, chaves e cardinalidade.");
   } else if (input.diagramType === "mindmap") {
-    tips.push("Foco em ramificacoes e temas relacionados.");
+    tips.push(
+      t ? t("shell.structureTips.mindmap") : "Foco em ramificacoes e temas relacionados.",
+    );
   } else if (input.diagramType === "timeline") {
-    tips.push("Foco em marcos, sequencia e dependencias temporais.");
+    tips.push(
+      t
+        ? t("shell.structureTips.timeline")
+        : "Foco em marcos, sequencia e dependencias temporais.",
+    );
   } else {
-    tips.push("Foco em contexto e conexoes principais.");
+    tips.push(
+      t ? t("shell.structureTips.default") : "Foco em contexto e conexoes principais.",
+    );
   }
 
   return tips;
@@ -1032,7 +1119,7 @@ function resolveEdgeMarker(
   }
 
   if (input?.rendererKey === "graph") {
-    const graphEdgeSemantic = resolveGraphEdgeSemantic(edgeKind);
+      const graphEdgeSemantic = resolveGraphEdgeSemantic(edgeKind);
 
     if (graphEdgeSemantic.markerStyle === "none") {
       return undefined;
@@ -1464,18 +1551,21 @@ function readIssueSuggestedFixes(issue: SemanticIssueLike) {
     );
 }
 
-function getSemanticSeverityLabel(severity: SemanticIssueLike["severity"]) {
+function getSemanticSeverityLabel(
+  severity: SemanticIssueLike["severity"],
+  t?: EditorTranslationFn,
+) {
   if (severity === "error") {
-    return "Erro";
+    return translateEditor(t, "shell.semanticSeverity.error", "Erro");
   }
   if (severity === "warning") {
-    return "Aviso";
+    return translateEditor(t, "shell.semanticSeverity.warning", "Aviso");
   }
   if (severity === "suggestion") {
-    return "Sugestao";
+    return translateEditor(t, "shell.semanticSeverity.suggestion", "Sugestao");
   }
 
-  return "Info";
+  return translateEditor(t, "shell.semanticSeverity.info", "Info");
 }
 
 function getMindmapRootNodeId(
@@ -1709,6 +1799,8 @@ export function EditorShell({
   initialSnapshot,
   initialRevision,
 }: EditorShellProps) {
+  const locale = useLocale();
+  const editorT = useEditorTranslations();
   const initialFlowState = useMemo(
     () => fromCanonicalSnapshotToFlowState(initialSnapshot),
     [initialSnapshot],
@@ -1733,7 +1825,7 @@ export function EditorShell({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<EditorAutosaveState>(
-    createInitialEditorAutosaveState(),
+    createInitialEditorAutosaveState(editorT),
   );
   const [pendingCommands, setPendingCommands] = useState<PendingEditorCommand[]>(
     [],
@@ -2300,13 +2392,13 @@ export function EditorShell({
             : null;
   const selectedSemanticStatusLabel = selectedSemanticSeverity
     ? selectedSemanticSeverity === "error"
-      ? "Semantica: atencao"
+      ? editorT("shell.selection.semanticAttention")
       : selectedSemanticSeverity === "warning"
-        ? "Semantica: aviso"
+        ? editorT("shell.selection.semanticWarning")
         : selectedSemanticSeverity === "suggestion"
-          ? "Semantica: sugestao"
-          : "Semantica: info"
-    : "Semantica: OK";
+          ? editorT("shell.selection.semanticSuggestion")
+          : editorT("shell.selection.semanticInfo")
+    : editorT("shell.selection.semanticOk");
   const collapsedTreeNodeIdSet = useMemo(
     () => new Set(collapsedTreeNodeIds),
     [collapsedTreeNodeIds],
@@ -2484,7 +2576,7 @@ export function EditorShell({
               const hasPk = entityPayload.fields.some((field) => field.flags.includes("PK"));
 
               if (!hasPk) {
-                badges.push({ label: "Sem PK", tone: "warning" });
+                badges.push({ label: editorT("shell.erd.badges.noPk"), tone: "warning" });
               }
 
               const fkPending = entityPayload.fields.some(
@@ -2493,11 +2585,14 @@ export function EditorShell({
                   (!field.references?.entityId || !field.references?.relationEdgeId),
               );
               if (fkPending) {
-                badges.push({ label: "FK pendente", tone: "info" });
+                badges.push({ label: editorT("shell.erd.badges.fkPending"), tone: "info" });
               }
 
               if (erdNnSuggestedNodeIds.has(node.id)) {
-                badges.push({ label: "N:N sugere associativa", tone: "suggestion" });
+                badges.push({
+                  label: editorT("shell.erd.badges.nnSuggestsAssociative"),
+                  tone: "suggestion",
+                });
               }
 
               return badges;
@@ -2516,7 +2611,7 @@ export function EditorShell({
               kind: node.data.kind,
               label: node.data.label,
               payload: node.data.payload,
-            })
+            }, editorT)
           : null;
 
       return {
@@ -2580,7 +2675,7 @@ export function EditorShell({
               ? getOperationalDisplayLabel({
                   label: node.data.label,
                   payload: node.data.payload,
-                })
+                }, editorT)
               : node.data.label,
         },
       };
@@ -2740,7 +2835,7 @@ export function EditorShell({
         label: selectedNodeForInspector.data.label,
         kind: selectedNodeForInspector.data.kind,
         payload: selectedNodeForInspector.data.payload,
-      }),
+      }, editorT),
     );
     setNodeInspectorErrors({});
     setNodeInspectorMessage(null);
@@ -2885,8 +2980,10 @@ export function EditorShell({
     });
   }
 
-  function markDirtyState(message = "Alteracoes pendentes (autosave em fila).") {
-    setSaveState((current) => markEditorDirty(current, message));
+  function markDirtyState(
+    message = editorT("autosave.pendingChangesQueued"),
+  ) {
+    setSaveState((current) => markEditorDirty(current, message, editorT));
   }
 
   function beginSaveRequest() {
@@ -2938,7 +3035,7 @@ export function EditorShell({
     }
 
     return window.confirm(
-      "Existem alteracoes no inspetor ainda nao aplicadas. Deseja descartar?",
+      editorT("shell.inspector.confirmDiscardDraft"),
     );
   }
 
@@ -2986,7 +3083,7 @@ export function EditorShell({
 
       return true;
     } catch (error) {
-      const message = formatErrorMessage(error, "Nao foi possivel aplicar a alteracao.");
+      const message = formatErrorMessage(error, editorT("shell.errors.applyChange"));
       setGlobalErrorMessage(message);
 
       if (command.type === "updateNode") {
@@ -3016,7 +3113,9 @@ export function EditorShell({
     setSaveState((current) =>
       markEditorSaving(
         current,
-        reason === "manual" ? "Salvando manualmente..." : "Salvando alteracoes...",
+        reason === "manual"
+          ? editorT("autosave.savingManually")
+          : editorT("autosave.savingChanges"),
       ),
     );
 
@@ -3069,7 +3168,7 @@ export function EditorShell({
 
       setGlobalErrorMessage(null);
       if (pendingCommandsRef.current.length === 0) {
-        setSaveState((current) => markEditorSaveSuccess(current));
+        setSaveState((current) => markEditorSaveSuccess(current, Date.now(), editorT));
       } else {
         markDirtyState();
         autosaveDebouncerRef.current.trigger();
@@ -3090,7 +3189,7 @@ export function EditorShell({
 
       const message = formatErrorMessage(
         error,
-        "Erro ao salvar alteracoes do editor.",
+        editorT("shell.errors.saveChanges"),
       );
       setSaveState((current) => markEditorSaveError(current, message));
       setGlobalErrorMessage(message);
@@ -3121,7 +3220,9 @@ export function EditorShell({
     const snapshotLocalVersion = localMutationVersionRef.current;
     const snapshotToSave = getCurrentSnapshot();
     const requestId = beginSaveRequest();
-    setSaveState((current) => markEditorSaving(current, "Salvando manualmente..."));
+    setSaveState((current) =>
+      markEditorSaving(current, editorT("autosave.savingManually")),
+    );
     setGlobalErrorMessage(null);
 
     try {
@@ -3144,7 +3245,7 @@ export function EditorShell({
       setGlobalErrorMessage(null);
 
       if (pendingCommandsRef.current.length === 0) {
-        setSaveState((current) => markEditorSaveSuccess(current));
+        setSaveState((current) => markEditorSaveSuccess(current, Date.now(), editorT));
       } else {
         markDirtyState();
         autosaveDebouncerRef.current.trigger();
@@ -3156,7 +3257,7 @@ export function EditorShell({
         return false;
       }
 
-      const message = formatErrorMessage(error, "Falha ao salvar o snapshot.");
+      const message = formatErrorMessage(error, editorT("shell.errors.saveSnapshot"));
       setSaveState((current) => markEditorSaveError(current, message));
       setGlobalErrorMessage(message);
       return false;
@@ -3179,8 +3280,8 @@ export function EditorShell({
         const saved = await handleManualSave();
 
         if (!saved) {
-          throw new Error(
-            "Nao foi possivel salvar o snapshot de trabalho antes de criar a versao.",
+            throw new Error(
+            editorT("shell.versions.errors.saveBeforeCreate"),
           );
         }
       }
@@ -3221,7 +3322,7 @@ export function EditorShell({
     } catch (error) {
       setVersionCreateFeedback({
         kind: "error",
-        message: formatErrorMessage(error, "Falha ao criar versao."),
+        message: formatErrorMessage(error, editorT("shell.versions.errors.create")),
       });
     } finally {
       setIsCreatingVersion(false);
@@ -3241,12 +3342,12 @@ export function EditorShell({
       setSnapshotVersions(versions);
       setVersionActionFeedback({
         kind: "success",
-        message: `Versoes atualizadas (${versions.length}).`,
+        message: editorT("shell.versions.refreshSuccess", { count: versions.length }),
       });
     } catch (error) {
       setVersionActionFeedback({
         kind: "error",
-        message: formatErrorMessage(error, "Falha ao atualizar versoes."),
+        message: formatErrorMessage(error, editorT("shell.versions.errors.refresh")),
       });
     } finally {
       setIsRefreshingVersionList(false);
@@ -3278,8 +3379,8 @@ export function EditorShell({
     setVersionActionFeedback({
       kind: "success",
       message: normalizedName
-        ? "Nome da versao salvo localmente neste navegador."
-        : "Nome local da versao removido.",
+        ? editorT("shell.versions.localNameSaved")
+        : editorT("shell.versions.localNameRemoved"),
     });
   }
 
@@ -3287,7 +3388,7 @@ export function EditorShell({
     return (
       localVersionNames[version.id] ||
       version.label?.trim() ||
-      "Versao sem nome"
+      editorT("shell.versions.unnamed")
     );
   }
 
@@ -3313,19 +3414,20 @@ export function EditorShell({
         baseSnapshot: snapshotVersion.snapshot,
         targetSnapshot: getCurrentSnapshot(),
         diff,
+        t: editorT,
       });
 
       setVersionDiffSummary(executiveSummary);
       setVersionDiffFeedback({
         kind: "info",
-        message: buildVersionDiffFeedbackMessage(diff),
+        message: buildVersionDiffFeedbackMessage(diff, editorT),
       });
       setVersionActionFeedback(null);
     } catch (error) {
       setVersionDiffSummary(null);
       setVersionDiffFeedback({
         kind: "error",
-        message: formatErrorMessage(error, "Falha ao comparar versao."),
+        message: formatErrorMessage(error, editorT("shell.versions.errors.compare")),
       });
     } finally {
       setActiveVersionCompareId(null);
@@ -3344,8 +3446,8 @@ export function EditorShell({
     const hasLocalPendingChanges =
       pendingCommandsRef.current.length > 0 || saveState.isDirty;
     const confirmMessage = hasLocalPendingChanges
-      ? "Restaurar esta versao vai descartar alteracoes locais pendentes no editor. Deseja continuar?"
-      : "Deseja restaurar esta versao para o snapshot de trabalho atual?";
+      ? editorT("shell.versions.confirmRestoreDiscard")
+      : editorT("shell.versions.confirmRestore");
 
     if (!window.confirm(confirmMessage)) {
       return;
@@ -3372,11 +3474,11 @@ export function EditorShell({
       setSaveState({
         status: "saved",
         isDirty: false,
-        message: "Versao restaurada no snapshot de trabalho.",
+        message: editorT("shell.versions.restoreSaved"),
         lastSavedAt: Date.now(),
       });
       setGlobalErrorMessage(null);
-      setQuerySyncMessage("Snapshot sincronizado apos restore.");
+      setQuerySyncMessage(editorT("shell.versions.restoreSynced"));
       setVersionActionFeedback({
         kind: "success",
         message: result.message,
@@ -3384,7 +3486,7 @@ export function EditorShell({
     } catch (error) {
       setVersionActionFeedback({
         kind: "error",
-        message: formatErrorMessage(error, "Falha ao restaurar versao."),
+        message: formatErrorMessage(error, editorT("shell.versions.errors.restore")),
       });
     } finally {
       setActiveVersionRestoreId(null);
@@ -3405,7 +3507,7 @@ export function EditorShell({
     if (!schemaText) {
       setPrismaSchemaImportFeedback({
         kind: "error",
-        message: "Cole um schema Prisma (.prisma) antes de importar.",
+        message: editorT("shell.prisma.errors.emptySchema"),
       });
       return;
     }
@@ -3413,8 +3515,8 @@ export function EditorShell({
     const hasLocalPendingChanges =
       pendingCommandsRef.current.length > 0 || saveState.isDirty;
     const confirmMessage = hasLocalPendingChanges
-      ? "Importar um schema Prisma vai sobrescrever o snapshot de trabalho atual e descartar alteracoes locais pendentes. Deseja continuar?"
-      : "Deseja importar este schema Prisma para o snapshot de trabalho atual?";
+      ? editorT("shell.prisma.confirmImportDiscard")
+      : editorT("shell.prisma.confirmImport");
 
     if (!window.confirm(confirmMessage)) {
       return;
@@ -3441,21 +3543,21 @@ export function EditorShell({
       setSaveState({
         status: "saved",
         isDirty: false,
-        message: "Schema Prisma importado e salvo no snapshot de trabalho.",
+        message: editorT("shell.prisma.saved"),
         lastSavedAt: Date.now(),
       });
       setVersionDiffFeedback(null);
       setVersionDiffSummary(null);
       setGlobalErrorMessage(null);
-      setQuerySyncMessage("Snapshot importado de schema Prisma.");
+      setQuerySyncMessage(editorT("shell.prisma.synced"));
       setPrismaSchemaImportFeedback({
         kind: "success",
-        message: buildPrismaSchemaImportFeedbackMessage(result.importSummary),
+        message: buildPrismaSchemaImportFeedbackMessage(result.importSummary, editorT),
       });
     } catch (error) {
       setPrismaSchemaImportFeedback({
         kind: "error",
-        message: formatErrorMessage(error, "Falha ao importar schema Prisma."),
+        message: formatErrorMessage(error, editorT("shell.prisma.errors.import")),
       });
     } finally {
       setIsImportingPrismaSchema(false);
@@ -3485,7 +3587,7 @@ export function EditorShell({
           ) {
             setCurrentRevision(result.revision);
             setQuerySyncMessage(
-              "Sincronizacao inicial ignorada porque ja existem alteracoes locais.",
+              editorT("shell.sync.initialIgnored"),
             );
             return;
           }
@@ -3494,8 +3596,8 @@ export function EditorShell({
           setPendingCommandsState([]);
           localMutationVersionRef.current = 0;
           setCurrentRevision(result.revision);
-          setSaveState(createInitialEditorAutosaveState());
-          setQuerySyncMessage("Snapshot sincronizado com o backend.");
+          setSaveState(createInitialEditorAutosaveState(editorT));
+          setQuerySyncMessage(editorT("shell.sync.snapshotSynced"));
           setGlobalErrorMessage(null);
         }
       } catch (error) {
@@ -3504,7 +3606,7 @@ export function EditorShell({
         setQuerySyncMessage(
           formatErrorMessage(
             error,
-            "Nao foi possivel sincronizar o snapshot pelo endpoint do editor.",
+            editorT("shell.sync.errors.snapshot"),
           ),
         );
       } finally {
@@ -3541,7 +3643,7 @@ export function EditorShell({
 
         setVersionActionFeedback({
           kind: "error",
-          message: formatErrorMessage(error, "Falha ao carregar versoes."),
+          message: formatErrorMessage(error, editorT("shell.versions.errors.load")),
         });
       } finally {
         if (active) {
@@ -3610,23 +3712,23 @@ export function EditorShell({
   const saveStatusLabel = useMemo(() => {
     switch (saveState.status) {
       case "dirty":
-        return "Alteracoes pendentes";
+        return editorT("autosave.pendingChanges");
       case "saving":
-        return "Salvando...";
+        return editorT("autosave.saving");
       case "saved":
-        return "Salvo";
+        return editorT("autosave.saved");
       case "error":
-        return "Erro ao salvar";
+        return editorT("shell.saveStatus.error");
     }
-  }, [saveState.status]);
+  }, [editorT, saveState.status]);
 
   const saveStatusClassName = `badge editor-save-badge editor-save-badge-${saveState.status}`;
   const lastSavedAtLabel = saveState.lastSavedAt
-    ? new Date(saveState.lastSavedAt).toLocaleTimeString("pt-BR")
+    ? new Date(saveState.lastSavedAt).toLocaleTimeString(locale)
     : null;
   const layoutPolicyLabel = isReapplyLayoutBlockedByPolicy
-    ? "Layout bloqueado"
-    : "Reaplicacao permitida";
+    ? editorT("shell.layoutPolicy.blocked")
+    : editorT("shell.layoutPolicy.allowed");
   const nodeInspectorDirty =
     inspectorMode === "operational"
       ? selectedNode !== null && operationalNodeDraft !== null
@@ -3703,8 +3805,8 @@ export function EditorShell({
     quickAddKindOptions,
   ]);
   const quickAddRoleOptions = useMemo(
-    () => resolveQuickAddRoleOptions(currentSupportedDiagramType),
-    [currentSupportedDiagramType],
+    () => resolveQuickAddRoleOptions(currentSupportedDiagramType, editorT),
+    [currentSupportedDiagramType, editorT],
   );
   const edgeKindOptions = EdgeKindSchema.options;
   const nodeLabelById = useMemo(
@@ -3716,11 +3818,11 @@ export function EditorShell({
             ? getOperationalDisplayLabel({
                 label: node.data.label,
                 payload: node.data.payload,
-              })
+              }, editorT)
             : node.data.label,
         ]),
       ),
-    [inspectorMode, nodes],
+    [editorT, inspectorMode, nodes],
   );
   const nodeRoleById = useMemo(
     () =>
@@ -3777,11 +3879,14 @@ export function EditorShell({
         preview: processSelectedNodeRelations.preview.map((relation) => ({
           ...relation,
           directionLabel:
-            relation.direction === "incoming" ? "Entrada" : "Saida",
+            relation.direction === "incoming"
+              ? editorT("shell.relations.incoming")
+              : editorT("shell.relations.outgoing"),
           relationTypeLabel: getEdgeKindLabelForDiagram(
             currentSupportedDiagramType,
             relation.edgeKind,
             inspectorMode === "technical" ? "technical" : "operational",
+            editorT,
           ),
         })),
       };
@@ -3797,15 +3902,16 @@ export function EditorShell({
       directionLabel:
         currentSupportedDiagramType === "graph"
           ? edge.target === selectedNode.id
-            ? "Recebe"
-            : "Aponta para"
+            ? editorT("shell.relations.graphIncoming")
+            : editorT("shell.relations.graphOutgoing")
           : edge.target === selectedNode.id
-            ? "Entrada"
-            : "Saida",
+            ? editorT("shell.relations.incoming")
+            : editorT("shell.relations.outgoing"),
       relationTypeLabel: getEdgeKindLabelForDiagram(
         currentSupportedDiagramType,
         edge.data?.kind ?? "relates-to",
         inspectorMode === "technical" ? "technical" : "operational",
+        editorT,
       ),
       relationLabel: edge.label ? String(edge.label) : undefined,
       edgeKind: edge.data?.kind ?? "relates-to",
@@ -3813,7 +3919,7 @@ export function EditorShell({
       otherLabel:
         nodeLabelById.get(
           edge.target === selectedNode.id ? edge.source : edge.target,
-        ) ?? "No sem titulo",
+        ) ?? editorT("presentation.fallbacks.untitledNode"),
       sourceLabel: nodeLabelById.get(edge.source) ?? edge.source,
       targetLabel: nodeLabelById.get(edge.target) ?? edge.target,
       }));
@@ -3827,6 +3933,7 @@ export function EditorShell({
   }, [
     currentSupportedDiagramType,
     edges,
+    editorT,
     inspectorMode,
     nodeLabelById,
     nodeRoleById,
@@ -3834,7 +3941,7 @@ export function EditorShell({
     selectedNode,
   ]);
   const selectedNodeRoleLabel = selectedNode
-    ? getDiagramRoleLabel(nodeRoleById.get(selectedNode.id))
+    ? getDiagramRoleLabel(nodeRoleById.get(selectedNode.id), editorT)
     : null;
   const selectedNodeStructureTips = useMemo(() => {
     if (!selectedNode) {
@@ -3848,9 +3955,10 @@ export function EditorShell({
       nodeLabel: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
       incomingCount: selectedNodeRelations.incomingCount,
       outgoingCount: selectedNodeRelations.outgoingCount,
-    });
+    }, editorT);
   }, [
     currentSupportedDiagramType,
+    editorT,
     selectedNode,
     selectedNodeRelations.incomingCount,
     selectedNodeRelations.outgoingCount,
@@ -3862,8 +3970,8 @@ export function EditorShell({
     ? nodeLabelById.get(selectedEdge.target) ?? selectedEdge.target
     : null;
   const quickFindOptions = useMemo(
-    () => filterNodeQuickFindOptions(nodes, quickFindQuery, inspectorMode),
-    [inspectorMode, nodes, quickFindQuery],
+    () => filterNodeQuickFindOptions(nodes, quickFindQuery, inspectorMode, editorT),
+    [editorT, inspectorMode, nodes, quickFindQuery],
   );
   const selectedItemLabel = selectedNode
     ? nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label
@@ -3873,22 +3981,22 @@ export function EditorShell({
         : `${selectedEdgeSourceLabel ?? selectedEdge.source} -> ${
             selectedEdgeTargetLabel ?? selectedEdge.target
           }`
-      : "Nenhum item selecionado";
+      : editorT("shell.selection.none");
   const inspectorSelectionState = resolveInspectorSelectionState({
     hasSelectedNode: Boolean(selectedNode),
     hasSelectedEdge: Boolean(selectedEdge),
   });
   const isProcessDiagram = currentSupportedDiagramType === "flow";
   const isGraphDiagram = currentSupportedDiagramType === "graph";
-  const processInspectorCopy = isProcessDiagram ? getProcessInspectorCopy() : null;
+  const processInspectorCopy = isProcessDiagram ? getProcessInspectorCopy(editorT) : null;
   const processNodeInspectorModel =
     isProcessDiagram && selectedNode && processSelectedNodeRelations
-      ? resolveProcessNodeInspectorViewModel({
+        ? resolveProcessNodeInspectorViewModel({
           diagramRole: nodeRoleById.get(selectedNode.id),
           kind: selectedNode.data.kind,
           label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
           relations: processSelectedNodeRelations,
-        })
+        }, editorT)
       : null;
   const flowSelectionKindLabel =
     processNodeInspectorModel?.selectionKindLabel ??
@@ -3899,7 +4007,7 @@ export function EditorShell({
             kind: selectedNode.data.kind,
             label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
           });
-          const roleMeta = getProcessRoleMeta(role);
+          const roleMeta = getProcessRoleMeta(role, editorT);
 
           return role === "flow-step" ? roleMeta.kindLabel : roleMeta.badgeLabel;
         })()
@@ -3914,6 +4022,7 @@ export function EditorShell({
             currentSupportedDiagramType,
             selectedEdge.data?.kind ?? "flows-to",
             "operational",
+            editorT,
           )}${
             inspectorMode === "technical"
               ? ` (kind: ${selectedEdge.data?.kind ?? "flows-to"})`
@@ -3926,12 +4035,12 @@ export function EditorShell({
     selectedEdge &&
     selectedEdgeSourceLabel &&
     selectedEdgeTargetLabel
-      ? resolveProcessEdgeInspectorViewModel({
+        ? resolveProcessEdgeInspectorViewModel({
           kind: selectedEdge.data?.kind ?? "flows-to",
           label: selectedEdge.label ? String(selectedEdge.label) : undefined,
           sourceLabel: selectedEdgeSourceLabel,
           targetLabel: selectedEdgeTargetLabel,
-        })
+        }, editorT)
       : null;
   const graphSelectedNodeSemantic =
     isGraphDiagram && selectedNode
@@ -3942,50 +4051,68 @@ export function EditorShell({
           payload: selectedNode.data.payload,
           incomingCount: selectedNodeRelations.incomingCount,
           outgoingCount: selectedNodeRelations.outgoingCount,
-        })
+        }, editorT)
       : null;
   const graphSelectedEdgeSemantic =
     isGraphDiagram && selectedEdge
-      ? resolveGraphEdgeSemantic(selectedEdge.data?.kind ?? "flows-to")
+      ? resolveGraphEdgeSemantic(selectedEdge.data?.kind ?? "flows-to", editorT)
     : null;
   const inspectorSelectionBadge =
     graphSelectedNodeSemantic
       ? graphSelectedNodeSemantic.selectionBadgeLabel
       : isProcessDiagram
         ? selectedEdge
-          ? "Transicao em foco"
+          ? editorT("shell.selection.transitionInFocus")
           : processInspectorCopy?.selectionBadgeLabel ?? inspectorSelectionState.badgeLabel
         : inspectorSelectionState.badgeLabel;
-  const operationalNodeTitleLabel = isGraphDiagram ? "Nome do componente" : "Titulo";
-  const operationalNodeKindLabel = isGraphDiagram ? "Tipo estrutural" : "Tipo";
-  const operationalNodeDescriptionLabel = isGraphDiagram ? "Responsabilidade" : "Descricao";
+  const operationalNodeTitleLabel = isGraphDiagram
+    ? editorT("shell.nodeFields.graphTitle")
+    : editorT("shell.nodeFields.title");
+  const operationalNodeKindLabel = isGraphDiagram
+    ? editorT("shell.nodeFields.graphKind")
+    : editorT("shell.nodeFields.kind");
+  const operationalNodeDescriptionLabel = isGraphDiagram
+    ? editorT("shell.nodeFields.graphDescription")
+    : editorT("shell.nodeFields.description");
   const operationalNodeDescriptionPlaceholder = isGraphDiagram
-    ? "Descreva o papel deste item na rede, o que ele concentra e por que existe."
-    : "Opcional. Salvo em payload.description.";
-  const operationalNodeTagsLabel = isGraphDiagram ? "Contextos" : "Tags";
+    ? editorT("shell.nodeFields.graphDescriptionPlaceholder")
+    : editorT("shell.nodeFields.descriptionPlaceholder");
+  const operationalNodeTagsLabel = isGraphDiagram
+    ? editorT("shell.nodeFields.graphTags")
+    : editorT("shell.nodeFields.tags");
   const operationalNodeTagsPlaceholder = isGraphDiagram
-    ? "Ex.: autenticacao, fila, observabilidade"
-    : "Ex.: onboarding, urgencia, aprovacao";
+    ? editorT("shell.nodeFields.graphTagsPlaceholder")
+    : editorT("shell.nodeFields.tagsPlaceholder");
   const operationalNodeTagsHelper = isGraphDiagram
-    ? "Use tags para dominios, capacidades transversais ou fronteiras da arquitetura."
-    : "Separadas por virgula. Salvas em payload.tags como lista.";
+    ? editorT("shell.nodeFields.graphTagsHelper")
+    : editorT("shell.nodeFields.tagsHelper");
   const operationalNodeContextTitle = isGraphDiagram
-    ? "Papel na rede"
-    : "Contexto da estrutura";
-  const operationalGeneralSectionTitle = isGraphDiagram ? "Edicao principal" : "Geral";
+    ? editorT("shell.nodeFields.graphContextTitle")
+    : editorT("shell.nodeFields.contextTitle");
+  const operationalGeneralSectionTitle = isGraphDiagram
+    ? editorT("shell.sections.graphGeneral")
+    : editorT("shell.sections.general");
   const operationalDetailsSectionTitle = isGraphDiagram
-    ? "Responsabilidade e contexto"
-    : "Detalhes";
+    ? editorT("shell.sections.graphDetails")
+    : editorT("shell.sections.details");
   const operationalRelationsSectionTitle = isGraphDiagram
-    ? "Conexoes na rede"
-    : "Relacoes";
-  const operationalEdgeLabelLabel = isGraphDiagram ? "Rotulo da conexao" : "Rotulo";
+    ? editorT("shell.sections.graphRelations")
+    : editorT("shell.sections.relations");
+  const operationalEdgeLabelLabel = isGraphDiagram
+    ? editorT("shell.edgeFields.graphLabel")
+    : editorT("shell.edgeFields.label");
   const operationalEdgeGeneralSectionTitle = isGraphDiagram
-    ? "Edicao da conexao"
-    : "Geral";
-  const operationalEdgeKindLabel = isGraphDiagram ? "Tipo de conexao" : "Relacao";
-  const operationalEdgeSourceLabel = isGraphDiagram ? "Sai de" : "Origem";
-  const operationalEdgeTargetLabel = isGraphDiagram ? "Chega em" : "Destino";
+    ? editorT("shell.sections.graphEdgeGeneral")
+    : editorT("shell.sections.general");
+  const operationalEdgeKindLabel = isGraphDiagram
+    ? editorT("shell.edgeFields.graphKind")
+    : editorT("shell.edgeFields.kind");
+  const operationalEdgeSourceLabel = isGraphDiagram
+    ? editorT("shell.edgeFields.graphSource")
+    : editorT("shell.edgeFields.source");
+  const operationalEdgeTargetLabel = isGraphDiagram
+    ? editorT("shell.edgeFields.graphTarget")
+    : editorT("shell.edgeFields.target");
   const graphSelectedNodeKindLabel =
     graphSelectedNodeSemantic
       ? graphSelectedNodeSemantic.kindLabel
@@ -4000,19 +4127,22 @@ export function EditorShell({
   const shouldShowPrismaPanel = !isCanvasFocusMode;
   const shouldShowVersionsPanel = !isCanvasFocusMode;
   const contextualActionDefinitions = useMemo(
-    () => getContextualActionsForDiagram(currentSupportedDiagramType),
-    [currentSupportedDiagramType],
+    () => getContextualActionsForDiagram(currentSupportedDiagramType, editorT),
+    [currentSupportedDiagramType, editorT],
   );
   const contextualActions = useMemo(
-    () => buildContextualActionsFromDiagramType(currentSupportedDiagramType),
-    [currentSupportedDiagramType],
+    () => buildContextualActionsFromDiagramType(currentSupportedDiagramType, editorT),
+    [currentSupportedDiagramType, editorT],
   );
   const quickAction = useMemo(() => {
     if (contextualActions[0]) {
       return contextualActions[0];
     }
 
-    const fallbackAction = buildQuickActionFromDiagramType(currentSupportedDiagramType);
+    const fallbackAction = buildQuickActionFromDiagramType(
+      currentSupportedDiagramType,
+      editorT,
+    );
     return {
       ...fallbackAction,
       label: editorPersona.labels.addPrimary,
@@ -4022,6 +4152,7 @@ export function EditorShell({
   }, [
     contextualActions,
     currentSupportedDiagramType,
+    editorT,
     editorPersona.labels.addPrimary,
     editorPersona.quickAdd.defaultEdgeKind,
     personaDefaultNodeKind,
@@ -4031,6 +4162,7 @@ export function EditorShell({
         currentSupportedDiagramType,
         quickAction.edgeKind,
         "operational",
+        editorT,
       )
     : null;
   const inlineRenameNode = useMemo(
@@ -4052,65 +4184,67 @@ export function EditorShell({
     [contextualActionDefinitions],
   );
   const selectionNodeKindPresentation = selectedNode
-    ? getNodeKindPresentation(selectedNode.data.kind)
+    ? getNodeKindPresentation(selectedNode.data.kind, editorT)
     : null;
   const flowSelectionDismissKey = `${selectedNodeId ?? ""}:${selectedEdgeId ?? ""}:${inspectorMode}:${isCanvasFocusMode}`;
   const isSelectedTreeSubtreeCollapsed = selectedNode
     ? collapsedTreeNodeIdSet.has(selectedNode.id)
     : false;
   const inspectorToggleLabel = isInspectorVisible
-    ? "Ocultar inspetor"
-    : "Mostrar inspetor";
+    ? editorT("shell.inspector.hide")
+    : editorT("shell.inspector.show");
   const inspectorSubtitle = useMemo(() => {
     if (!selectedNode && !selectedEdge) {
-      return "Selecione um item no canvas para editar com contexto.";
+      return editorT("shell.inspector.subtitle.noneSelected");
     }
 
     if (selectedEdge) {
       if (currentSupportedDiagramType === "graph") {
-        return "Edite dependencias, integracoes e conexoes de apoio entre componentes.";
+        return editorT("shell.inspector.subtitle.graphEdge");
       }
 
       if (currentSupportedDiagramType === "flow") {
-        return processInspectorCopy?.edgeSubtitle ?? "Leia a transicao selecionada antes de editar.";
+        return processInspectorCopy?.edgeSubtitle ?? editorT("shell.inspector.subtitle.flowEdge");
       }
 
-      return "Ajuste tipo, direcao e metadados da conexao selecionada.";
+      return editorT("shell.inspector.subtitle.defaultEdge");
     }
 
     if (currentSupportedDiagramType === "graph") {
-      return "Edite papel, conexoes e vizinhanca do no dentro da rede.";
+      return editorT("shell.inspector.subtitle.graphNode");
     }
 
     if (currentSupportedDiagramType === "flow") {
-      return processInspectorCopy?.nodeSubtitle ?? "Entenda este ponto no fluxo antes de editar.";
+      return processInspectorCopy?.nodeSubtitle ?? editorT("shell.inspector.subtitle.flowNode");
     }
 
     if (currentSupportedDiagramType === "sitemap") {
-      return "Edite navegacao, hierarquia e secoes do sitemap.";
+      return editorT("shell.inspector.subtitle.sitemap");
     }
 
     if (currentSupportedDiagramType === "tree") {
-      return "Edite pai, filhos e profundidade da hierarquia.";
+      return editorT("shell.inspector.subtitle.tree");
     }
 
     if (currentSupportedDiagramType === "erd") {
-      return "Edite campos, chaves e relacionamentos do modelo.";
+      return editorT("shell.inspector.subtitle.erd");
     }
 
     if (currentSupportedDiagramType === "timeline") {
-      return "Edite marcos, sequencia e dependencias temporais.";
+      return editorT("shell.inspector.subtitle.timeline");
     }
 
     if (currentSupportedDiagramType === "mindmap") {
-      return "Edite tema central e ramificacoes associadas.";
+      return editorT("shell.inspector.subtitle.mindmap");
     }
 
-    return "Ajuste o item selecionado e aplique as alteracoes quando concluir.";
-  }, [currentSupportedDiagramType, selectedEdge, selectedNode]);
+    return editorT("shell.inspector.subtitle.defaultNode");
+  }, [currentSupportedDiagramType, editorT, processInspectorCopy, selectedEdge, selectedNode]);
   const diagramDefinitionLabel = layoutMetadata.diagramType
-    ? `Diagrama atual: ${getDiagramTypeLabel(layoutMetadata.diagramType)}`
-    : "Diagrama: Definir durante a criacao";
+    ? editorT("shell.diagram.current", {
+        label: getDiagramTypeLabel(layoutMetadata.diagramType),
+      })
+    : editorT("shell.diagram.pending");
   const hasDiagramRendererMismatch =
     isSupportedDiagramType(layoutMetadata.diagramType) &&
     renderer.key !== layoutMetadata.diagramType;
@@ -4357,7 +4491,11 @@ export function EditorShell({
     });
 
     if (removed) {
-      setQuerySyncMessage(isProcessDiagram ? "Transicao removida." : "Relacao removida.");
+      setQuerySyncMessage(
+        isProcessDiagram
+          ? editorT("shell.messages.transitionRemoved")
+          : editorT("shell.messages.relationRemoved"),
+      );
     }
   }
 
@@ -4467,7 +4605,7 @@ export function EditorShell({
     const targetNode = nodesRef.current.find((node) => node.id === input.targetNodeId);
 
     if (!sourceNode || !targetNode) {
-      setGlobalErrorMessage("Nao foi possivel conectar: no de origem/destino nao encontrado.");
+      setGlobalErrorMessage(editorT("shell.errors.connectionNodesNotFound"));
       return false;
     }
 
@@ -4532,7 +4670,7 @@ export function EditorShell({
           error.payload?.overrideAllowed
         ) {
           openTechnicalOverrideDialog({
-            title: "Override tecnico",
+            title: editorT("shell.semanticOverride.ariaLabel"),
             message: error.message,
             requireReason: error.payload.requireOverrideReason ?? true,
             onConfirm: async (reason) => {
@@ -4562,8 +4700,8 @@ export function EditorShell({
         formatErrorMessage(
           error,
           isProcessDiagram
-            ? "Falha ao criar a transicao no servidor."
-            : "Falha ao criar relacao no servidor.",
+            ? editorT("shell.errors.createTransitionOnServer")
+            : editorT("shell.errors.createRelationOnServer"),
         ),
       );
       return false;
@@ -4582,7 +4720,7 @@ export function EditorShell({
     const targetNode = nodesRef.current.find((node) => node.id === input.targetNodeId);
 
     if (!sourceNode || !targetNode) {
-      setGlobalErrorMessage("Nao foi possivel conectar: no de origem/destino nao encontrado.");
+      setGlobalErrorMessage(editorT("shell.errors.connectionNodesNotFound"));
       return false;
     }
 
@@ -4618,7 +4756,7 @@ export function EditorShell({
           recommendedEdgeKind: validation.recommendedEdgeKind,
           message:
             validation.violation?.message ??
-            "Esta conexao nao respeita as regras semanticas do diagrama.",
+            editorT("shell.connection.invalidRules"),
           details: validation.violation?.details,
         });
         return false;
@@ -4627,7 +4765,7 @@ export function EditorShell({
       if (validation.allowedEdgeKinds.length === 0) {
         setGlobalErrorMessage(
           validation.violation?.message ??
-            "Conexao invalida para o tipo atual de diagrama.",
+            editorT("shell.errors.invalidConnectionForDiagram"),
         );
         return false;
       }
@@ -4635,8 +4773,12 @@ export function EditorShell({
       nextEdgeKind = validation.recommendedEdgeKind ?? validation.allowedEdgeKinds[0];
       setQuerySyncMessage(
         isProcessDiagram
-          ? `Transicao ajustada automaticamente para '${getEdgeKindLabel(nextEdgeKind, "operational")}'.`
-          : `Relacao ajustada automaticamente para '${getEdgeKindLabel(nextEdgeKind, "operational")}'.`,
+          ? editorT("shell.messages.transitionAutoAdjusted", {
+              nextKind: getEdgeKindLabel(nextEdgeKind, "operational", editorT),
+            })
+          : editorT("shell.messages.relationAutoAdjusted", {
+              nextKind: getEdgeKindLabel(nextEdgeKind, "operational", editorT),
+            }),
       );
     } else if (
       !input.explicitKind &&
@@ -4711,7 +4853,7 @@ export function EditorShell({
       });
       setServerSemanticAudit(audit);
       setQuerySyncMessage(
-        `Verificacao concluida: ${audit.counters.total} issue(s).`,
+        editorT("shell.messages.auditCompleted", { count: audit.counters.total }),
       );
       setGlobalErrorMessage(null);
       return audit;
@@ -4719,7 +4861,7 @@ export function EditorShell({
       setServerSemanticAudit(null);
       const message = formatErrorMessage(
         error,
-        "Falha ao executar verificacao semantica no servidor.",
+        editorT("shell.errors.serverSemanticAudit"),
       );
       setGlobalErrorMessage(message);
       return null;
@@ -5258,7 +5400,7 @@ export function EditorShell({
       return;
     }
 
-    setQuerySyncMessage("Titulo atualizado.");
+      setQuerySyncMessage(editorT("shell.messages.titleUpdated"));
     handleCancelInlineRename();
   }
 
@@ -5321,7 +5463,7 @@ export function EditorShell({
       ) {
         event.preventDefault();
         void handleCopySelectionToClipboard().catch(() => {
-          setGlobalErrorMessage("Falha ao copiar selecao.");
+          setGlobalErrorMessage(editorT("shell.errors.copySelection"));
         });
         return;
       }
@@ -5334,7 +5476,7 @@ export function EditorShell({
       ) {
         event.preventDefault();
         void handlePasteFromClipboard().catch(() => {
-          setGlobalErrorMessage("Falha ao colar selecao.");
+          setGlobalErrorMessage(editorT("shell.errors.pasteSelection"));
         });
         return;
       }
@@ -5347,7 +5489,7 @@ export function EditorShell({
       ) {
         event.preventDefault();
         void handleCutSelectionToClipboard().catch(() => {
-          setGlobalErrorMessage("Falha ao recortar selecao.");
+          setGlobalErrorMessage(editorT("shell.errors.cutSelection"));
         });
         return;
       }
@@ -5360,7 +5502,7 @@ export function EditorShell({
       ) {
         event.preventDefault();
         void handleDuplicateSelection().catch(() => {
-          setGlobalErrorMessage("Falha ao duplicar selecao.");
+          setGlobalErrorMessage(editorT("shell.errors.duplicateSelection"));
         });
         return;
       }
@@ -5578,7 +5720,7 @@ export function EditorShell({
     successMessage?: string,
   ) {
     if (!selectedNode || selectedNode.data.kind !== "entity") {
-      setGlobalErrorMessage("Selecione uma entidade ERD para editar campos.");
+      setGlobalErrorMessage(editorT("shell.errors.selectErdEntityToEdit"));
       return false;
     }
 
@@ -5591,7 +5733,7 @@ export function EditorShell({
 
   function handleAddErdField() {
     if (!selectedErdEntityPayload || !selectedNode || selectedNode.data.kind !== "entity") {
-      setGlobalErrorMessage("Selecione uma entidade ERD para adicionar campo.");
+      setGlobalErrorMessage(editorT("shell.errors.selectErdEntityToAddField"));
       return;
     }
 
@@ -5616,7 +5758,12 @@ export function EditorShell({
       },
     }));
     setErdPendingFieldFocusId(nextField.id);
-    setQuerySyncMessage(`Campo '${nextField.name}' adicionado em ${selectedNode.data.label}.`);
+    setQuerySyncMessage(
+      editorT("shell.messages.fieldAdded", {
+        fieldName: nextField.name,
+        entityName: selectedNode.data.label,
+      }),
+    );
     setGlobalErrorMessage(null);
   }
 
@@ -5751,7 +5898,7 @@ export function EditorShell({
 
   function handleCancelConnectionAssistant() {
     setPendingConnectionAssistant(null);
-    setQuerySyncMessage("Conexao cancelada pelo usuario.");
+    setQuerySyncMessage(editorT("shell.messages.connectionCancelled"));
   }
 
   function handleCancelErdQuickRelate() {
@@ -5875,29 +6022,37 @@ export function EditorShell({
   function handleApplyErdSuggestedFix(commands: ErdEditorCommand[]) {
     const result = applyErdEditorCommands(commands);
     if (result.applied === 0) {
-      setGlobalErrorMessage("Nao foi possivel aplicar a correcao sugerida.");
-      return;
-    }
-
-    setGlobalErrorMessage(null);
-    setQuerySyncMessage(`Correcao aplicada (${result.applied}/${result.total} comandos).`);
-  }
-
-  function handleApplyAllSafeErdFixes() {
-    if (!localErdSafeBatchFix || localErdSafeBatchFix.commands.length === 0) {
-      setQuerySyncMessage("Nenhuma correcao segura disponivel.");
-      return;
-    }
-
-    const result = applyErdEditorCommands(localErdSafeBatchFix.commands);
-    if (result.applied === 0) {
-      setGlobalErrorMessage("Nao foi possivel aplicar correcoes seguras.");
+      setGlobalErrorMessage(editorT("shell.errors.applySuggestedFix"));
       return;
     }
 
     setGlobalErrorMessage(null);
     setQuerySyncMessage(
-      `Correcoes seguras aplicadas (${result.applied}/${result.total}).`,
+      editorT("shell.messages.fixApplied", {
+        applied: result.applied,
+        total: result.total,
+      }),
+    );
+  }
+
+  function handleApplyAllSafeErdFixes() {
+    if (!localErdSafeBatchFix || localErdSafeBatchFix.commands.length === 0) {
+      setQuerySyncMessage(editorT("shell.messages.noSafeFixes"));
+      return;
+    }
+
+    const result = applyErdEditorCommands(localErdSafeBatchFix.commands);
+    if (result.applied === 0) {
+      setGlobalErrorMessage(editorT("shell.errors.applySafeFixes"));
+      return;
+    }
+
+    setGlobalErrorMessage(null);
+    setQuerySyncMessage(
+      editorT("shell.messages.safeFixesApplied", {
+        applied: result.applied,
+        total: result.total,
+      }),
     );
   }
 
@@ -5919,18 +6074,18 @@ export function EditorShell({
         },
       });
       setSemanticPolicy(updated);
-      setQuerySyncMessage(`Validação ERD atualizada para '${level}'.`);
+      setQuerySyncMessage(editorT("shell.messages.erdValidationLevelUpdated", { level }));
       setGlobalErrorMessage(null);
     } catch (error) {
       setGlobalErrorMessage(
-        formatErrorMessage(error, "Nao foi possivel atualizar validacao ERD."),
+        formatErrorMessage(error, editorT("shell.errors.updateErdValidation")),
       );
     }
   }
 
   async function handleExportErdPreview() {
     if (!isErdDiagram) {
-      setGlobalErrorMessage("Export preview disponivel apenas para ERD.");
+      setGlobalErrorMessage(editorT("shell.errors.erdExportOnly"));
       return;
     }
 
@@ -5947,7 +6102,10 @@ export function EditorShell({
       setLastErdExportPreview(result);
       setErdExportFeedback({
         kind: "success",
-        message: `Preview gerado com ${result.export.entities.length} entidade(s) e ${result.export.relations.length} relacao(oes).`,
+        message: editorT("shell.erd.exportPreviewSuccess", {
+          entitiesCount: result.export.entities.length,
+          relationsCount: result.export.relations.length,
+        }),
       });
       setGlobalErrorMessage(null);
     } catch (error) {
@@ -5959,13 +6117,13 @@ export function EditorShell({
           kind: "info",
           message:
             safeFixCount > 0
-              ? `Export bloqueado no strict: aplique ${safeFixCount} correcao(oes) segura(s) sugerida(s).`
-              : "Export bloqueado no strict: corrija os erros de semantica ERD.",
+              ? editorT("shell.erd.exportBlockedStrictWithSafeFixes", { count: safeFixCount })
+              : editorT("shell.erd.exportBlockedStrict"),
         });
       } else {
         setErdExportFeedback({
           kind: "error",
-          message: formatErrorMessage(error, "Falha ao gerar export preview ERD."),
+          message: formatErrorMessage(error, editorT("shell.errors.erdExportPreview")),
         });
       }
     } finally {
@@ -6010,7 +6168,7 @@ export function EditorShell({
     if (result.applied > 0) {
       setSelectedEdgeId(selectedEdge.id);
       setSelectedNodeId(null);
-      setQuerySyncMessage("Direcao da relacao invertida.");
+      setQuerySyncMessage(editorT("shell.messages.relationDirectionSwapped"));
       setGlobalErrorMessage(null);
     }
   }
@@ -6110,7 +6268,7 @@ export function EditorShell({
         },
       ]);
       if (result.applied > 0) {
-        setQuerySyncMessage("Relacao materializada em campo existente.");
+        setQuerySyncMessage(editorT("shell.messages.relationMaterializedExistingField"));
       }
       return;
     }
@@ -6224,7 +6382,7 @@ export function EditorShell({
     setPendingErdQuickRelate(null);
 
     if (!sourceNode || !targetNode) {
-      setGlobalErrorMessage("Nao foi possivel criar relacao rapida: entidade nao encontrada.");
+      setGlobalErrorMessage(editorT("shell.errors.quickRelationEntityNotFound"));
       return;
     }
 
@@ -6292,7 +6450,7 @@ export function EditorShell({
 
     const result = applyErdEditorCommands(commands);
     if (result.applied === 0) {
-      setGlobalErrorMessage("Nao foi possivel criar a relacao rapida.");
+      setGlobalErrorMessage(editorT("shell.errors.createQuickRelation"));
       return;
     }
 
@@ -6307,8 +6465,8 @@ export function EditorShell({
     if (preset === "N:N") {
       setQuerySyncMessage(
         erdPolicy.allowConceptualRelations
-          ? "Relacao criada. Sugestao: converter em associativa."
-          : "Relacao N:N convertida automaticamente para associativa.",
+          ? editorT("shell.messages.quickRelationCreatedSuggestAssociative")
+          : editorT("shell.messages.quickRelationConvertedAssociative"),
       );
     } else if (erdPolicy.allowConceptualRelations) {
       const inferredDependentSide = inferDependentSide({
@@ -6325,10 +6483,13 @@ export function EditorShell({
           ? targetEntityRef.label ?? targetEntityRef.id
           : sourceEntityRef.label ?? sourceEntityRef.id;
       setQuerySyncMessage(
-        `Relacao criada. Sugestao: materializar FK em ${dependentLabel} para referenciar ${referencedLabel}.`,
+        editorT("shell.messages.quickRelationSuggestMaterialize", {
+          dependentLabel,
+          referencedLabel,
+        }),
       );
     } else {
-      setQuerySyncMessage("Relacao criada e materializada automaticamente.");
+      setQuerySyncMessage(editorT("shell.messages.quickRelationMaterializedAutomatically"));
     }
 
     setGlobalErrorMessage(null);
@@ -6344,7 +6505,7 @@ export function EditorShell({
       setPendingConnectionAssistant(null);
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setGlobalErrorMessage("Conclua o salvamento pendente antes de criar a relacao.");
+        setGlobalErrorMessage(editorT("shell.errors.finishPendingSaveBeforeRelation"));
         return;
       }
 
@@ -6359,7 +6520,7 @@ export function EditorShell({
 
   function handleCancelPendingNodeRepair() {
     setPendingNodeRepair(null);
-    setNodeInspectorMessage("Alteracao de tipo cancelada.");
+    setNodeInspectorMessage(editorT("shell.messages.kindChangeCancelled"));
   }
 
   function handleApplyPendingNodeRepair(mode: "repair" | "remove") {
@@ -6376,7 +6537,7 @@ export function EditorShell({
           repairApplied: true,
         },
       },
-      "No atualizado. Salvamento automatico agendado.",
+      editorT("shell.messages.nodeUpdatedAutosaveQueued"),
     );
 
     if (!nodeApplied) {
@@ -6399,11 +6560,11 @@ export function EditorShell({
     }
 
     setPendingNodeRepair(null);
-    setNodeInspectorMessage(
-      mode === "repair"
-        ? `Tipo aplicado com reparo automatico (${appliedActions}).`
-        : `Tipo aplicado com remocao de relacoes invalidas (${appliedActions}).`,
-    );
+      setNodeInspectorMessage(
+        mode === "repair"
+          ? editorT("shell.messages.kindAppliedWithRepair", { count: appliedActions })
+          : editorT("shell.messages.kindAppliedWithRemoval", { count: appliedActions }),
+      );
   }
 
   function handleCancelSemanticOverride() {
@@ -6420,7 +6581,9 @@ export function EditorShell({
     const reason = semanticOverrideReason.trim();
     if (pending.requireReason && !hasMinimumSemanticOverrideReason(reason)) {
       setGlobalErrorMessage(
-        `Justificativa obrigatoria com no minimo ${MIN_SEMANTIC_OVERRIDE_REASON_LENGTH} caracteres.`,
+        editorT("shell.errors.semanticOverrideReasonRequired", {
+          min: MIN_SEMANTIC_OVERRIDE_REASON_LENGTH,
+        }),
       );
       return;
     }
@@ -6432,7 +6595,7 @@ export function EditorShell({
       setGlobalErrorMessage(null);
     } catch (error) {
       setGlobalErrorMessage(
-        formatErrorMessage(error, "Falha ao aplicar override tecnico."),
+        formatErrorMessage(error, editorT("shell.errors.applySemanticOverride")),
       );
     }
   }
@@ -6501,7 +6664,7 @@ export function EditorShell({
   async function writeMapiaClipboardFragment(fragment: MapiaClipboardFragment) {
     const serialized = JSON.stringify(fragment);
     if (!navigator.clipboard) {
-      throw new Error("Clipboard indisponivel.");
+      throw new Error(editorT("shell.errors.clipboardUnavailable"));
     }
 
     const supportsCustomMime =
@@ -6565,7 +6728,7 @@ export function EditorShell({
     }
 
     await writeMapiaClipboardFragment(fragment);
-    setQuerySyncMessage("Selecao copiada para a area de transferencia.");
+    setQuerySyncMessage(editorT("shell.messages.selectionCopied"));
     return true;
   }
 
@@ -6755,8 +6918,7 @@ export function EditorShell({
               (issue) => issue.severity === "error",
             ) ?? initialValidation.validation.issues[0];
           setGlobalErrorMessage(
-            firstError?.message ??
-              "Colagem bloqueada pela politica semantica do projeto.",
+            firstError?.message ?? editorT("shell.errors.pasteBlockedByPolicy"),
           );
           return {
             appliedNodes: 0,
@@ -6774,8 +6936,7 @@ export function EditorShell({
               (issue) => issue.severity === "error",
             ) ?? filteredValidation.validation.issues[0];
           setGlobalErrorMessage(
-            firstError?.message ??
-              "Colagem bloqueada pela politica semantica do projeto.",
+            firstError?.message ?? editorT("shell.errors.pasteBlockedByPolicy"),
           );
           return {
             appliedNodes: 0,
@@ -6794,7 +6955,7 @@ export function EditorShell({
       setGlobalErrorMessage(
         formatErrorMessage(
           error,
-          "Nao foi possivel validar a colagem com o backend.",
+          editorT("shell.errors.validatePasteWithBackend"),
         ),
       );
       return {
@@ -6812,7 +6973,7 @@ export function EditorShell({
     }
 
     handleRemoveSelected();
-    setQuerySyncMessage("Selecao recortada para a area de transferencia.");
+    setQuerySyncMessage(editorT("shell.messages.selectionCut"));
     return true;
   }
 
@@ -6824,12 +6985,16 @@ export function EditorShell({
 
     const result = await applyClipboardFragment(fragment);
     if (result.appliedNodes === 0 && result.appliedEdges === 0) {
-      setGlobalErrorMessage("Nao foi possivel duplicar a selecao atual.");
+      setGlobalErrorMessage(editorT("shell.errors.duplicateCurrentSelection"));
       return false;
     }
 
     setQuerySyncMessage(
-      `Duplicacao concluida: ${result.appliedNodes} no(s), ${result.appliedEdges} relacao(oes), ${result.skippedEdges} relacao(oes) ignorada(s).`,
+      editorT("shell.messages.duplicateCompleted", {
+        nodes: result.appliedNodes,
+        edges: result.appliedEdges,
+        skippedEdges: result.skippedEdges,
+      }),
     );
     return true;
   }
@@ -6837,7 +7002,7 @@ export function EditorShell({
   async function handlePasteFromClipboard() {
     const fragment = await readMapiaClipboardFragment();
     if (!fragment || fragment.nodes.length === 0) {
-      setGlobalErrorMessage("Area de transferencia sem fragmento MapIA valido.");
+      setGlobalErrorMessage(editorT("shell.errors.invalidClipboardFragment"));
       return false;
     }
 
@@ -6846,7 +7011,11 @@ export function EditorShell({
       return false;
     }
     setQuerySyncMessage(
-      `Colagem concluida: ${result.appliedNodes} no(s), ${result.appliedEdges} relacao(oes), ${result.skippedEdges} relacao(oes) ignorada(s).`,
+      editorT("shell.messages.pasteCompleted", {
+        nodes: result.appliedNodes,
+        edges: result.appliedEdges,
+        skippedEdges: result.skippedEdges,
+      }),
     );
     return true;
   }
@@ -6856,7 +7025,7 @@ export function EditorShell({
 
     if (currentSnapshot.allowReapplyLayout === false) {
       setGlobalErrorMessage(
-        "Layout bloqueado pela configuracao do Assistente de criacao. Ajuste antes de tentar novamente.",
+        editorT("shell.errors.layoutBlockedByAssistant"),
       );
       return;
     }
@@ -6868,7 +7037,7 @@ export function EditorShell({
 
     if (!isDiagramLayoutType(layoutDiagramType)) {
       setGlobalErrorMessage(
-        "Organizacao automatica exige tipo suportado (hierarquia, fluxo, mindmap, ERD, sitemap, grafo ou timeline).",
+        editorT("shell.errors.organizeRequiresSupportedType"),
       );
       return;
     }
@@ -6880,12 +7049,12 @@ export function EditorShell({
 
     setGlobalErrorMessage(null);
     if (movedNodes === 0) {
-      setQuerySyncMessage("Diagrama ja esta organizado.");
+      setQuerySyncMessage(editorT("shell.messages.diagramAlreadyOrganized"));
       return;
     }
 
     markDirtyState(
-      `Organizacao aplicada: ${movedNodes} no(s) reposicionado(s). Salve para persistir no snapshot.`,
+      editorT("shell.messages.organizeApplied", { count: movedNodes }),
     );
   }
 
@@ -6894,7 +7063,7 @@ export function EditorShell({
 
     if (currentSnapshot.allowReapplyLayout === false) {
       setGlobalErrorMessage(
-        "Layout bloqueado pela configuracao do Assistente de criacao. Ajuste antes de tentar novamente.",
+        editorT("shell.errors.layoutBlockedByAssistant"),
       );
       return;
     }
@@ -6912,19 +7081,19 @@ export function EditorShell({
 
       setGlobalErrorMessage(null);
       if (movedNodes === 0) {
-        setQuerySyncMessage("Layout ja estava consistente.");
+        setQuerySyncMessage(editorT("shell.messages.layoutAlreadyConsistent"));
         return;
       }
 
       markDirtyState(
-        `Layout reaplicado: ${movedNodes} no(s) reposicionado(s). Salve para persistir no snapshot.`,
+        editorT("shell.messages.layoutReapplied", { count: movedNodes }),
       );
       return;
     }
 
     if (!isSupportedDiagramType(currentSnapshot.diagramType)) {
       setGlobalErrorMessage(
-        "Reaplicar layout automatico exige tipo suportado (hierarquia, fluxo ou mindmap).",
+        editorT("shell.errors.reapplyLayoutRequiresSupportedType"),
       );
       return;
     }
@@ -6932,7 +7101,7 @@ export function EditorShell({
     const nextSnapshot = reapplyLayoutForSnapshot(currentSnapshot);
     syncFromSnapshot(nextSnapshot);
     setGlobalErrorMessage(null);
-    markDirtyState("Layout reaplicado. Salve para persistir no snapshot.");
+    markDirtyState(editorT("shell.messages.layoutReappliedGeneric"));
   }
 
   function handleRemoveSelected() {
@@ -7010,7 +7179,7 @@ export function EditorShell({
       setPendingConnectionAssistant(null);
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setGlobalErrorMessage("Conclua o salvamento pendente antes de criar a relacao.");
+        setGlobalErrorMessage(editorT("shell.errors.finishPendingSaveBeforeRelation"));
         return;
       }
 
@@ -7074,14 +7243,14 @@ export function EditorShell({
             }
           : current,
       );
-      setNodeInspectorMessage("JSON formatado.");
+      setNodeInspectorMessage(editorT("shell.messages.jsonFormatted"));
       setNodeInspectorErrors((current) => {
         const next = { ...current };
         delete next.dataJson;
         return next;
       });
     } catch {
-      setNodeInspectorMessage("Nao foi possivel formatar: JSON invalido.");
+      setNodeInspectorMessage(editorT("shell.errors.invalidJsonFormat"));
     }
   }
 
@@ -7103,14 +7272,14 @@ export function EditorShell({
             }
           : current,
       );
-      setEdgeInspectorMessage("JSON formatado.");
+      setEdgeInspectorMessage(editorT("shell.messages.jsonFormatted"));
       setEdgeInspectorErrors((current) => {
         const next = { ...current };
         delete next.dataJson;
         return next;
       });
     } catch {
-      setEdgeInspectorMessage("Nao foi possivel formatar: JSON invalido.");
+      setEdgeInspectorMessage(editorT("shell.errors.invalidJsonFormat"));
     }
   }
 
@@ -7121,9 +7290,9 @@ export function EditorShell({
 
     try {
       await copyTextToClipboard(selectedNode.id);
-      setNodeInspectorMessage("ID copiado para a area de transferencia.");
+      setNodeInspectorMessage(editorT("shell.messages.idCopied"));
     } catch {
-      setNodeInspectorMessage("Falha ao copiar ID do no.");
+      setNodeInspectorMessage(editorT("shell.errors.copyNodeId"));
     }
   }
 
@@ -7134,9 +7303,9 @@ export function EditorShell({
 
     try {
       await copyTextToClipboard(selectedEdge.id);
-      setEdgeInspectorMessage("ID copiado para a area de transferencia.");
+      setEdgeInspectorMessage(editorT("shell.messages.idCopied"));
     } catch {
-      setEdgeInspectorMessage("Falha ao copiar ID da aresta.");
+      setEdgeInspectorMessage(editorT("shell.errors.copyEdgeId"));
     }
   }
 
@@ -7147,9 +7316,9 @@ export function EditorShell({
 
     try {
       await copyTextToClipboard(nodeInspectorDraft.dataJson);
-      setNodeInspectorMessage("JSON copiado para a area de transferencia.");
+      setNodeInspectorMessage(editorT("shell.messages.jsonCopied"));
     } catch {
-      setNodeInspectorMessage("Falha ao copiar JSON.");
+      setNodeInspectorMessage(editorT("shell.errors.copyJson"));
     }
   }
 
@@ -7160,9 +7329,9 @@ export function EditorShell({
 
     try {
       await copyTextToClipboard(edgeInspectorDraft.dataJson);
-      setEdgeInspectorMessage("JSON copiado para a area de transferencia.");
+      setEdgeInspectorMessage(editorT("shell.messages.jsonCopied"));
     } catch {
-      setEdgeInspectorMessage("Falha ao copiar JSON.");
+      setEdgeInspectorMessage(editorT("shell.errors.copyJson"));
     }
   }
 
@@ -7205,7 +7374,7 @@ export function EditorShell({
 
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setNodeInspectorMessage("Conclua o salvamento pendente antes de aplicar.");
+        setNodeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
         return;
       }
 
@@ -7220,7 +7389,7 @@ export function EditorShell({
 
         syncFromSnapshot(result.workingSnapshot.snapshot);
         setCurrentRevision(result.newRevision);
-        setNodeInspectorMessage("No atualizado. Snapshot sincronizado com o servidor.");
+        setNodeInspectorMessage(editorT("shell.messages.nodeUpdatedSynced"));
         setGlobalErrorMessage(null);
       } catch (error) {
         if (error instanceof EditorQueryError) {
@@ -7246,7 +7415,7 @@ export function EditorShell({
             error.payload?.overrideAllowed
           ) {
             openTechnicalOverrideDialog({
-              title: "Override tecnico",
+              title: editorT("shell.semanticOverride.ariaLabel"),
               message: error.message,
               requireReason: error.payload.requireOverrideReason ?? true,
               onConfirm: async (reason) => {
@@ -7261,9 +7430,7 @@ export function EditorShell({
                 });
                 syncFromSnapshot(overrideResult.workingSnapshot.snapshot);
                 setCurrentRevision(overrideResult.newRevision);
-                setNodeInspectorMessage(
-                  "No atualizado com override tecnico registrado.",
-                );
+                setNodeInspectorMessage(editorT("shell.messages.nodeUpdatedWithOverride"));
               },
             });
             return;
@@ -7283,7 +7450,7 @@ export function EditorShell({
         throw error;
       }
     } catch (error) {
-      const feedback = getFriendlyInspectorFeedback(error);
+      const feedback = getFriendlyInspectorFeedback(error, undefined, editorT);
       setNodeInspectorErrors(feedback.fieldErrors);
       setNodeInspectorMessage(feedback.message);
     }
@@ -7296,7 +7463,7 @@ export function EditorShell({
     setEdgeInspectorMessage(null);
 
     try {
-      let command =
+      const command =
         inspectorMode === "operational" && operationalEdgeDraft
           ? buildUpdateEdgeCommandFromInspectorForm({
               edgeId: selectedEdge.id,
@@ -7323,7 +7490,7 @@ export function EditorShell({
 
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setEdgeInspectorMessage("Conclua o salvamento pendente antes de aplicar.");
+        setEdgeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
         return;
       }
 
@@ -7337,7 +7504,7 @@ export function EditorShell({
         });
         syncFromSnapshot(result.workingSnapshot.snapshot);
         setCurrentRevision(result.newRevision);
-        setEdgeInspectorMessage("Aresta atualizada. Snapshot sincronizado com o servidor.");
+        setEdgeInspectorMessage(editorT("shell.messages.edgeUpdatedSynced"));
         setGlobalErrorMessage(null);
       } catch (error) {
         if (error instanceof EditorQueryError) {
@@ -7347,7 +7514,7 @@ export function EditorShell({
             error.payload?.overrideAllowed
           ) {
             openTechnicalOverrideDialog({
-              title: "Override tecnico",
+              title: editorT("shell.semanticOverride.ariaLabel"),
               message: error.message,
               requireReason: error.payload.requireOverrideReason ?? true,
               onConfirm: async (reason) => {
@@ -7362,9 +7529,7 @@ export function EditorShell({
                 });
                 syncFromSnapshot(overrideResult.workingSnapshot.snapshot);
                 setCurrentRevision(overrideResult.newRevision);
-                setEdgeInspectorMessage(
-                  "Aresta atualizada com override tecnico registrado.",
-                );
+                setEdgeInspectorMessage(editorT("shell.messages.edgeUpdatedWithOverride"));
               },
             });
             return;
@@ -7384,7 +7549,7 @@ export function EditorShell({
         throw error;
       }
     } catch (error) {
-      const feedback = getFriendlyInspectorFeedback(error);
+      const feedback = getFriendlyInspectorFeedback(error, undefined, editorT);
       setEdgeInspectorErrors(feedback.fieldErrors);
       setEdgeInspectorMessage(feedback.message);
     }
@@ -7406,9 +7571,7 @@ export function EditorShell({
             <header className="panel-header">
               <div>
                 <h3>{project.name}</h3>
-                <p>
-                  Snapshot de trabalho com salvamento continuo, versoes e inspetor.
-                </p>
+                <p>{editorT("shell.metadata.description")}</p>
               </div>
               <div className="row-actions">
                 <span
@@ -7418,20 +7581,22 @@ export function EditorShell({
                   {diagramDefinitionLabel}
                 </span>
                 <span className="badge" data-testid="visual-mode-badge">
-                  Modo visual: {renderer.label}
+                  {editorT("shell.metadata.visualMode", {
+                    mode: editorT(`shell.rendererLabels.${renderer.key}`),
+                  })}
                 </span>
                 <Link
                   className="btn btn-link"
                   href={`/create?fromProjectId=${project.id}`}
                   data-testid="layout-policy-open-wizard-link"
                 >
-                  Alterar no Assistente
+                  {editorT("shell.metadata.changeInAssistant")}
                 </Link>
                 <span
                   className={`badge ${isReapplyLayoutBlockedByPolicy ? "badge-warning" : ""}`}
                   data-testid="layout-policy-badge"
                 >
-                  Politica de layout: {layoutPolicyLabel}
+                  {editorT("shell.metadata.layoutPolicy", { policy: layoutPolicyLabel })}
                 </span>
                 <button
                   className="btn"
@@ -7441,8 +7606,8 @@ export function EditorShell({
                   data-testid="editor-panel-metadata-toggle"
                 >
                   {panelState.metadata
-                    ? "▾ Metadados"
-                    : `▸ Metadados (${nodes.length} nos)`}
+                    ? `▾ ${editorT("shell.metadata.toggleOpen")}`
+                    : `▸ ${editorT("shell.metadata.toggleClosed", { count: nodes.length })}`}
                 </button>
               </div>
             </header>
@@ -7451,18 +7616,23 @@ export function EditorShell({
                 <div className="row-actions editor-toolbar editor-toolbar-meta">
                   <span className="badge">
                     <span className="badge-dot" aria-hidden="true" />
-                    Snapshot de trabalho
+                    {editorT("shell.metadata.workingSnapshot")}
                   </span>
                   <span className="muted">
-                    {pendingCommands.length} pendente(s) | {nodes.length} no(s) | {edges.length}{" "}
-                    arestas
+                    {editorT("shell.metadata.counts", {
+                      pendingCount: pendingCommands.length,
+                      nodeCount: nodes.length,
+                      edgeCount: edges.length,
+                    })}
                   </span>
                   {lastSavedAtLabel ? (
-                    <span className="muted">Ultimo salvamento: {lastSavedAtLabel}</span>
+                    <span className="muted">
+                      {editorT("shell.metadata.lastSavedAt", { time: lastSavedAtLabel })}
+                    </span>
                   ) : null}
                   <span className="helper">{saveState.message}</span>
                   {isRefreshingFromQuery ? (
-                    <span className="helper">Sincronizando com o backend...</span>
+                    <span className="helper">{editorT("shell.sync.syncing")}</span>
                   ) : null}
                   {querySyncMessage ? (
                     <span className="helper">{querySyncMessage}</span>
@@ -7479,7 +7649,7 @@ export function EditorShell({
                     }
                     data-testid="remove-selected-button"
                   >
-                    Remover selecionado
+                    {editorT("shell.buttons.removeSelected")}
                   </button>
                   <button
                     className="btn btn-primary"
@@ -7488,18 +7658,20 @@ export function EditorShell({
                     disabled={saveState.status === "saving" || isCreatingVersion}
                     data-testid="save-button"
                   >
-                    {saveState.status === "saving" ? "Salvando..." : "Salvar"}
+                    {saveState.status === "saving"
+                      ? editorT("autosave.saving")
+                      : editorT("shell.buttons.save")}
                   </button>
                   <div className="field">
                     <label className="sr-only" htmlFor="new-version-name-input">
-                      Nome da nova versao (local)
+                      {editorT("shell.versions.newVersionNameAria")}
                     </label>
                     <input
                       id="new-version-name-input"
                       value={newVersionName}
                       onChange={(event) => setNewVersionName(event.target.value)}
-                      placeholder="Ex.: checkpoint antes da revisao (nome local opcional)"
-                      aria-label="Nome da nova versao (local)"
+                      placeholder={editorT("shell.versions.newVersionNamePlaceholder")}
+                      aria-label={editorT("shell.versions.newVersionNameAria")}
                     />
                   </div>
                   <button
@@ -7509,7 +7681,9 @@ export function EditorShell({
                     disabled={saveState.status === "saving" || isCreatingVersion}
                     data-testid="create-version-button"
                   >
-                    {isCreatingVersion ? "Criando versao..." : "Criar versao"}
+                    {isCreatingVersion
+                      ? editorT("shell.versions.creating")
+                      : editorT("shell.versions.create")}
                   </button>
                   <button
                     className="btn"
@@ -7518,27 +7692,28 @@ export function EditorShell({
                     disabled={saveState.status === "saving" || !canReapplyLayout}
                     title={
                       isReapplyLayoutBlockedByPolicy
-                        ? "Layout bloqueado no Assistente. Ajuste a politica para permitir reaplicacao."
+                        ? editorT("shell.layoutPolicy.blockedTooltip")
                         : undefined
                     }
                     data-testid="reapply-layout-button"
                   >
-                    Reaplicar layout
+                    {editorT("shell.buttons.reapplyLayout")}
                   </button>
                   {hasDiagramRendererMismatch ? (
                     <span
                       className="warning-text"
                       data-testid="diagram-renderer-mismatch-warning"
                     >
-                      O renderer atual nao corresponde ao tipo de diagrama salvo.
-                      Use Reaplicar layout ou ajuste no Assistente.
+                      {editorT("shell.metadata.rendererMismatch")}
                     </span>
                   ) : null}
                   {isReapplyLayoutBlockedByPolicy ? (
                     <>
-                      <span className="badge badge-warning">Layout bloqueado</span>
+                      <span className="badge badge-warning">
+                        {editorT("shell.layoutPolicy.blocked")}
+                      </span>
                       <span className="helper">
-                        A reaplicacao foi bloqueada para preservar o desenho definido no Assistente.
+                        {editorT("shell.layoutPolicy.blockedDescription")}
                       </span>
                     </>
                   ) : null}
@@ -7562,12 +7737,12 @@ export function EditorShell({
         {shouldShowPrismaPanel ? (
           <section
             className="panel editor-secondary-panel editor-panel-prisma"
-            aria-label="Importar schema Prisma"
+            aria-label={editorT("shell.prisma.ariaLabel")}
           >
             <header className="panel-header">
               <div>
-                <h3>Importar schema Prisma</h3>
-                <p>Cole o `.prisma` para atualizar o snapshot de trabalho.</p>
+                <h3>{editorT("shell.prisma.title")}</h3>
+                <p>{editorT("shell.prisma.description")}</p>
               </div>
               <button
                 className="btn"
@@ -7576,7 +7751,9 @@ export function EditorShell({
                 aria-expanded={panelState.prismaImport}
                 data-testid="editor-panel-prisma-toggle"
               >
-                {panelState.prismaImport ? "▾ Import Prisma" : "▸ Import Prisma"}
+                {panelState.prismaImport
+                  ? `▾ ${editorT("shell.prisma.toggleOpen")}`
+                  : `▸ ${editorT("shell.prisma.toggleClosed")}`}
               </button>
             </header>
             {panelState.prismaImport ? (
@@ -7595,10 +7772,12 @@ export function EditorShell({
                     }
                     data-testid="prisma-schema-import-button"
                   >
-                    {isImportingPrismaSchema ? "Importando..." : "Importar"}
+                    {isImportingPrismaSchema
+                      ? editorT("shell.prisma.importing")
+                      : editorT("shell.prisma.import")}
                   </button>
                   <span className="helper">
-                    A importacao sobrescreve o snapshot de trabalho.
+                    {editorT("shell.prisma.overwriteWarning")}
                   </span>
                 </div>
 
@@ -7629,13 +7808,13 @@ export function EditorShell({
         {shouldShowVersionsPanel ? (
           <section
             className="panel editor-secondary-panel editor-panel-versions"
-            aria-label="Versoes do snapshot"
+            aria-label={editorT("shell.versions.ariaLabel")}
             id="versoes"
           >
             <header className="panel-header">
               <div>
-                <h3>Versoes</h3>
-                <p>Compare e restaure checkpoints.</p>
+                <h3>{editorT("shell.versions.title")}</h3>
+                <p>{editorT("shell.versions.description")}</p>
               </div>
               <button
                 className="btn"
@@ -7645,8 +7824,10 @@ export function EditorShell({
                 data-testid="editor-panel-versions-toggle"
               >
                 {panelState.versions
-                  ? "▾ Versoes"
-                  : `▸ Versoes (${snapshotVersions.length})`}
+                  ? `▾ ${editorT("shell.versions.toggleOpen")}`
+                  : `▸ ${editorT("shell.versions.toggleClosed", {
+                      count: snapshotVersions.length,
+                    })}`}
               </button>
             </header>
             {panelState.versions ? (
@@ -7663,10 +7844,12 @@ export function EditorShell({
                     }
                     data-testid="version-list-refresh-button"
                   >
-                    {isRefreshingVersionList ? "Atualizando..." : "Atualizar versoes"}
+                    {isRefreshingVersionList
+                      ? editorT("shell.versions.refreshing")
+                      : editorT("shell.versions.refresh")}
                   </button>
                   <span className="helper">
-                    O nome da versao nesta tela e local (salvo apenas neste navegador).
+                    {editorT("shell.versions.localNameHint")}
                   </span>
                 </div>
 
@@ -7697,43 +7880,45 @@ export function EditorShell({
                     className="version-diff-executive"
                     data-testid="version-diff-executive-summary"
                   >
-                    <h4>Resumo de mudancas</h4>
+                    <h4>{editorT("shell.versions.summaryTitle")}</h4>
                     <div className="version-diff-cards">
                       <article
                         className="version-diff-card"
                         data-testid="version-diff-card-nodes-added"
                       >
-                        <span>Nos adicionados</span>
+                        <span>{editorT("shell.versions.cards.nodesAdded")}</span>
                         <strong>{versionDiffSummary.cards.nodesAdded}</strong>
                       </article>
                       <article
                         className="version-diff-card"
                         data-testid="version-diff-card-nodes-removed"
                       >
-                        <span>Nos removidos</span>
+                        <span>{editorT("shell.versions.cards.nodesRemoved")}</span>
                         <strong>{versionDiffSummary.cards.nodesRemoved}</strong>
                       </article>
                       <article
                         className="version-diff-card"
                         data-testid="version-diff-card-nodes-changed"
                       >
-                        <span>Nos alterados</span>
+                        <span>{editorT("shell.versions.cards.nodesChanged")}</span>
                         <strong>{versionDiffSummary.cards.nodesChanged}</strong>
                       </article>
                       <article
                         className="version-diff-card"
                         data-testid="version-diff-card-edges-changed"
                       >
-                        <span>Arestas alteradas</span>
+                        <span>{editorT("shell.versions.cards.edgesChanged")}</span>
                         <strong>{versionDiffSummary.cards.edgesChanged}</strong>
                       </article>
                     </div>
                     <p className="helper">
-                      Alterados: {versionDiffSummary.changedBreakdown.renamed} renomeados,{" "}
-                      {versionDiffSummary.changedBreakdown.kindChanged} com tipo alterado e{" "}
-                      {versionDiffSummary.changedBreakdown.payloadChanged} com payload alterado.
+                      {editorT("shell.versions.changedBreakdown", {
+                        renamed: versionDiffSummary.changedBreakdown.renamed,
+                        kindChanged: versionDiffSummary.changedBreakdown.kindChanged,
+                        payloadChanged: versionDiffSummary.changedBreakdown.payloadChanged,
+                      })}
                     </p>
-                    <h5>Top mudancas</h5>
+                    <h5>{editorT("shell.versions.topChangesTitle")}</h5>
                     <ul className="summary-list" data-testid="version-diff-top-changes">
                       {versionDiffSummary.topChanges.map((entry, index) => (
                         <li key={`${entry}-${index}`}>{entry}</li>
@@ -7745,7 +7930,7 @@ export function EditorShell({
                 <div className="stack-sm" data-testid="version-list">
                   {snapshotVersions.length === 0 ? (
                     <div className="helper">
-                      Nenhuma versao encontrada para este projeto.
+                      {editorT("shell.versions.empty")}
                     </div>
                   ) : (
                     snapshotVersions.map((version) => (
@@ -7757,16 +7942,18 @@ export function EditorShell({
                         <div className="row-actions row-actions-between">
                           <span className="badge">{getVersionDisplayName(version)}</span>
                           <span className="badge">
-                            Origem: {formatVersionOriginLabel(version.origin)}
+                            {editorT("shell.versions.originLabel", {
+                              origin: formatVersionOriginLabel(version.origin, editorT),
+                            })}
                           </span>
                           <span className="muted">
-                            {formatVersionCreatedAtLabel(version.createdAt)}
+                            {formatVersionCreatedAtLabel(version.createdAt, locale)}
                           </span>
                         </div>
 
                         <div className="field">
                           <label htmlFor={`version-name-input-${version.id}`}>
-                            Nome local da versao
+                            {editorT("shell.versions.localNameLabel")}
                           </label>
                           <div className="row-actions">
                             <input
@@ -7775,7 +7962,7 @@ export function EditorShell({
                               onChange={(event) =>
                                 handleVersionNameDraftChange(version.id, event.target.value)
                               }
-                              placeholder="Ex.: baseline onboarding (somente local)"
+                              placeholder={editorT("shell.versions.localNamePlaceholder")}
                               data-testid={`version-name-input-${version.id}`}
                             />
                             <button
@@ -7785,11 +7972,11 @@ export function EditorShell({
                               disabled={saveState.status === "saving"}
                               data-testid={`version-save-name-button-${version.id}`}
                             >
-                              Salvar nome
+                              {editorT("shell.versions.saveName")}
                             </button>
                           </div>
                           <span className="helper">
-                            Este nome e usado apenas para facilitar consulta neste navegador.
+                            {editorT("shell.versions.localNameDescription")}
                           </span>
                         </div>
 
@@ -7808,8 +7995,8 @@ export function EditorShell({
                             data-testid={`version-compare-button-${version.id}`}
                           >
                             {activeVersionCompareId === version.id
-                              ? "Comparando..."
-                              : "Comparar"}
+                              ? editorT("shell.versions.comparing")
+                              : editorT("shell.versions.compare")}
                           </button>
                           <button
                             className="btn"
@@ -7825,8 +8012,8 @@ export function EditorShell({
                             data-testid={`version-restore-button-${version.id}`}
                           >
                             {activeVersionRestoreId === version.id
-                              ? "Restaurando..."
-                              : "Restaurar"}
+                              ? editorT("shell.versions.restoring")
+                              : editorT("shell.versions.restore")}
                           </button>
                         </div>
                       </div>
@@ -7853,7 +8040,7 @@ export function EditorShell({
             isCanvasFocusMode ? "canvas-frame-focus" : ""
           }`}
           role="region"
-          aria-label="Canvas do editor"
+          aria-label={editorT("shell.canvasAriaLabel")}
           tabIndex={0}
           data-testid="editor-canvas"
           data-diagram-renderer={
@@ -7898,7 +8085,7 @@ export function EditorShell({
                 onClick={handleOpenQuickFind}
                 data-testid="canvas-toolbar-quick-find"
               >
-                Buscar (Ctrl+K)
+                {editorT("shell.topBar.quickFind")}
               </button>
               <button
                 className="btn"
@@ -7906,7 +8093,7 @@ export function EditorShell({
                 onClick={handleFitView}
                 data-testid="center-diagram-button"
               >
-                Ajustar
+                {editorT("shell.topBar.fitView")}
               </button>
               <button
                 className="btn"
@@ -7914,7 +8101,7 @@ export function EditorShell({
                 onClick={handleOrganizeDiagram}
                 data-testid="organize-diagram-button"
               >
-                Organizar
+                {editorT("shell.topBar.organize")}
               </button>
               <button
                 className="btn"
@@ -7922,11 +8109,13 @@ export function EditorShell({
                 onClick={handleToggleValidationPanel}
                 data-testid="semantic-audit-button"
               >
-                {isValidationPanelOpen ? "Ocultar verificacao" : "Verificar"}
+                {isValidationPanelOpen
+                  ? editorT("shell.topBar.hideValidation")
+                  : editorT("shell.topBar.showValidation")}
               </button>
               {isErdDiagram ? (
                 <label className="erd-validation-level-control">
-                  <span>Validação ERD</span>
+                  <span>{editorT("shell.topBar.erdValidationLevel")}</span>
                   <select
                     value={erdPolicy.validationLevel}
                     onChange={(event) => {
@@ -7952,7 +8141,9 @@ export function EditorShell({
                   disabled={isExportingErdPreview}
                   data-testid="erd-export-preview-button"
                 >
-                  {isExportingErdPreview ? "Gerando preview..." : "Gerar/Exportar (preview)"}
+                  {isExportingErdPreview
+                    ? editorT("shell.topBar.exportPreviewGenerating")
+                    : editorT("shell.topBar.exportPreview")}
                 </button>
               ) : null}
               <button
@@ -7969,7 +8160,9 @@ export function EditorShell({
                 onClick={handleToggleCanvasFocusMode}
                 data-testid="editor-focus-toggle"
               >
-                {isCanvasFocusMode ? "Sair do foco" : "Entrar em foco"}
+                {isCanvasFocusMode
+                  ? editorT("shell.topBar.exitFocus")
+                  : editorT("shell.topBar.enterFocus")}
               </button>
             </div>
           </div>
@@ -7999,7 +8192,11 @@ export function EditorShell({
                 kindChipTone={selectedNode ? selectionNodeKindPresentation?.tone ?? "slate" : null}
                 semanticStatusLabel={selectedSemanticStatusLabel}
                 semanticStatusSeverity={selectedSemanticSeverity}
-                openInspectorLabel={selectedEdge ? "Editar transicao" : "Editar no inspetor"}
+                openInspectorLabel={
+                  selectedEdge
+                    ? editorT("shell.selection.openTransition")
+                    : editorT("shell.selection.openInspector")
+                }
                 primaryAction={
                   selectedNode
                     ? {
@@ -8036,9 +8233,12 @@ export function EditorShell({
                         currentSupportedDiagramType,
                         selectedNode.data.kind,
                         "operational",
+                        editorT,
                       )}
                       {inspectorMode === "technical"
-                        ? ` (kind: ${selectedNode.data.kind})`
+                        ? editorT("shell.selection.technicalKind", {
+                            kind: selectedNode.data.kind,
+                          })
                         : ""}
                     </span>
                   ) : selectedEdge ? (
@@ -8047,9 +8247,12 @@ export function EditorShell({
                         currentSupportedDiagramType,
                         selectedEdge.data?.kind ?? "flows-to",
                         "operational",
+                        editorT,
                       )}
                       {inspectorMode === "technical"
-                        ? ` (kind: ${selectedEdge.data?.kind ?? "flows-to"})`
+                        ? editorT("shell.selection.technicalKind", {
+                            kind: selectedEdge.data?.kind ?? "flows-to",
+                          })
                         : ""}
                     </span>
                   ) : null}
@@ -8070,10 +8273,10 @@ export function EditorShell({
                     type="button"
                     onClick={() => setIsFocusInspectorCollapsed(false)}
                   >
-                    Editar
+                    {editorT("shell.selection.edit")}
                   </button>
                   <button className="btn" type="button" onClick={handleCenterView}>
-                    Centralizar
+                    {editorT("shell.selection.center")}
                   </button>
                   {selectedNode ? (
                     <button
@@ -8084,7 +8287,7 @@ export function EditorShell({
                       }}
                       data-testid="selection-hud-duplicate-button"
                     >
-                      Duplicar
+                      {editorT("selectionHud.duplicate")}
                     </button>
                   ) : null}
                   {selectedNode ? (
@@ -8119,7 +8322,7 @@ export function EditorShell({
                       onClick={handleAddErdField}
                       data-testid="selection-hud-erd-add-field-button"
                     >
-                      Adicionar campo
+                      {editorT("shell.selection.addField")}
                     </button>
                   ) : null}
                   {selectedNode && renderer.key === "tree" ? (
@@ -8130,12 +8333,12 @@ export function EditorShell({
                       data-testid="selection-hud-toggle-subtree-button"
                     >
                       {isSelectedTreeSubtreeCollapsed
-                        ? "Expandir subarvore"
-                        : "Colapsar subarvore"}
+                        ? editorT("shell.selection.expandSubtree")
+                        : editorT("shell.selection.collapseSubtree")}
                     </button>
                   ) : null}
                   <button className="btn" type="button" onClick={handleRemoveSelected}>
-                    Remover
+                    {editorT("selectionHud.remove")}
                   </button>
                 </div>
               </div>
@@ -8209,7 +8412,7 @@ export function EditorShell({
               data-testid="erd-quick-relate-popover"
             >
               <div className="erd-quick-relate-popover-header">
-                <strong>Relacionar entidades</strong>
+                <strong>{editorT("shell.quickRelate.title")}</strong>
                 <span className="helper">
                   {pendingErdQuickRelate.sourceLabel} - {pendingErdQuickRelate.targetLabel}
                 </span>
@@ -8234,7 +8437,7 @@ export function EditorShell({
                   onClick={handleCancelErdQuickRelate}
                   data-testid="erd-quick-relate-cancel"
                 >
-                  Cancelar
+                  {editorT("shell.common.cancel")}
                 </button>
               </div>
             </div>
@@ -8250,7 +8453,7 @@ export function EditorShell({
               }}
               data-testid="inline-rename-popover"
             >
-              <label htmlFor="inline-rename-input">Renomear no</label>
+              <label htmlFor="inline-rename-input">{editorT("shell.inlineRename.label")}</label>
               <input
                 id="inline-rename-input"
                 value={inlineRenameDraft}
@@ -8273,10 +8476,10 @@ export function EditorShell({
                   onClick={handleCancelInlineRename}
                   data-testid="inline-rename-cancel"
                 >
-                  Cancelar
+                  {editorT("shell.common.cancel")}
                 </button>
                 <button className="btn btn-primary" type="submit" data-testid="inline-rename-confirm">
-                  Salvar
+                  {editorT("shell.common.save")}
                 </button>
               </div>
             </form>
@@ -8359,7 +8562,11 @@ export function EditorShell({
 
               {quickAddRoleOptions.length > 0 ? (
                 <div className="field">
-                  <label>{isProcessDiagram ? "Papel no fluxo" : "Papel do no"}</label>
+                  <label>
+                    {isProcessDiagram
+                      ? editorT("shell.addNode.roleLabelFlow")
+                      : editorT("shell.addNode.roleLabelDefault")}
+                  </label>
                   <div className="add-node-kind-grid">
                     {quickAddRoleOptions.map((roleOption) => {
                       const isSelected = addNodeDraft.diagramRole === roleOption.role;
@@ -8390,10 +8597,10 @@ export function EditorShell({
               <div className="field">
                 <label htmlFor="add-node-title-input">
                   {isGraphDiagram
-                    ? "Nome do item"
+                    ? editorT("shell.addNode.titleLabelGraph")
                     : isProcessDiagram
-                      ? "Nome visivel no fluxo"
-                      : "Titulo"}
+                      ? editorT("shell.addNode.titleLabelFlow")
+                      : editorT("shell.addNode.titleLabelDefault")}
                 </label>
                 <input
                   id="add-node-title-input"
@@ -8404,11 +8611,14 @@ export function EditorShell({
                       title: event.target.value,
                     }))
                   }
-                  placeholder={`Ex.: ${buildDefaultNodeTitle(
-                    addNodeDraft.kind,
-                    nodes.length + 1,
-                    currentSupportedDiagramType,
-                  )}`}
+                  placeholder={editorT("shell.addNode.titlePlaceholder", {
+                    title: buildDefaultNodeTitle(
+                      addNodeDraft.kind,
+                      nodes.length + 1,
+                      currentSupportedDiagramType,
+                      editorT,
+                    ),
+                  })}
                   required
                   autoFocus
                   data-testid="add-node-title-input"
@@ -8419,7 +8629,9 @@ export function EditorShell({
                 <>
                   <div className="field">
                     <label htmlFor="add-node-description-input">
-                      {isProcessDiagram ? "Leitura operacional (opcional)" : "Descricao (opcional)"}
+                      {isProcessDiagram
+                        ? editorT("shell.addNode.descriptionLabelFlow")
+                        : editorT("shell.addNode.descriptionLabelDefault")}
                     </label>
                     <textarea
                       id="add-node-description-input"
@@ -8436,7 +8648,9 @@ export function EditorShell({
                   </div>
                   <div className="field">
                     <label htmlFor="add-node-tags-input">
-                      {isProcessDiagram ? "Marcadores operacionais (opcional)" : "Tags (opcional)"}
+                      {isProcessDiagram
+                        ? editorT("shell.addNode.tagsLabelFlow")
+                        : editorT("shell.addNode.tagsLabelDefault")}
                     </label>
                     <input
                       id="add-node-tags-input"
@@ -8447,7 +8661,7 @@ export function EditorShell({
                           tagsText: event.target.value,
                         }))
                       }
-                      placeholder="Ex.: onboarding, aprovacao"
+                      placeholder={editorT("shell.addNode.tagsPlaceholder")}
                       data-testid="add-node-tags-input"
                     />
                   </div>
@@ -8467,7 +8681,7 @@ export function EditorShell({
                   onClick={handleCloseAddDialog}
                   data-testid="add-node-cancel-button"
                 >
-                  Cancelar
+                  {editorT("shell.common.cancel")}
                 </button>
                 <button className="btn btn-primary" type="submit" data-testid="add-node-confirm-button">
                   {editorPersona.labels.addConfirm}
@@ -8482,7 +8696,7 @@ export function EditorShell({
           mode={inspectorMode}
           message={
             pendingConnectionAssistant?.message ??
-            "Conexao invalida para as regras do diagrama."
+            editorT("shell.connection.invalidRules")
           }
           details={pendingConnectionAssistant?.details}
           sourceLabel={pendingConnectionAssistant?.sourceLabel}
@@ -8497,7 +8711,7 @@ export function EditorShell({
           open={pendingNodeRepair !== null}
           summary={
             pendingNodeRepair?.repairPlan.summary ??
-            "A troca de tipo exige reparo para manter consistencia."
+            editorT("shell.repair.summaryFallback")
           }
           bullets={
             pendingNodeRepair
@@ -8507,12 +8721,19 @@ export function EditorShell({
                   ),
                   ...pendingNodeRepair.repairPlan.actions.map((action) => {
                     if (action.type === "updateEdgeKind") {
-                      return `Atualizar relacao ${action.edgeId} para '${getEdgeKindLabel(action.nextKind, "operational")}'.`;
+                      return editorT("shell.repair.updateRelation", {
+                        edgeId: action.edgeId,
+                        nextKind: getEdgeKindLabel(action.nextKind, "operational", editorT),
+                      });
                     }
                     if (action.type === "removeEdge") {
-                      return `Remover relacao invalida ${action.edgeId}.`;
+                      return editorT("shell.repair.removeInvalidRelation", {
+                        edgeId: action.edgeId,
+                      });
                     }
-                    return `Ajustar tipo do no para '${getNodeKindLabel(action.nextKind, "operational")}'.`;
+                    return editorT("shell.repair.adjustNodeKind", {
+                      nextKind: getNodeKindLabel(action.nextKind, "operational", editorT),
+                    });
                   }),
                 ].slice(0, 8)
               : []
@@ -8532,7 +8753,7 @@ export function EditorShell({
               className="semantic-dialog semantic-override-dialog"
               role="dialog"
               aria-modal="true"
-              aria-label="Override tecnico"
+              aria-label={editorT("shell.semanticOverride.ariaLabel")}
               data-testid="semantic-override-dialog"
               onClick={(event) => event.stopPropagation()}
             >
@@ -8540,23 +8761,25 @@ export function EditorShell({
                 <h3>{pendingSemanticOverride.title}</h3>
                 <p className="helper">{pendingSemanticOverride.message}</p>
                 <p className="helper">
-                  O override tecnico registra justificativa para auditoria e compliance.
+                  {editorT("shell.semanticOverride.complianceHint")}
                 </p>
               </header>
 
               <div className="field">
                 <label htmlFor="semantic-override-reason-input">
-                  Justificativa
+                  {editorT("shell.semanticOverride.reasonLabel")}
                   {pendingSemanticOverride.requireReason
-                    ? ` obrigatoria (minimo ${MIN_SEMANTIC_OVERRIDE_REASON_LENGTH} caracteres)`
-                    : " (opcional)"}
+                    ? editorT("shell.semanticOverride.reasonRequiredSuffix", {
+                        min: MIN_SEMANTIC_OVERRIDE_REASON_LENGTH,
+                      })
+                    : editorT("shell.semanticOverride.reasonOptionalSuffix")}
                 </label>
                 <textarea
                   id="semantic-override-reason-input"
                   rows={3}
                   value={semanticOverrideReason}
                   onChange={(event) => setSemanticOverrideReason(event.target.value)}
-                  placeholder="Descreva o motivo tecnico do override."
+                  placeholder={editorT("shell.semanticOverride.placeholder")}
                   data-testid="semantic-override-reason-input"
                 />
               </div>
@@ -8568,7 +8791,7 @@ export function EditorShell({
                   onClick={handleCancelSemanticOverride}
                   data-testid="semantic-override-cancel"
                 >
-                  Cancelar
+                  {editorT("shell.common.cancel")}
                 </button>
                 <button
                   className="btn btn-primary"
@@ -8578,7 +8801,7 @@ export function EditorShell({
                   }}
                   data-testid="semantic-override-confirm"
                 >
-                  Aplicar override
+                  {editorT("shell.semanticOverride.apply")}
                 </button>
               </div>
             </div>
@@ -8605,7 +8828,7 @@ export function EditorShell({
       {isInspectorVisible ? (
         <aside
           className={`inspector ${isProcessDiagram ? "inspector-process" : ""}`}
-          aria-label="Inspetor"
+          aria-label={editorT("shell.inspector.ariaLabel")}
           data-testid="inspector-panel"
         >
           <div className="inspector-header">
@@ -8613,7 +8836,7 @@ export function EditorShell({
               <span className="badge">{inspectorSelectionBadge}</span>
               {hasInspectorDirtyDraft ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                  Rascunho nao aplicado
+                  {editorT("shell.inspector.draftBadge")}
                 </span>
               ) : null}
             </div>
@@ -8628,7 +8851,7 @@ export function EditorShell({
           <div
             className="row-actions inspector-mode-toggle"
             role="group"
-            aria-label="Modo do inspetor"
+            aria-label={editorT("shell.inspector.modeAria")}
             data-testid="inspector-mode-toggle"
           >
             <button
@@ -8638,7 +8861,7 @@ export function EditorShell({
               onClick={() => setInspectorMode("operational")}
               data-testid="inspector-operational"
             >
-              Operacional
+              {editorT("shell.inspector.modeOperational")}
             </button>
             <button
               className={`btn ${inspectorMode === "technical" ? "btn-primary" : ""}`}
@@ -8647,19 +8870,22 @@ export function EditorShell({
               onClick={() => setInspectorMode("technical")}
               data-testid="inspector-technical"
             >
-              Tecnico
+              {editorT("shell.inspector.modeTechnical")}
             </button>
           </div>
 
           <section
             className={`semantic-audit-panel ${isValidationPanelOpen ? "is-open" : ""}`}
-            aria-label="Verificacao semantica"
+            aria-label={editorT("shell.audit.ariaLabel")}
             data-testid="semantic-audit-panel"
           >
             <div className="row-actions semantic-audit-header">
-              <strong>Verificacao semantica</strong>
+              <strong>{editorT("shell.audit.title")}</strong>
               <span className="badge">
-                {displayedSemanticAudit.counters.total} issue(s) | {displayedSemanticAudit.bySeverity.error} erro(s)
+                {editorT("shell.audit.summary", {
+                  total: displayedSemanticAudit.counters.total,
+                  errors: displayedSemanticAudit.bySeverity.error,
+                })}
               </span>
               {isErdDiagram && localErdSafeBatchFix?.safeFixes.length ? (
                 <button
@@ -8668,7 +8894,7 @@ export function EditorShell({
                   onClick={handleApplyAllSafeErdFixes}
                   data-testid="semantic-audit-apply-all-safe-fixes"
                 >
-                  Corrigir tudo seguro
+                  {editorT("shell.audit.applyAllSafeFixes")}
                 </button>
               ) : null}
             </div>
@@ -8695,7 +8921,7 @@ export function EditorShell({
                           data-testid={`semantic-issue-item-${index}`}
                         >
                           <div className="semantic-audit-item-main">
-                            <strong>{getSemanticSeverityLabel(issue.severity)}</strong>
+                            <strong>{getSemanticSeverityLabel(issue.severity, editorT)}</strong>
                             <span>{issue.message}</span>
                             {issue.explanation ? (
                               <span className="helper">{issue.explanation}</span>
@@ -8708,7 +8934,7 @@ export function EditorShell({
                               onClick={() => handleFocusSemanticIssue(issue)}
                               data-testid={`semantic-issue-goto-${index}`}
                             >
-                              Ir para
+                              {editorT("shell.audit.goToIssue")}
                             </button>
                             {issueFixes.map((fix) => (
                               <button
@@ -8729,11 +8955,11 @@ export function EditorShell({
                 </>
               ) : (
                 <p className="helper" data-testid="semantic-audit-empty">
-                  Nenhuma inconsistencia semantica detectada.
+                  {editorT("shell.audit.empty")}
                 </p>
               )
             ) : (
-              <p className="helper">Abra para navegar pelas validacoes e focar os itens.</p>
+              <p className="helper">{editorT("shell.audit.collapsedHint")}</p>
             )}
           </section>
 
@@ -8744,16 +8970,16 @@ export function EditorShell({
           selectedErdEntityPayload ? (
             <div className="stack-sm erd-entity-inspector">
               <div className="row-actions inspector-selection-row">
-                <span className="badge">Entidade (ERD)</span>
+                <span className="badge">{editorT("shell.erd.entity.badge")}</span>
                 {nodeInspectorDirty ? (
                   <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                    Rascunho nao aplicado
+                    {editorT("shell.inspector.draftBadge")}
                   </span>
                 ) : null}
               </div>
 
               <div className="field">
-                <label htmlFor="erd-entity-label-input">Nome da entidade</label>
+                <label htmlFor="erd-entity-label-input">{editorT("shell.erd.entity.nameLabel")}</label>
                 <input
                   id="erd-entity-label-input"
                   value={operationalNodeDraft?.label ?? selectedNode.data.label}
@@ -8767,7 +8993,9 @@ export function EditorShell({
               </div>
 
               <div className="field">
-                <label htmlFor="erd-entity-table-name-input">Nome da tabela (opcional)</label>
+                <label htmlFor="erd-entity-table-name-input">
+                  {editorT("shell.erd.entity.tableNameLabel")}
+                </label>
                 <input
                   id="erd-entity-table-name-input"
                   defaultValue={selectedErdEntityPayload.tableName ?? ""}
@@ -8779,13 +9007,15 @@ export function EditorShell({
                       ...(tableName ? { tableName } : { tableName: undefined }),
                     }));
                   }}
-                  placeholder="Ex.: users"
+                  placeholder={editorT("shell.erd.entity.tableNamePlaceholder")}
                   data-testid="erd-entity-table-name-input"
                 />
               </div>
 
               <div className="field">
-                <label htmlFor="erd-entity-description-input">Descricao (opcional)</label>
+                <label htmlFor="erd-entity-description-input">
+                  {editorT("shell.erd.entity.descriptionLabel")}
+                </label>
                 <textarea
                   id="erd-entity-description-input"
                   rows={2}
@@ -8804,10 +9034,10 @@ export function EditorShell({
 
               <div className="erd-fields-grid" data-testid="erd-entity-fields-grid">
                 <div className="erd-fields-grid-header">
-                  <span>Nome</span>
-                  <span>Tipo</span>
-                  <span>Flags</span>
-                  <span>Acoes</span>
+                  <span>{editorT("shell.erd.entity.grid.name")}</span>
+                  <span>{editorT("shell.erd.entity.grid.type")}</span>
+                  <span>{editorT("shell.erd.entity.grid.flags")}</span>
+                  <span>{editorT("shell.erd.entity.grid.actions")}</span>
                 </div>
                 {selectedErdEntityPayload.fields.map((field, index) => {
                   const draft = erdFieldDrafts[field.id] ?? {
@@ -8922,7 +9152,7 @@ export function EditorShell({
                           onClick={() => handleRemoveErdField(field.id)}
                           data-testid={`erd-field-remove-${index}`}
                         >
-                          Remover
+                          {editorT("selectionHud.remove")}
                         </button>
                       </div>
                     </div>
@@ -8948,11 +9178,10 @@ export function EditorShell({
                   onClick={handleAddErdField}
                   data-testid="erd-fields-add-button"
                 >
-                  + Campo
+                  {editorT("shell.erd.entity.addField")}
                 </button>
                 <span className="helper">
-                  Enter cria novo campo. Atalhos por linha: P (PK), F (FK), U (UQ), N
-                  (NOT_NULL).
+                  {editorT("shell.erd.entity.keyboardHint")}
                 </span>
               </div>
 
@@ -8974,7 +9203,7 @@ export function EditorShell({
                   disabled={saveState.status === "saving"}
                   data-testid="inspector-apply-node"
                 >
-                  Aplicar alteracoes
+                  {editorT("shell.applyChanges")}
                 </button>
                 <button
                   className="btn"
@@ -8982,7 +9211,7 @@ export function EditorShell({
                   onClick={handleNodeInspectorReset}
                   data-testid="inspector-reset-node"
                 >
-                  Reverter
+                  {editorT("shell.revert")}
                 </button>
               </div>
             </div>
@@ -9060,7 +9289,7 @@ export function EditorShell({
                   <span className="badge">{inspectorSelectionBadge}</span>
                   {nodeInspectorDirty ? (
                     <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                      Rascunho nao aplicado
+                      {editorT("shell.inspector.draftBadge")}
                     </span>
                   ) : null}
                 </div>
@@ -9074,15 +9303,15 @@ export function EditorShell({
                     <span className="badge">{graphSelectedNodeSemantic.roleBadgeLabel}</span>
                     <span className="badge">{graphSelectedNodeSemantic.kindLabel}</span>
                   </div>
-                  <h4>Leitura da rede</h4>
+                  <h4>{editorT("shell.graph.readingTitle")}</h4>
                   <p className="helper">{graphSelectedNodeSemantic.summary}</p>
                   <dl className="inspector-meta-list">
                     <div>
-                      <dt>Posicao na rede</dt>
+                      <dt>{editorT("shell.graph.networkPosition")}</dt>
                       <dd>{graphSelectedNodeSemantic.footprintLabel}</dd>
                     </div>
                     <div>
-                      <dt>Vizinhanca</dt>
+                      <dt>{editorT("shell.inspector.neighborhood")}</dt>
                       <dd>{graphSelectedNodeSemantic.connectivityLabel}</dd>
                     </div>
                   </dl>
@@ -9183,8 +9412,11 @@ export function EditorShell({
                             currentSupportedDiagramType,
                             option.kind,
                             "operational",
+                            editorT,
                           )}
-                          {option.outOfProfile ? " (fora do perfil)" : ""}
+                          {option.outOfProfile
+                            ? editorT("shell.inspector.outOfProfileSuffix")
+                            : ""}
                         </option>
                       ))}
                     </select>
@@ -9192,6 +9424,7 @@ export function EditorShell({
                       {getNodeKindDescriptionForDiagram(
                         currentSupportedDiagramType,
                         operationalNodeDraft.kind,
+                        editorT,
                       )}
                     </span>
                   </div>
@@ -9256,19 +9489,22 @@ export function EditorShell({
                   >
                     <h4>{operationalNodeContextTitle}</h4>
                     <p className="helper">
-                      Papel atual: <strong>{selectedNodeRoleLabel ?? "Sem papel definido"}</strong>
+                      {editorT("shell.inspector.currentRole")}{" "}
+                      <strong>{selectedNodeRoleLabel ?? editorT("shell.roles.undefined")}</strong>
                     </p>
                     {isGraphDiagram ? (
                       <dl className="inspector-meta-list">
                         <div>
-                          <dt>Leitura dominante</dt>
-                          <dd>{graphSelectedNodeKindLabel ?? "Componente"}</dd>
+                          <dt>{editorT("shell.inspector.dominantReading")}</dt>
+                          <dd>{graphSelectedNodeKindLabel ?? editorT("graph.nodeKinds.entity.labelOperational")}</dd>
                         </div>
                         <div>
-                          <dt>Vizinhanca</dt>
+                          <dt>{editorT("shell.inspector.neighborhood")}</dt>
                           <dd>
-                            {selectedNodeRelations.incomingCount} entrada(s) e{" "}
-                            {selectedNodeRelations.outgoingCount} saida(s)
+                            {editorT("shell.inspector.neighborhoodSummary", {
+                              incomingCount: selectedNodeRelations.incomingCount,
+                              outgoingCount: selectedNodeRelations.outgoingCount,
+                            })}
                           </dd>
                         </div>
                       </dl>
@@ -9301,8 +9537,14 @@ export function EditorShell({
                   <h4>{operationalRelationsSectionTitle}</h4>
                   <p className="helper">
                     {isGraphDiagram
-                      ? `Recebe ${selectedNodeRelations.incomingCount} conexao(oes) e envia ${selectedNodeRelations.outgoingCount}.`
-                      : `Entrada: ${selectedNodeRelations.incomingCount} | Saida: ${selectedNodeRelations.outgoingCount}`}
+                      ? editorT("shell.relations.graphSummary", {
+                          incomingCount: selectedNodeRelations.incomingCount,
+                          outgoingCount: selectedNodeRelations.outgoingCount,
+                        })
+                      : editorT("shell.relations.flowSummary", {
+                          incomingCount: selectedNodeRelations.incomingCount,
+                          outgoingCount: selectedNodeRelations.outgoingCount,
+                        })}
                   </p>
                   {selectedNodeRelations.preview.length > 0 ? (
                     <ul className="summary-list inspector-relation-list">
@@ -9331,21 +9573,23 @@ export function EditorShell({
                                 )
                               }
                             >
-                              {isGraphDiagram ? "Ir para componente" : "Ir para no relacionado"}
+                              {isGraphDiagram
+                                ? editorT("shell.relations.openComponent")
+                                : editorT("shell.relations.openRelatedNode")}
                             </button>
                             <button
                               className="btn btn-link"
                               type="button"
                               onClick={() => handleOpenTransitionFromRelation(relation.id)}
                             >
-                              Editar conexao
+                              {editorT("shell.relations.editConnection")}
                             </button>
                             <button
                               className="btn btn-link btn-danger"
                               type="button"
                               onClick={() => handleRemoveRelation(relation.id)}
                             >
-                              Remover
+                              {editorT("selectionHud.remove")}
                             </button>
                           </div>
                         </li>
@@ -9354,8 +9598,8 @@ export function EditorShell({
                   ) : (
                     <p className="helper">
                       {isGraphDiagram
-                        ? "Sem conexoes registradas para este item."
-                        : "Sem relacoes conectadas."}
+                        ? editorT("shell.relations.emptyGraph")
+                        : editorT("shell.relations.empty")}
                     </p>
                   )}
                 </div>
@@ -9379,7 +9623,7 @@ export function EditorShell({
                   disabled={saveState.status === "saving"}
                   data-testid="inspector-apply-node"
                 >
-                  Aplicar alteracoes
+                  {editorT("shell.applyChanges")}
                 </button>
                 <button
                   className="btn"
@@ -9387,7 +9631,7 @@ export function EditorShell({
                   onClick={handleNodeInspectorReset}
                   data-testid="inspector-reset-node"
                 >
-                  Reverter
+                  {editorT("shell.revert")}
                 </button>
               </div>
               </div>
@@ -9399,7 +9643,7 @@ export function EditorShell({
               <span className="badge">{inspectorSelectionBadge}</span>
               {nodeInspectorDirty ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                  Rascunho nao aplicado
+                  {editorT("shell.inspector.draftBadge")}
                 </span>
                 ) : null}
             </div>
@@ -9415,7 +9659,7 @@ export function EditorShell({
                 aria-expanded={inspectorSections.general}
                 data-testid="inspector-section-general-toggle"
               >
-                Geral {inspectorSections.general ? "▾" : "▸"}
+                {editorT("shell.technical.generalSection")} {inspectorSections.general ? "▾" : "▸"}
               </button>
               <button
                 className="btn inspector-section-toggle"
@@ -9424,7 +9668,7 @@ export function EditorShell({
                 aria-expanded={inspectorSections.details}
                 data-testid="inspector-section-details-toggle"
               >
-                Detalhes {inspectorSections.details ? "▾" : "▸"}
+                {editorT("shell.technical.detailsSection")} {inspectorSections.details ? "▾" : "▸"}
               </button>
               <button
                 className="btn inspector-section-toggle"
@@ -9433,14 +9677,14 @@ export function EditorShell({
                 aria-expanded={inspectorSections.advanced}
                 data-testid="inspector-section-advanced-toggle"
               >
-                Avancado {inspectorSections.advanced ? "▾" : "▸"}
+                {editorT("shell.technical.advancedSection")} {inspectorSections.advanced ? "▾" : "▸"}
               </button>
             </div>
 
             {inspectorSections.general ? (
               <>
                 <div className="field">
-                  <label htmlFor="node-label-input">Rotulo</label>
+                  <label htmlFor="node-label-input">{editorT("shell.technical.node.label")}</label>
                   <input
                     id="node-label-input"
                     data-testid="inspector-node-label"
@@ -9459,7 +9703,7 @@ export function EditorShell({
                 </div>
 
                 <div className="field">
-                  <label htmlFor="node-kind-input">Kind (raw)</label>
+                  <label htmlFor="node-kind-input">{editorT("shell.technical.node.rawKind")}</label>
                   <select
                     id="node-kind-input"
                     data-testid="inspector-node-kind"
@@ -9478,15 +9722,17 @@ export function EditorShell({
                     {nodeKindOptions.map((option) => (
                       <option key={option.kind} value={option.kind}>
                         {option.kind}
-                        {option.outOfProfile ? " (fora do perfil)" : ""}
+                        {option.outOfProfile ? editorT("shell.inspector.outOfProfileSuffix") : ""}
                       </option>
                     ))}
                   </select>
                   <span
                     className="helper"
-                    title={getFriendlyNodeKindDescription(nodeInspectorDraft.kind)}
+                    title={getFriendlyNodeKindDescription(nodeInspectorDraft.kind, editorT)}
                   >
-                    Label amigavel: {getFriendlyNodeKindLabel(nodeInspectorDraft.kind)}
+                    {editorT("shell.technical.friendlyLabel", {
+                      label: getFriendlyNodeKindLabel(nodeInspectorDraft.kind, editorT),
+                    })}
                   </span>
                   {nodeInspectorErrors.kind ? (
                     <span className="helper field-error" role="alert">
@@ -9499,13 +9745,13 @@ export function EditorShell({
 
             {inspectorSections.details ? (
               <div className="field">
-                <label htmlFor="node-data-json-input">Dados (JSON)</label>
+                <label htmlFor="node-data-json-input">{editorT("shell.technical.node.dataJson")}</label>
                 <div className="row-actions">
                   <button className="btn" type="button" onClick={handleFormatNodeJson}>
-                    Formatar JSON
+                    {editorT("shell.technical.formatJson")}
                   </button>
                   <button className="btn" type="button" onClick={handleCopyNodeJson}>
-                    Copiar JSON
+                    {editorT("shell.technical.copyJson")}
                   </button>
                 </div>
                 <textarea
@@ -9546,7 +9792,7 @@ export function EditorShell({
                 disabled={saveState.status === "saving"}
                 data-testid="inspector-apply-node"
               >
-                Aplicar alteracoes
+                {editorT("shell.applyChanges")}
               </button>
               <button
                 className="btn"
@@ -9554,7 +9800,7 @@ export function EditorShell({
                 onClick={handleNodeInspectorReset}
                 data-testid="inspector-reset-node"
               >
-                Reverter
+                {editorT("shell.revert")}
               </button>
             </div>
 
@@ -9565,12 +9811,12 @@ export function EditorShell({
                     {selectedNode.id}
                   </span>
                   <button className="btn" type="button" onClick={handleCopyNodeId}>
-                    Copiar ID
+                    {editorT("shell.technical.copyId")}
                   </button>
                 </div>
                 <dl className="inspector-meta-list">
                   <div>
-                    <dt>Posicao</dt>
+                    <dt>{editorT("shell.technical.position")}</dt>
                     <dd data-testid="inspector-node-position">
                       {Math.round(selectedNode.position.x)},{" "}
                       {Math.round(selectedNode.position.y)}
@@ -9589,18 +9835,20 @@ export function EditorShell({
           selectedErdRelationPayload ? (
             <div className="stack-sm erd-relation-inspector">
               <div className="row-actions inspector-selection-row">
-                <span className="badge">Relação (ERD)</span>
+                <span className="badge">{editorT("shell.erd.relation.badge")}</span>
                 {edgeInspectorDirty ? (
                   <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                    Rascunho nao aplicado
+                    {editorT("shell.inspector.draftBadge")}
                   </span>
                 ) : null}
               </div>
 
               <section className="inspector-section-body">
-                <h4>Geral</h4>
+                <h4>{editorT("shell.erd.relation.sections.general")}</h4>
                 <div className="field">
-                  <label htmlFor="erd-relation-name-input">Nome da relação</label>
+                  <label htmlFor="erd-relation-name-input">
+                    {editorT("shell.erd.relation.nameLabel")}
+                  </label>
                   <input
                     id="erd-relation-name-input"
                     defaultValue={selectedErdRelationPayload.name ?? ""}
@@ -9608,12 +9856,14 @@ export function EditorShell({
                     onBlur={(event) => {
                       updateSelectedErdRelationName(event.target.value);
                     }}
-                    placeholder="Opcional"
+                    placeholder={editorT("shell.erd.relation.optionalPlaceholder")}
                     data-testid="erd-relation-name-input"
                   />
                 </div>
                 <div className="field">
-                  <label htmlFor="erd-relation-description-input">Descrição</label>
+                  <label htmlFor="erd-relation-description-input">
+                    {editorT("shell.erd.relation.descriptionLabel")}
+                  </label>
                   <textarea
                     id="erd-relation-description-input"
                     rows={2}
@@ -9631,11 +9881,11 @@ export function EditorShell({
                 </div>
                 <dl className="inspector-meta-list">
                   <div>
-                    <dt>Origem</dt>
+                    <dt>{editorT("shell.erd.relation.source")}</dt>
                     <dd>{selectedEdgeSourceLabel}</dd>
                   </div>
                   <div>
-                    <dt>Destino</dt>
+                    <dt>{editorT("shell.erd.relation.target")}</dt>
                     <dd>{selectedEdgeTargetLabel}</dd>
                   </div>
                 </dl>
@@ -9646,13 +9896,13 @@ export function EditorShell({
                     onClick={handleSwapSelectedErdRelationDirection}
                     data-testid="erd-relation-swap-direction"
                   >
-                    Trocar direção
+                    {editorT("shell.erd.relation.swapDirection")}
                   </button>
                 </div>
               </section>
 
               <section className="inspector-section-body">
-                <h4>Cardinalidade</h4>
+                <h4>{editorT("shell.erd.relation.sections.cardinality")}</h4>
                 <div className="row-actions">
                   {(["1:1", "1:N", "N:1", "N:N"] as ErdCardinalityPreset[]).map((preset) => (
                     <button
@@ -9684,7 +9934,7 @@ export function EditorShell({
                     return (
                       <>
                         <label>
-                          Min origem
+                          {editorT("shell.erd.relation.minSource")}
                           <select
                             value={String(cardinality.minSource)}
                             onChange={(event) =>
@@ -9703,7 +9953,7 @@ export function EditorShell({
                           </select>
                         </label>
                         <label>
-                          Max origem
+                          {editorT("shell.erd.relation.maxSource")}
                           <select
                             value={String(cardinality.maxSource)}
                             onChange={(event) =>
@@ -9722,7 +9972,7 @@ export function EditorShell({
                           </select>
                         </label>
                         <label>
-                          Min destino
+                          {editorT("shell.erd.relation.minTarget")}
                           <select
                             value={String(cardinality.minTarget)}
                             onChange={(event) =>
@@ -9741,7 +9991,7 @@ export function EditorShell({
                           </select>
                         </label>
                         <label>
-                          Max destino
+                          {editorT("shell.erd.relation.maxTarget")}
                           <select
                             value={String(cardinality.maxTarget)}
                             onChange={(event) =>
@@ -9774,7 +10024,7 @@ export function EditorShell({
                             }
                             data-testid="erd-cardinality-optional-source"
                           />
-                          Origem opcional
+                          {editorT("shell.erd.relation.optionalSource")}
                         </label>
                         <label className="erd-cardinality-checkbox">
                           <input
@@ -9791,7 +10041,7 @@ export function EditorShell({
                             }
                             data-testid="erd-cardinality-optional-target"
                           />
-                          Destino opcional
+                          {editorT("shell.erd.relation.optionalTarget")}
                         </label>
                       </>
                     );
@@ -9800,7 +10050,7 @@ export function EditorShell({
               </section>
 
               <section className="inspector-section-body">
-                <h4>Papéis</h4>
+                <h4>{editorT("shell.erd.relation.sections.roles")}</h4>
                 <div className="field">
                   <label htmlFor="erd-role-source-input">sourceRole</label>
                   <input
@@ -9840,25 +10090,27 @@ export function EditorShell({
                   />
                 </div>
                 <p className="helper" data-testid="erd-role-preview">
-                  {selectedEdgeSourceLabel} {selectedErdRelationPayload.roles?.sourceRole ?? "relaciona"}
+                  {selectedEdgeSourceLabel}{" "}
+                  {selectedErdRelationPayload.roles?.sourceRole ?? editorT("shell.erd.relation.roleFallback")}
                   {" / "}
-                  {selectedEdgeTargetLabel} {selectedErdRelationPayload.roles?.targetRole ?? "relaciona"}
+                  {selectedEdgeTargetLabel}{" "}
+                  {selectedErdRelationPayload.roles?.targetRole ?? editorT("shell.erd.relation.roleFallback")}
                 </p>
               </section>
 
               <section className="inspector-section-body">
-                <h4>Materialização</h4>
+                <h4>{editorT("shell.erd.relation.sections.materialization")}</h4>
                 <p className="helper">
-                  Estado atual:{" "}
+                  {editorT("shell.erd.relation.currentState")}{" "}
                   {selectedErdRelationPayload.materialization?.mode === "fk"
-                    ? "FK materializada"
+                    ? editorT("shell.erd.relation.materialization.fk")
                     : selectedErdRelationPayload.materialization?.mode === "associative"
-                      ? "Associativa"
-                      : "Conceitual"}
+                      ? editorT("shell.erd.relation.materialization.associative")
+                      : editorT("shell.erd.relation.materialization.conceptual")}
                 </p>
                 <div className="erd-materialization-controls">
                   <label>
-                    Lado dependente
+                    {editorT("shell.erd.relation.dependentSide")}
                     <select
                       value={erdMaterializeDependentSide}
                       onChange={(event) =>
@@ -9868,8 +10120,8 @@ export function EditorShell({
                       }
                       data-testid="erd-materialize-dependent-side"
                     >
-                      <option value="source">Origem</option>
-                      <option value="target">Destino</option>
+                      <option value="source">{editorT("shell.erd.relation.source")}</option>
+                      <option value="target">{editorT("shell.erd.relation.target")}</option>
                     </select>
                   </label>
                   {(() => {
@@ -9883,13 +10135,13 @@ export function EditorShell({
 
                     return (
                       <label>
-                        Campo FK
+                        {editorT("shell.erd.relation.fkField")}
                         <select
                           value={erdMaterializeExistingFieldId}
                           onChange={(event) => setErdMaterializeExistingFieldId(event.target.value)}
                           data-testid="erd-materialize-field-select"
                         >
-                          <option value="__new__">Criar novo campo</option>
+                          <option value="__new__">{editorT("shell.erd.relation.createNewField")}</option>
                           {dependentFields.map((field) => (
                             <option key={field.id} value={field.id}>
                               {field.name}
@@ -9906,7 +10158,7 @@ export function EditorShell({
                       onChange={(event) => setErdMaterializeUnique(event.target.checked)}
                       data-testid="erd-materialize-unique-toggle"
                     />
-                    UNIQUE no FK (1:1)
+                    {editorT("shell.erd.relation.uniqueOnFk")}
                   </label>
                 </div>
                 <div className="row-actions">
@@ -9916,7 +10168,7 @@ export function EditorShell({
                     onClick={handleMaterializeSelectedErdRelationAsFk}
                     data-testid="erd-materialize-fk-button"
                   >
-                    Materializar como FK
+                    {editorT("shell.erd.relation.materializeFk")}
                   </button>
                   <button
                     className="btn"
@@ -9924,7 +10176,7 @@ export function EditorShell({
                     onClick={handleApplySelectedErdOneToOneUniqueFix}
                     data-testid="erd-materialize-apply-unique-button"
                   >
-                    Aplicar UNIQUE (1:1)
+                    {editorT("shell.erd.relation.applyUnique")}
                   </button>
                   <button
                     className="btn"
@@ -9933,7 +10185,7 @@ export function EditorShell({
                     disabled={erdCardinalityToPreset(selectedErdRelationPayload.cardinality) !== "N:N"}
                     data-testid="erd-convert-associative-button"
                   >
-                    Converter em associativa
+                    {editorT("shell.erd.relation.convertAssociative")}
                   </button>
                   <button
                     className="btn"
@@ -9942,13 +10194,13 @@ export function EditorShell({
                     disabled={!erdPolicy.allowConceptualRelations}
                     data-testid="erd-mark-conceptual-button"
                   >
-                    Marcar como conceitual
+                    {editorT("shell.erd.relation.markConceptual")}
                   </button>
                 </div>
               </section>
 
               <section className="inspector-section-body">
-                <h4>Integridade referencial</h4>
+                <h4>{editorT("shell.erd.relation.sections.referentialIntegrity")}</h4>
                 <div className="erd-cardinality-advanced">
                   <label>
                     onDelete
@@ -9967,7 +10219,7 @@ export function EditorShell({
                       }
                       data-testid="erd-referential-on-delete"
                     >
-                      <option value="">(padrao)</option>
+                      <option value="">{editorT("shell.erd.relation.defaultOption")}</option>
                       <option value="restrict">restrict</option>
                       <option value="cascade">cascade</option>
                       <option value="setNull">setNull</option>
@@ -9991,7 +10243,7 @@ export function EditorShell({
                       }
                       data-testid="erd-referential-on-update"
                     >
-                      <option value="">(padrao)</option>
+                      <option value="">{editorT("shell.erd.relation.defaultOption")}</option>
                       <option value="restrict">restrict</option>
                       <option value="cascade">cascade</option>
                       <option value="setNull">setNull</option>
@@ -10002,13 +10254,13 @@ export function EditorShell({
               </section>
 
               <section className="inspector-section-body">
-                <h4>Diagnósticos</h4>
+                <h4>{editorT("shell.erd.relation.sections.diagnostics")}</h4>
                 {selectedErdRelationIssues.length > 0 ? (
                   <ul className="summary-list">
                     {selectedErdRelationIssues.map((issue) => (
                       <li key={issue.id}>
                         <span>
-                          {getSemanticSeverityLabel(issue.severity)}: {issue.message}
+                          {getSemanticSeverityLabel(issue.severity, editorT)}: {issue.message}
                         </span>
                         <div className="row-actions">
                           <button
@@ -10017,7 +10269,7 @@ export function EditorShell({
                             onClick={() => handleFocusSemanticIssue(issue)}
                             data-testid={`erd-relation-issue-goto-${issue.id}`}
                           >
-                            Ir para
+                            {editorT("shell.audit.goToIssue")}
                           </button>
                           {readIssueSuggestedFixes(issue).map((fix) => (
                             <button
@@ -10035,7 +10287,7 @@ export function EditorShell({
                     ))}
                   </ul>
                 ) : (
-                  <p className="helper">Sem diagnosticos para esta relação.</p>
+                  <p className="helper">{editorT("shell.erd.relation.diagnosticsEmpty")}</p>
                 )}
               </section>
 
@@ -10057,7 +10309,7 @@ export function EditorShell({
                   disabled={saveState.status === "saving"}
                   data-testid="erd-relation-remove-button"
                 >
-                  Remover relacao
+                  {editorT("shell.erd.relation.remove")}
                 </button>
               </div>
             </div>
@@ -10114,11 +10366,11 @@ export function EditorShell({
                   <span className="badge">
                     {inspectorSelectionState.edgeSelected
                       ? inspectorSelectionState.badgeLabel
-                      : "Conexao em foco"}
+                      : editorT("shell.selection.edgeFocused")}
                   </span>
                   {edgeInspectorDirty ? (
                     <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                      Rascunho nao aplicado
+                      {editorT("shell.inspector.draftBadge")}
                     </span>
                   ) : null}
                 </div>
@@ -10153,7 +10405,7 @@ export function EditorShell({
                     <span className="badge">{graphSelectedEdgeSemantic.labelOperational}</span>
                     <span className="badge">{graphSelectedEdgeSemantic.defaultVerbLabel}</span>
                   </div>
-                  <h4>Leitura da conexao</h4>
+                  <h4>{editorT("shell.graph.edgeReadingTitle")}</h4>
                   <p className="helper">
                     {selectedEdgeSourceLabel} {" -> "} {selectedEdgeTargetLabel}
                   </p>
@@ -10202,6 +10454,7 @@ export function EditorShell({
                             currentSupportedDiagramType,
                             kind,
                             "operational",
+                            editorT,
                           )}
                         </option>
                       ))}
@@ -10210,6 +10463,7 @@ export function EditorShell({
                       {getEdgeKindDescriptionForDiagram(
                         currentSupportedDiagramType,
                         operationalEdgeDraft.kind,
+                        editorT,
                       )}
                     </span>
                   </div>
@@ -10257,10 +10511,10 @@ export function EditorShell({
                   onClick={handleApplyEdgeInspector}
                   disabled={saveState.status === "saving"}
                 >
-                  Aplicar alteracoes
+                  {editorT("shell.applyChanges")}
                 </button>
                 <button className="btn" type="button" onClick={handleEdgeInspectorReset}>
-                  Reverter
+                  {editorT("shell.revert")}
                 </button>
                 <button
                   className="btn"
@@ -10268,7 +10522,7 @@ export function EditorShell({
                   onClick={handleRemoveSelected}
                   disabled={saveState.status === "saving"}
                 >
-                  Remover aresta
+                  {editorT("shell.edgeActions.remove")}
                 </button>
               </div>
               </div>
@@ -10277,10 +10531,14 @@ export function EditorShell({
           {selectedEdge && inspectorMode === "technical" && edgeInspectorDraft ? (
           <div className="stack-sm">
             <div className="row-actions inspector-selection-row">
-              <span className="badge">{inspectorSelectionState.edgeSelected ? inspectorSelectionState.badgeLabel : "Conexao em foco"}</span>
+              <span className="badge">
+                {inspectorSelectionState.edgeSelected
+                  ? inspectorSelectionState.badgeLabel
+                  : editorT("shell.selection.edgeFocused")}
+              </span>
               {edgeInspectorDirty ? (
                 <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                  Rascunho nao aplicado
+                  {editorT("shell.inspector.draftBadge")}
                   </span>
                 ) : null}
             </div>
@@ -10293,7 +10551,7 @@ export function EditorShell({
                 aria-expanded={inspectorSections.general}
                 data-testid="inspector-section-general-toggle"
               >
-                Geral {inspectorSections.general ? "▾" : "▸"}
+                {editorT("shell.technical.generalSection")} {inspectorSections.general ? "▾" : "▸"}
               </button>
               <button
                 className="btn inspector-section-toggle"
@@ -10302,7 +10560,7 @@ export function EditorShell({
                 aria-expanded={inspectorSections.details}
                 data-testid="inspector-section-details-toggle"
               >
-                Detalhes {inspectorSections.details ? "▾" : "▸"}
+                {editorT("shell.technical.detailsSection")} {inspectorSections.details ? "▾" : "▸"}
               </button>
               <button
                 className="btn inspector-section-toggle"
@@ -10311,14 +10569,14 @@ export function EditorShell({
                 aria-expanded={inspectorSections.advanced}
                 data-testid="inspector-section-advanced-toggle"
               >
-                Avancado {inspectorSections.advanced ? "▾" : "▸"}
+                {editorT("shell.technical.advancedSection")} {inspectorSections.advanced ? "▾" : "▸"}
               </button>
             </div>
 
             {inspectorSections.general ? (
               <>
                 <div className="field">
-                  <label htmlFor="edge-label-input">Rotulo</label>
+                  <label htmlFor="edge-label-input">{editorT("shell.technical.edge.label")}</label>
                   <input
                     id="edge-label-input"
                     value={edgeInspectorDraft.label}
@@ -10336,7 +10594,7 @@ export function EditorShell({
                 </div>
 
                 <div className="field">
-                  <label htmlFor="edge-kind-input">Kind (raw)</label>
+                  <label htmlFor="edge-kind-input">{editorT("shell.technical.edge.rawKind")}</label>
                   <select
                     id="edge-kind-input"
                     value={edgeInspectorDraft.kind}
@@ -10359,9 +10617,11 @@ export function EditorShell({
                   </select>
                   <span
                     className="helper"
-                    title={getFriendlyEdgeKindDescription(edgeInspectorDraft.kind)}
+                    title={getFriendlyEdgeKindDescription(edgeInspectorDraft.kind, editorT)}
                   >
-                    Label amigavel: {getFriendlyEdgeKindLabel(edgeInspectorDraft.kind)}
+                    {editorT("shell.technical.friendlyLabel", {
+                      label: getFriendlyEdgeKindLabel(edgeInspectorDraft.kind, editorT),
+                    })}
                   </span>
                   {edgeInspectorErrors.kind ? (
                     <span className="helper field-error" role="alert">
@@ -10374,13 +10634,13 @@ export function EditorShell({
 
             {inspectorSections.details ? (
               <div className="field">
-                <label htmlFor="edge-data-json-input">Dados (JSON)</label>
+                <label htmlFor="edge-data-json-input">{editorT("shell.technical.edge.dataJson")}</label>
                 <div className="row-actions">
                   <button className="btn" type="button" onClick={handleFormatEdgeJson}>
-                    Formatar JSON
+                    {editorT("shell.technical.formatJson")}
                   </button>
                   <button className="btn" type="button" onClick={handleCopyEdgeJson}>
-                    Copiar JSON
+                    {editorT("shell.technical.copyJson")}
                   </button>
                 </div>
                 <textarea
@@ -10419,10 +10679,10 @@ export function EditorShell({
                 onClick={handleApplyEdgeInspector}
                 disabled={saveState.status === "saving"}
               >
-                Aplicar alteracoes
+                {editorT("shell.applyChanges")}
               </button>
               <button className="btn" type="button" onClick={handleEdgeInspectorReset}>
-                Reverter
+                {editorT("shell.revert")}
               </button>
               <button
                 className="btn"
@@ -10430,7 +10690,7 @@ export function EditorShell({
                 onClick={handleRemoveSelected}
                 disabled={saveState.status === "saving"}
               >
-                Remover aresta
+                {editorT("shell.edgeActions.remove")}
               </button>
             </div>
 
@@ -10439,12 +10699,12 @@ export function EditorShell({
                 <div className="row-actions">
                   <span className="badge mono">{selectedEdge.id}</span>
                   <button className="btn" type="button" onClick={handleCopyEdgeId}>
-                    Copiar ID
+                    {editorT("shell.technical.copyId")}
                   </button>
                 </div>
                 <dl className="inspector-meta-list">
                   <div>
-                    <dt>Ligacao</dt>
+                    <dt>{editorT("shell.technical.link")}</dt>
                     <dd>
                       {selectedEdge.source} -&gt; {selectedEdge.target}
                     </dd>
@@ -10460,29 +10720,29 @@ export function EditorShell({
             <p className="helper">
               {isProcessDiagram
                 ? processInspectorCopy?.emptyTitle
-                : "Nenhum item selecionado no canvas."}
+                : editorT("shell.emptyState.title")}
             </p>
             <p className="helper">
               {isProcessDiagram
                 ? processInspectorCopy?.emptySummary
-                : "Selecione um no ou aresta para revisar titulos, relacoes e detalhes."}
+                : editorT("shell.emptyState.summary")}
             </p>
             <p className="helper">
               {isProcessDiagram
                 ? processInspectorCopy?.emptyGuidance
-                : "Para iniciar ajustes: selecione um elemento no diagrama ou adicione um novo nó na barra superior."}
+                : editorT("shell.emptyState.guidance")}
             </p>
             <dl className="inspector-meta-list">
               <div>
-                <dt>Nós</dt>
+                <dt>{editorT("shell.emptyState.nodes")}</dt>
                 <dd>{nodes.length}</dd>
               </div>
               <div>
-                <dt>Arestas</dt>
+                <dt>{editorT("shell.emptyState.edges")}</dt>
                 <dd>{edges.length}</dd>
               </div>
               <div>
-                <dt>Viewport</dt>
+                <dt>{editorT("shell.emptyState.viewport")}</dt>
                 <dd>
                   {Math.round(viewport.x)}, {Math.round(viewport.y)} @{" "}
                   {viewport.zoom.toFixed(2)}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "@/src/i18n/navigation";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { PageHeader } from "@/src/components/ui/page-header";
+import { useDashboardCopy } from "./dashboard-copy";
 import { NewProjectDrawer } from "./new-project-drawer";
 import { ProjectsGrid } from "./projects-grid";
 import { ProjectsList } from "./projects-list";
@@ -49,19 +50,22 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   return debouncedValue;
 }
 
-function validateProjectName(name: string) {
+function validateProjectName(
+  name: string,
+  copy: ReturnType<typeof useDashboardCopy>,
+) {
   const trimmed = name.trim();
 
   if (!trimmed) {
-    return "Informe um nome para criar o projeto.";
+    return copy.messages.nameRequired;
   }
 
   if (trimmed.length < 3) {
-    return "Use ao menos 3 caracteres no nome.";
+    return copy.messages.nameTooShort;
   }
 
   if (trimmed.length > 120) {
-    return "Use no maximo 120 caracteres no nome.";
+    return copy.messages.nameTooLong;
   }
 
   return null;
@@ -88,6 +92,7 @@ export function DashboardProjectsPanel({
   workspace,
   projects,
 }: DashboardProjectsPanelProps) {
+  const copy = useDashboardCopy();
   const router = useRouter();
   const drawerNameInputRef = useRef<HTMLInputElement | null>(null);
   const newProjectButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -226,8 +231,9 @@ export function DashboardProjectsPanel({
         snapshotFilter,
         sortOption,
         workspaceMode,
-      }),
+      }, copy),
     [
+      copy,
       debouncedSearchTerm,
       diagramFilter,
       projects,
@@ -277,9 +283,9 @@ export function DashboardProjectsPanel({
   async function handleCopyTechnicalId(project: DashboardProject) {
     try {
       await copyTextToClipboard(project.id);
-      setWorkspaceMessage(`ID tecnico copiado: ${project.id}`);
+      setWorkspaceMessage(copy.getCopiedTechnicalIdMessage(project.id));
     } catch {
-      setWorkspaceMessage("Nao foi possivel copiar o ID tecnico.");
+      setWorkspaceMessage(copy.messages.copyTechnicalIdError);
     }
   }
 
@@ -287,7 +293,7 @@ export function DashboardProjectsPanel({
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedDescription = description.trim();
-    const validationError = validateProjectName(trimmedName);
+    const validationError = validateProjectName(trimmedName, copy);
 
     if (validationError) {
       setErrorMessage(validationError);
@@ -320,18 +326,18 @@ export function DashboardProjectsPanel({
       };
 
       if (!response.ok) {
-        setErrorMessage(payload.message ?? "Nao foi possivel criar o projeto.");
+        setErrorMessage(payload.message ?? copy.messages.createError);
         return;
       }
 
       setWorkspaceMessage(
-        `Projeto "${payload.data?.project?.name ?? trimmedName}" criado com sucesso.`,
+        copy.getCreateSuccessMessage(payload.data?.project?.name ?? trimmedName),
       );
       setRecentlyCreatedProjectId(payload.data?.project?.id ?? null);
       closeDrawerAndResetForm();
       router.refresh();
     } catch {
-      setErrorMessage("Falha de rede ao criar projeto.");
+      setErrorMessage(copy.messages.networkError);
     } finally {
       setIsSubmitting(false);
     }
@@ -341,8 +347,8 @@ export function DashboardProjectsPanel({
     <>
       <section className="panel">
         <PageHeader
-          title="Hub da area de trabalho"
-          description="Gerencie projetos e avance no fluxo Workspace -> Assistente de criacao -> Editor."
+          title={copy.page.title}
+          description={copy.page.description}
           actions={
             <span className="badge">
               <span className="badge-dot" aria-hidden="true" />
@@ -354,15 +360,15 @@ export function DashboardProjectsPanel({
         <div className="panel-body stack-sm">
           <div className="grid-tiles workspace-stats-grid">
             <div className="tile">
-              <h3>Projetos</h3>
+              <h3>{copy.stats.projects}</h3>
               <p>{workspaceStats.total}</p>
             </div>
             <div className="tile">
-              <h3>Snapshot gerado</h3>
+              <h3>{copy.stats.generated}</h3>
               <p>{workspaceStats.generated}</p>
             </div>
             <div className="tile">
-              <h3>Snapshot pendente</h3>
+              <h3>{copy.stats.pending}</h3>
               <p>{workspaceStats.pending}</p>
             </div>
           </div>
@@ -396,27 +402,28 @@ export function DashboardProjectsPanel({
             filteredCount={filteredProjects.length}
             totalCount={projects.length}
             workspaceMessage={workspaceMessage}
+            copy={copy}
           />
         </div>
       </section>
 
       <section className="panel">
         <PageHeader
-          title="Projetos"
-          description={`${filteredProjects.length} projeto(s) na visualizacao atual.`}
+          title={copy.page.projectListTitle}
+          description={copy.getProjectListDescription(filteredProjects.length)}
         />
         <div className="panel-body">
           {filteredProjects.length === 0 ? (
             projects.length === 0 ? (
               <EmptyState
-                title="Nenhum projeto criado ainda"
-                description="Crie seu primeiro projeto para iniciar o fluxo workspace -> Assistente de criacao -> Editor."
+                title={copy.emptyStates.noneCreatedTitle}
+                description={copy.emptyStates.noneCreatedDescription}
                 dataTestId="dashboard-empty-projects"
               />
             ) : (
               <EmptyState
-                title="Nenhum projeto encontrado"
-                description="Ajuste busca, filtros ou ordenacao para encontrar projetos."
+                title={copy.emptyStates.noneFilteredTitle}
+                description={copy.emptyStates.noneFilteredDescription}
                 dataTestId="dashboard-empty-filtered-projects"
               />
             )
@@ -427,6 +434,7 @@ export function DashboardProjectsPanel({
               workspaceMode={workspaceMode}
               highlightedProjectId={highlightedProjectId}
               onCopyTechnicalId={handleCopyTechnicalId}
+              copy={copy}
             />
           ) : (
             <ProjectsList
@@ -436,6 +444,7 @@ export function DashboardProjectsPanel({
               highlightedProjectId={highlightedProjectId}
               onOpenProject={(projectId) => router.push(`/editor?projectId=${projectId}`)}
               onCopyTechnicalId={handleCopyTechnicalId}
+              copy={copy}
             />
           )}
         </div>
@@ -457,6 +466,7 @@ export function DashboardProjectsPanel({
         onDescriptionChange={setDescription}
         onInitialDiagramTypeChange={setInitialDiagramType}
         onTemplateChange={setTemplate}
+        copy={copy}
       />
     </>
   );

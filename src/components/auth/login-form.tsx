@@ -1,16 +1,21 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useTranslations, useLocale } from "next-intl";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+import { getPathname, useRouter } from "@/src/i18n/navigation";
+import { appRoutes } from "@/src/lib/routes";
 
-function getAuthErrorMessage(errorCode: string | null) {
+type AuthErrorKey = "credentialsSignin" | "default";
+
+function getAuthErrorKey(errorCode: string | null): AuthErrorKey | null {
   if (!errorCode) return null;
   if (errorCode === "CredentialsSignin") {
-    return "Credenciais invalidas. Confira email e senha de desenvolvimento.";
+    return "credentialsSignin";
   }
 
-  return "Nao foi possivel autenticar. Tente novamente.";
+  return "default";
 }
 
 type LoginFormProps = {
@@ -26,39 +31,57 @@ export function LoginForm({ devCredentialsEnabled = true }: LoginFormProps) {
 }
 
 function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
+  const t = useTranslations("Auth.form");
+  const errorT = useTranslations("Auth.errors");
+  const locale = useLocale();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
-  const errorMessage = getAuthErrorMessage(searchParams.get("error"));
+  const callbackUrl =
+    searchParams.get("callbackUrl") ??
+    getPathname({ href: appRoutes.dashboard, locale });
+  const errorKey = getAuthErrorKey(searchParams.get("error"));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitErrorKey, setSubmitErrorKey] = useState<AuthErrorKey | null>(null);
   const [email, setEmail] = useState("admin@mapia.local");
   const [password, setPassword] = useState("mapia123");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!devCredentialsEnabled) return;
+
+    setSubmitErrorKey(null);
     setIsSubmitting(true);
 
-    await signIn("credentials", {
+    const result = await signIn("credentials", {
       email,
       password,
       callbackUrl,
+      redirect: false,
     });
 
+    if (result?.error) {
+      setSubmitErrorKey(getAuthErrorKey(result.error));
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(false);
+    router.push(result?.url ?? callbackUrl);
+    router.refresh();
   }
 
   return (
     <form className="stack-sm" onSubmit={handleSubmit} data-testid="login-form">
       {!devCredentialsEnabled ? (
         <div className="error-box">
-          O login por credenciais de desenvolvimento esta desabilitado fora de{" "}
-          <code className="mono">NODE_ENV=development</code>.
+          {t("disabledMessage")} <code className="mono">NODE_ENV=development</code>.
         </div>
       ) : null}
-      {errorMessage ? <div className="error-box">{errorMessage}</div> : null}
+      {errorKey ? <div className="error-box">{errorT(errorKey)}</div> : null}
+      {submitErrorKey ? <div className="error-box">{errorT(submitErrorKey)}</div> : null}
 
       <div className="field">
-        <label htmlFor="email">Email</label>
+        <label htmlFor="email">{t("emailLabel")}</label>
         <input
           id="email"
           name="email"
@@ -73,7 +96,7 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
       </div>
 
       <div className="field">
-        <label htmlFor="password">Senha</label>
+        <label htmlFor="password">{t("passwordLabel")}</label>
         <input
           id="password"
           name="password"
@@ -88,8 +111,8 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
       </div>
 
       <p className="helper">
-        Credenciais padrao configuraveis via{" "}
-        <code className="mono">DEV_LOGIN_EMAIL</code> e{" "}
+        {t("credentialsHint")}{" "}
+        <code className="mono">DEV_LOGIN_EMAIL</code> /{" "}
         <code className="mono">DEV_LOGIN_PASSWORD</code>.
       </p>
 
@@ -99,7 +122,7 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
         disabled={isSubmitting || !devCredentialsEnabled}
         data-testid="login-submit-button"
       >
-        {isSubmitting ? "Entrando..." : "Entrar"}
+        {isSubmitting ? t("submitting") : t("submit")}
       </button>
     </form>
   );

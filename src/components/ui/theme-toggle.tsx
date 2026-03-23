@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 
 const THEME_STORAGE_KEY = "mapia-theme";
 
@@ -26,6 +27,7 @@ function applyTheme(theme: ThemeMode) {
 }
 
 export function ThemeToggle() {
+  const t = useTranslations("Common.theme");
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof document !== "undefined") {
       const current = document.documentElement.dataset.theme;
@@ -71,11 +73,13 @@ export function ThemeToggle() {
       className="btn theme-toggle"
       onClick={handleToggleTheme}
       data-testid="theme-toggle"
-      aria-label={`Alternar tema para ${theme === "dark" ? "claro" : "escuro"}`}
-      title={`Tema atual: ${theme === "dark" ? "Escuro" : "Claro"}`}
+      aria-label={
+        theme === "dark" ? t("toggleToLightAria") : t("toggleToDarkAria")
+      }
+      title={theme === "dark" ? t("currentDarkTitle") : t("currentLightTitle")}
     >
       <span className="theme-toggle-indicator" aria-hidden="true" />
-      {theme === "dark" ? "Tema: Claro" : "Tema: Escuro"}
+      {theme === "dark" ? t("switchToLight") : t("switchToDark")}
     </button>
   );
 }

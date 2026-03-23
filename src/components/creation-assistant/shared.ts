@@ -2,14 +2,12 @@ import {
   AssistantDraftSchema,
   buildDefaultAutomationToggles,
   buildDefaultContextForView,
-  getViewCompatibilityRank,
   normalizeLayoutForView,
   resolveRecommendedInitialView,
   resolveRecommendedLayout,
   type AssistantCreationSettings,
   type AssistantDraft,
   type DetailLevel,
-  type InitialView,
   type ProjectProfile,
   type StartSource,
   type StartStrategy,
@@ -46,77 +44,34 @@ export type CreationAssistantShellProps = {
   snapshotDiagramType?: string;
 };
 
-export const STEPS = [
-  { id: "project", title: "Projeto", description: "Nome e objetivo do projeto." },
-  { id: "scope", title: "Escopo", description: "Perfil do que voce quer mapear." },
-  { id: "origin", title: "Origem", description: "Como comecar o mapa inicial." },
-  { id: "view", title: "Visao inicial", description: "Modo de leitura inicial." },
-  {
-    id: "adjustments",
-    title: "Ajustes",
-    description: "Layout, detalhe, automacao e contexto.",
-  },
-  { id: "review", title: "Revisao", description: "Resumo final antes de criar." },
-] as const;
+export const STEP_IDS = [
+  "project",
+  "scope",
+  "origin",
+  "view",
+  "adjustments",
+  "review",
+] as const satisfies readonly StepId[];
 
-export const PROFILES: Array<{
-  value: ProjectProfile;
-  title: string;
-  description: string;
-}> = [
-  { value: "blank", title: "Em branco", description: "Comece sem estrutura fixa." },
-  {
-    value: "information-structure",
-    title: "Estrutura da informacao",
-    description: "Conteudo e navegacao.",
-  },
-  { value: "process", title: "Processo", description: "Etapas e decisoes." },
-  {
-    value: "data-model",
-    title: "Modelo de dados",
-    description: "Entidades e relacionamentos.",
-  },
-  {
-    value: "system-architecture",
-    title: "Arquitetura do sistema",
-    description: "Servicos e dependencias.",
-  },
-  {
-    value: "documents-governance",
-    title: "Documentos e governanca",
-    description: "Politicas e trilhas.",
-  },
-  { value: "mixed", title: "Misto", description: "Cenario hibrido." },
-];
+export const PROJECT_PROFILES = [
+  "blank",
+  "information-structure",
+  "process",
+  "data-model",
+  "system-architecture",
+  "documents-governance",
+  "mixed",
+] as const satisfies readonly ProjectProfile[];
 
-export const START_STRATEGIES: Array<{
-  value: StartStrategy;
-  title: string;
-  description: string;
-}> = [
-  { value: "manual", title: "Criar manualmente", description: "Canvas limpo com edicao manual." },
-  { value: "import", title: "Importar do sistema", description: "Partir de fonte estruturada." },
-  { value: "template", title: "Usar modelo inicial", description: "Preset inicial recomendado." },
-  {
-    value: "hybrid",
-    title: "Combinar importacao e edicao manual",
-    description: "Importa e complementa manualmente.",
-  },
-];
+export const START_STRATEGY_VALUES = [
+  "manual",
+  "import",
+  "template",
+  "hybrid",
+] as const satisfies readonly StartStrategy[];
 
 export const DETAIL_LEVELS: DetailLevel[] = ["essential", "intermediate", "detailed"];
 export const LOCAL_DRAFT_KEY = "mapia.creation-assistant.new-project.v1";
-
-export const VIEW_DESCRIPTIONS: Record<InitialView, string> = {
-  free: "Canvas livre para organizar ideias sem restricoes iniciais.",
-  hierarchy: "Estrutura em niveis para organizacao pai-filho.",
-  flow: "Fluxo de etapas com transicoes e decisoes.",
-  graph: "Rede de relacoes entre elementos conectados.",
-  erd: "Modelo entidade-relacionamento para dados.",
-  sitemap: "Mapa de paginas e navegacao da informacao.",
-  timeline: "Sequencia temporal de marcos e eventos.",
-  mindmap: "Mapa mental com ramificacoes a partir de um tema central.",
-};
 
 export const GENERIC_SOURCE_KINDS = [
   "csv",
@@ -144,14 +99,10 @@ export type InitialDraftState = {
   layoutWarning: string | null;
 };
 
-export function rankLabel(profile: ProjectProfile, view: InitialView) {
-  const rank = getViewCompatibilityRank(profile, view);
-
-  if (rank === "primary") return "Principal";
-  if (rank === "secondary") return "Secundaria";
-  if (rank === "experimental") return "Experimental";
-  return "Incompativel";
-}
+const DEFAULT_INITIAL_DRAFT_LABELS = {
+  projectName: "Novo projeto",
+  rootName: "Nucleo",
+} as const;
 
 export function isGenericSourceKind(
   kind: StartSource,
@@ -196,7 +147,13 @@ export function buildInitialDraft(input: {
   initialSettings?: AssistantCreationSettings | null;
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
+  labels?: {
+    projectName: string;
+    rootName: string;
+  };
 }): InitialDraftState {
+  const labels = input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS;
+
   if (input.initialDraftState?.draft) {
     const parsedDraft = AssistantDraftSchema.safeParse(input.initialDraftState.draft);
     if (parsedDraft.success) {
@@ -221,7 +178,7 @@ export function buildInitialDraft(input: {
   });
   const layoutWarning = context.warning ?? normalized.warning;
   const parsed = AssistantDraftSchema.safeParse({
-    projectName: input.initialProject?.name ?? "Novo projeto",
+    projectName: input.initialProject?.name ?? labels.projectName,
     ...(input.initialProject?.objective
       ? { projectObjective: input.initialProject.objective }
       : {}),
@@ -261,7 +218,7 @@ export function buildInitialDraft(input: {
 
   return {
     draft: AssistantDraftSchema.parse({
-      projectName: "Novo projeto",
+      projectName: labels.projectName,
       profile: "blank",
       startStrategy: "manual",
       initialView: "free",

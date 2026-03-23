@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+import ptBRMessages from "@/messages/pt-BR.json";
+import { createDashboardCopy } from "./dashboard-copy";
 import {
   filterAndSortProjects,
-  getTemplateLabel,
   type DashboardProject,
 } from "./workspace-projects";
 
@@ -43,6 +44,7 @@ const sampleProjects: DashboardProject[] = [
     snapshotVersionCount: 1,
   },
 ];
+const dashboardCopy = createDashboardCopy(ptBRMessages.Dashboard, "pt-BR");
 
 describe("workspace-projects", () => {
   it("filters snapshot pendente + tipo indefinido", () => {
@@ -53,7 +55,7 @@ describe("workspace-projects", () => {
       snapshotFilter: "pending",
       sortOption: "updated-desc",
       workspaceMode: "operational",
-    });
+    }, dashboardCopy);
 
     expect(result.map((project) => project.name)).toEqual(["Alpha"]);
   });
@@ -66,7 +68,7 @@ describe("workspace-projects", () => {
       snapshotFilter: "all",
       sortOption: "name-asc",
       workspaceMode: "operational",
-    });
+    }, dashboardCopy);
 
     expect(result.map((project) => project.name)).toEqual([
       "Alpha",
@@ -83,13 +85,17 @@ describe("workspace-projects", () => {
       snapshotFilter: "all",
       sortOption: "name-asc",
       workspaceMode: "technical",
-    });
+    }, dashboardCopy);
 
-    expect(result.map((project) => project.name)).toEqual(["Zulu"]);
+  expect(result.map((project) => project.name)).toEqual(["Zulu"]);
   });
 
   it("returns operational and technical template labels", () => {
-    expect(getTemplateLabel("graph", "operational")).toBe("Estrutura livre");
-    expect(getTemplateLabel("graph", "technical")).toBe("graph (legado)");
+    expect(dashboardCopy.getTemplateLabel("graph", "operational")).toBe(
+      "Estrutura livre",
+    );
+    expect(dashboardCopy.getTemplateLabel("graph", "technical")).toBe(
+      "graph (legado)",
+    );
   });
 });

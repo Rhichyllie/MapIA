@@ -3,19 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export function useFlowSelectionMenu(dismissKey: string) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [openForKey, setOpenForKey] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const isOpen = openForKey === dismissKey;
 
   const closeMenu = useCallback(() => {
-    setIsOpen(false);
+    setOpenForKey(null);
   }, []);
 
   const toggleMenu = useCallback(() => {
-    setIsOpen((current) => !current);
-  }, []);
-
-  useEffect(() => {
-    setIsOpen(false);
+    setOpenForKey((current) => (current === dismissKey ? null : dismissKey));
   }, [dismissKey]);
 
   useEffect(() => {
@@ -30,13 +27,13 @@ export function useFlowSelectionMenu(dismissKey: string) {
         target instanceof Node &&
         !menuRef.current.contains(target)
       ) {
-        setIsOpen(false);
+        setOpenForKey(null);
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setIsOpen(false);
+        setOpenForKey(null);
       }
     }
 

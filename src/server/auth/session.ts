@@ -1,6 +1,8 @@
 import type { Session } from "next-auth";
+import { getLocale } from "next-intl/server";
 import { getServerSession } from "next-auth";
-import { redirect } from "next/navigation";
+import { redirect } from "@/src/i18n/navigation";
+import { appRoutes } from "@/src/lib/routes";
 import { authOptions } from "@/src/server/auth/options";
 
 export async function getOptionalSession() {
@@ -11,7 +13,12 @@ export async function requireSession(): Promise<Session> {
   const session = await getServerSession(authOptions);
 
   if (!session) {
-    redirect("/login");
+    const locale = await getLocale();
+    redirect({ href: appRoutes.login, locale });
+  }
+
+  if (!session) {
+    throw new Error("Missing authenticated session after redirect.");
   }
 
   return session;

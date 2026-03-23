@@ -1,15 +1,8 @@
 import {
-  buildWhatWillBeCreatedSummary,
-  getDetailLevelLabel,
-  getInitialViewLabel,
-  getLayoutChoiceLabel,
-  getProjectProfileLabel,
-  getStartSourceLabel,
-  getStartStrategyLabel,
-  getTemplatePresetLabel,
   type AssistantDraft,
   type StartStrategyRecommendation,
 } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type ReviewStepProps = {
   draft: AssistantDraft;
@@ -18,10 +11,12 @@ type ReviewStepProps = {
   recommendedStartStrategy: StartStrategyRecommendation;
   legacyLayoutWarning: string | null;
   enabledAutomationLabels: string[];
+  labels: CreationAssistantLabels;
 };
 
 export function ReviewStep({
   draft,
+  labels,
   sourceStatusSummary,
   sourceStatusCode,
   recommendedStartStrategy,
@@ -33,59 +28,65 @@ export function ReviewStep({
       <section className="tile">
         <ul className="summary-list">
           <li>
-            <strong>Nome:</strong> {draft.projectName}
+            <strong>{labels.reviewStep.nameLabel}</strong> {draft.projectName}
           </li>
           <li>
-            <strong>Perfil:</strong> {getProjectProfileLabel(draft.profile)}
+            <strong>{labels.reviewStep.profileLabel}</strong>{" "}
+            {labels.getProjectProfile(draft.profile).title}
           </li>
           <li>
-            <strong>Origem:</strong> {getStartStrategyLabel(draft.startStrategy)}
+            <strong>{labels.reviewStep.originLabel}</strong>{" "}
+            {labels.getStartStrategy(draft.startStrategy).title}
           </li>
           <li>
-            <strong>Visao:</strong> {getInitialViewLabel(draft.initialView)}
+            <strong>{labels.reviewStep.viewLabel}</strong>{" "}
+            {labels.getInitialView(draft.initialView).label}
           </li>
           <li>
-            <strong>Layout:</strong> {getLayoutChoiceLabel(draft.layout)}
+            <strong>{labels.reviewStep.layoutLabel}</strong>{" "}
+            {labels.getLayoutChoiceLabel(draft.layout)}
           </li>
           <li>
-            <strong>Detalhe:</strong> {getDetailLevelLabel(draft.detailLevel)}
+            <strong>{labels.reviewStep.detailLabel}</strong>{" "}
+            {labels.getDetailLevelLabel(draft.detailLevel)}
           </li>
           <li>
-            <strong>Blocos sugeridos:</strong> {draft.context.setup?.suggestedBlockCount ?? 3}
+            <strong>{labels.reviewStep.suggestedBlocksLabel}</strong>{" "}
+            {draft.context.setup?.suggestedBlockCount ?? 3}
           </li>
           <li>
-            <strong>No raiz inicial:</strong>{" "}
+            <strong>{labels.reviewStep.initialRootLabel}</strong>{" "}
             {draft.context.setup?.createInitialRoot
-              ? (draft.context.setup.initialRootName ?? "Ativo")
-              : "Desativado"}
+              ? (draft.context.setup.initialRootName ?? labels.reviewStep.rootEnabledFallback)
+              : labels.reviewStep.rootDisabledFallback}
           </li>
           <li>
-            <strong>Automacao:</strong>{" "}
+            <strong>{labels.reviewStep.enabledAutomationLabel}</strong>{" "}
             {enabledAutomationLabels.length > 0
               ? enabledAutomationLabels.join(", ")
-              : "Sem automacoes ativas"}
+              : labels.reviewStep.noAutomation}
           </li>
           <li>
-            <strong>Fonte:</strong>{" "}
+            <strong>{labels.reviewStep.sourceLabel}</strong>{" "}
             {draft.startStrategy === "template"
               ? draft.templatePreset
-                ? getTemplatePresetLabel(draft.templatePreset)
-                : "Nao selecionado"
+                ? labels.getTemplatePresetLabel(draft.templatePreset)
+                : labels.reviewStep.noTemplateSelected
               : draft.startSource
-                ? getStartSourceLabel(draft.startSource)
-                : "Nao selecionada"}
+                ? labels.getStartSourceLabel(draft.startSource)
+                : labels.reviewStep.noSourceSelected}
           </li>
           <li>
-            <strong>Status da fonte:</strong> {sourceStatusSummary}
+            <strong>{labels.reviewStep.sourceStatusLabel}</strong> {sourceStatusSummary}
           </li>
           <li>
-            <strong>Estrategia recomendada:</strong>{" "}
-            {getStartStrategyLabel(recommendedStartStrategy.strategy)}
+            <strong>{labels.reviewStep.recommendedStrategyLabel}</strong>{" "}
+            {labels.getStartStrategy(recommendedStartStrategy.strategy).title}
           </li>
         </ul>
         {legacyLayoutWarning ? <p className="helper">{legacyLayoutWarning}</p> : null}
         <p>
-          {buildWhatWillBeCreatedSummary({
+          {labels.buildWhatWillBeCreatedSummary({
             profile: draft.profile,
             initialView: draft.initialView,
             layout: draft.layout,

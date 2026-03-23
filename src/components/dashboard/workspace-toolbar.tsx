@@ -1,6 +1,7 @@
 "use client";
 
 import type { RefObject } from "react";
+import type { DashboardCopy } from "./dashboard-copy";
 import type {
   DashboardProject,
   DiagramFilter,
@@ -38,20 +39,20 @@ type WorkspaceToolbarProps = {
   filteredCount: number;
   totalCount: number;
   workspaceMessage: string | null;
+  copy: DashboardCopy;
 };
 
 function getTemplateFilterLabel(
   template: DashboardProject["template"],
   workspaceMode: WorkspaceMode,
+  copy: DashboardCopy,
 ) {
   const option = legacyTemplateOptions.find((entry) => entry.value === template);
   if (!option) {
     return template;
   }
 
-  return workspaceMode === "technical"
-    ? option.technicalLabel
-    : option.operationalLabel;
+  return copy.getTemplateLabel(option.value, workspaceMode);
 }
 
 export function WorkspaceToolbar({
@@ -79,12 +80,13 @@ export function WorkspaceToolbar({
   filteredCount,
   totalCount,
   workspaceMessage,
+  copy,
 }: WorkspaceToolbarProps) {
   return (
     <div className="tile workspace-toolbar" data-testid="workspace-toolbar">
       <div className="workspace-toolbar-main">
         <div className="field workspace-search-field">
-          <label htmlFor="workspace-search-input">Buscar</label>
+          <label htmlFor="workspace-search-input">{copy.filters.searchLabel}</label>
           <div className="workspace-search-input-wrap">
             <span className="workspace-search-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -107,42 +109,44 @@ export function WorkspaceToolbar({
                   event.preventDefault();
                 }
               }}
-              placeholder="Buscar por nome, descricao, tipo..."
+              placeholder={copy.filters.searchPlaceholder}
               data-testid="workspace-search"
-              aria-label="Buscar projeto"
+              aria-label={copy.filters.searchAriaLabel}
             />
             <button
               className="btn workspace-search-clear-btn"
               type="button"
               onClick={onClearSearch}
               disabled={searchTerm.length === 0}
-              aria-label="Limpar busca"
+              aria-label={copy.filters.clearSearchAriaLabel}
               data-testid="workspace-search-clear"
             >
-              Limpar
+              {copy.filters.clearSearchButton}
             </button>
           </div>
         </div>
 
         <div className="field workspace-filter-field">
-          <label htmlFor="workspace-filter-diagram">Tipo de diagrama</label>
+          <label htmlFor="workspace-filter-diagram">{copy.filters.diagramLabel}</label>
           <select
             id="workspace-filter-diagram"
             value={diagramFilter}
             onChange={(event) => onDiagramFilterChange(event.target.value as DiagramFilter)}
             data-testid="workspace-filter-diagram"
           >
-            <option value="all">Todos</option>
-            <option value="tree">Hierarquia</option>
-            <option value="flow">Processo</option>
-            <option value="mindmap">Mapa mental</option>
-            <option value="undefined">Definir durante a criacao</option>
+            <option value="all">{copy.filters.allOption}</option>
+            <option value="tree">{copy.getDiagramTypeLabel("tree")}</option>
+            <option value="flow">{copy.getDiagramTypeLabel("flow")}</option>
+            <option value="mindmap">{copy.getDiagramTypeLabel("mindmap")}</option>
+            <option value="undefined">{copy.getDiagramTypeLabel(undefined)}</option>
           </select>
         </div>
 
         <div className="field workspace-filter-field">
           <label htmlFor="workspace-filter-template">
-            {workspaceMode === "technical" ? "Template legado" : "Modelo"}
+            {workspaceMode === "technical"
+              ? copy.filters.templateLabelTechnical
+              : copy.filters.templateLabelOperational}
           </label>
           <select
             id="workspace-filter-template"
@@ -152,17 +156,17 @@ export function WorkspaceToolbar({
             }
             data-testid="workspace-filter-template"
           >
-            <option value="all">Todos</option>
+            <option value="all">{copy.filters.allOption}</option>
             {legacyTemplateOptions.map((option) => (
               <option key={option.value} value={option.value}>
-                {getTemplateFilterLabel(option.value, workspaceMode)}
+                {getTemplateFilterLabel(option.value, workspaceMode, copy)}
               </option>
             ))}
           </select>
         </div>
 
         <div className="field workspace-filter-field">
-          <label htmlFor="workspace-filter-snapshot">Status de snapshot</label>
+          <label htmlFor="workspace-filter-snapshot">{copy.filters.snapshotLabel}</label>
           <select
             id="workspace-filter-snapshot"
             value={snapshotFilter}
@@ -171,23 +175,23 @@ export function WorkspaceToolbar({
             }
             data-testid="workspace-filter-snapshot"
           >
-            <option value="all">Todos</option>
-            <option value="generated">Gerado</option>
-            <option value="pending">Pendente</option>
+            <option value="all">{copy.filters.allOption}</option>
+            <option value="generated">{copy.filters.generatedOption}</option>
+            <option value="pending">{copy.filters.pendingOption}</option>
           </select>
         </div>
 
         <div className="field workspace-filter-field">
-          <label htmlFor="workspace-sort">Ordenar por</label>
+          <label htmlFor="workspace-sort">{copy.filters.sortLabel}</label>
           <select
             id="workspace-sort"
             value={sortOption}
             onChange={(event) => onSortOptionChange(event.target.value as SortOption)}
             data-testid="workspace-sort"
           >
-            <option value="name-asc">Nome (A-Z)</option>
-            <option value="updated-desc">Atualizado (mais recente)</option>
-            <option value="created-desc">Criado (mais recente)</option>
+            <option value="name-asc">{copy.filters.sortNameAsc}</option>
+            <option value="updated-desc">{copy.filters.sortUpdatedDesc}</option>
+            <option value="created-desc">{copy.filters.sortCreatedDesc}</option>
           </select>
         </div>
       </div>
@@ -196,7 +200,7 @@ export function WorkspaceToolbar({
         <div
           className="workspace-view-toggle"
           role="group"
-          aria-label="Alternar visualizacao"
+          aria-label={copy.filters.viewModeAriaLabel}
           data-testid="workspace-view-toggle"
         >
           <button
@@ -205,7 +209,7 @@ export function WorkspaceToolbar({
             aria-pressed={viewMode === "grid"}
             onClick={() => onViewModeChange("grid")}
           >
-            Grid
+            {copy.viewMode.grid}
           </button>
           <button
             className={`btn ${viewMode === "list" ? "btn-primary" : ""}`}
@@ -213,14 +217,14 @@ export function WorkspaceToolbar({
             aria-pressed={viewMode === "list"}
             onClick={() => onViewModeChange("list")}
           >
-            Lista
+            {copy.viewMode.list}
           </button>
         </div>
 
         <div
           className="workspace-view-toggle"
           role="group"
-          aria-label="Densidade da visualizacao"
+          aria-label={copy.filters.densityAriaLabel}
           data-testid="workspace-density-toggle"
         >
           <button
@@ -229,7 +233,7 @@ export function WorkspaceToolbar({
             aria-pressed={density === "compact"}
             onClick={() => onDensityChange("compact")}
           >
-            Compacta
+            {copy.density.compact}
           </button>
           <button
             className={`btn ${density === "comfortable" ? "btn-primary" : ""}`}
@@ -237,14 +241,14 @@ export function WorkspaceToolbar({
             aria-pressed={density === "comfortable"}
             onClick={() => onDensityChange("comfortable")}
           >
-            Confortavel
+            {copy.density.comfortable}
           </button>
         </div>
 
         <div
           className="workspace-view-toggle"
           role="group"
-          aria-label="Modo do workspace"
+          aria-label={copy.filters.workspaceModeAriaLabel}
           data-testid="workspace-mode-toggle"
         >
           <button
@@ -254,7 +258,7 @@ export function WorkspaceToolbar({
             onClick={() => onWorkspaceModeChange("operational")}
             data-testid="workspace-mode-operational"
           >
-            Operacional
+            {copy.workspaceMode.operational}
           </button>
           <button
             className={`btn ${workspaceMode === "technical" ? "btn-primary" : ""}`}
@@ -263,7 +267,7 @@ export function WorkspaceToolbar({
             onClick={() => onWorkspaceModeChange("technical")}
             data-testid="workspace-mode-technical"
           >
-            Tecnico
+            {copy.workspaceMode.technical}
           </button>
         </div>
 
@@ -274,7 +278,7 @@ export function WorkspaceToolbar({
           disabled={!hasActiveFilters}
           data-testid="workspace-clear-filters"
         >
-          Limpar filtros
+          {copy.filters.clearFiltersButton}
         </button>
 
         <button
@@ -284,13 +288,13 @@ export function WorkspaceToolbar({
           onClick={onOpenNewProject}
           data-testid="new-project-button"
         >
-          Novo projeto
+          {copy.filters.newProjectButton}
         </button>
       </div>
 
       <div className="row-actions row-actions-between workspace-toolbar-footer">
         <span className="helper" data-testid="workspace-project-counter">
-          Exibindo {filteredCount} de {totalCount} projetos
+          {copy.getCounterLabel(filteredCount, totalCount)}
         </span>
         {workspaceMessage ? (
           <span className="helper" aria-live="polite">

@@ -1,4 +1,5 @@
 import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type PrismaSchemaSourceFormProps = {
   draft: AssistantDraft;
@@ -8,6 +9,7 @@ type PrismaSchemaSourceFormProps = {
   fromProjectId?: string;
   validatePrismaSource: () => Promise<void>;
   isBusy: boolean;
+  labels: CreationAssistantLabels;
 };
 
 export function PrismaSchemaSourceForm({
@@ -18,6 +20,7 @@ export function PrismaSchemaSourceForm({
   fromProjectId,
   validatePrismaSource,
   isBusy,
+  labels,
 }: PrismaSchemaSourceFormProps) {
   if (draft.sourceConfig?.kind !== "prisma-schema") {
     return null;
@@ -26,7 +29,7 @@ export function PrismaSchemaSourceForm({
   return (
     <div className="dashboard-form">
       <div className="field">
-        <label htmlFor="origin-prisma-mode">Entrada</label>
+        <label htmlFor="origin-prisma-mode">{labels.sourceForms.prisma.inputLabel}</label>
         <select
           id="origin-prisma-mode"
           value={draft.sourceConfig.inputMode}
@@ -43,16 +46,16 @@ export function PrismaSchemaSourceForm({
             }))
           }
         >
-          <option value="paste">Colar schema</option>
-          <option value="upload">Upload (em breve)</option>
+          <option value="paste">{labels.sourceForms.prisma.pasteOption}</option>
+          <option value="upload">{labels.sourceForms.prisma.uploadOption}</option>
         </select>
       </div>
       <div className="field">
-        <label htmlFor="origin-prisma-text">Schema Prisma</label>
+        <label htmlFor="origin-prisma-text">{labels.sourceForms.prisma.schemaLabel}</label>
         <textarea
           id="origin-prisma-text"
           rows={6}
-          placeholder="model User { id String @id }"
+          placeholder={labels.sourceForms.prisma.schemaPlaceholder}
           value={draft.sourceConfig.schemaText ?? ""}
           onChange={(event) =>
             setDraft((current) => ({
@@ -77,13 +80,11 @@ export function PrismaSchemaSourceForm({
             onClick={validatePrismaSource}
             disabled={isBusy}
           >
-            Verificacao inicial e importar agora
+            {labels.sourceForms.prisma.validateNowButton}
           </button>
         </div>
       ) : (
-        <p className="helper">
-          A verificacao inicial sera aplicada ao criar o mapa inicial.
-        </p>
+        <p className="helper">{labels.sourceForms.prisma.validateOnCreateHint}</p>
       )}
     </div>
   );

@@ -2,14 +2,12 @@
 
 import { type FormEvent, type RefObject, useEffect } from "react";
 import { CardOption } from "@/src/components/ui/card-option";
+import type { DashboardCopy } from "./dashboard-copy";
 import type {
   DashboardProject,
   InitialDiagramChoice,
 } from "./workspace-projects";
 import {
-  diagramTypeOptions,
-  getTemplateDescription,
-  getTemplateLabel,
   legacyTemplateOptions,
   type WorkspaceMode,
 } from "./workspace-projects";
@@ -30,6 +28,7 @@ type NewProjectDrawerProps = {
   onDescriptionChange: (value: string) => void;
   onInitialDiagramTypeChange: (value: InitialDiagramChoice) => void;
   onTemplateChange: (value: DashboardProject["template"]) => void;
+  copy: DashboardCopy;
 };
 
 export function NewProjectDrawer({
@@ -48,6 +47,7 @@ export function NewProjectDrawer({
   onDescriptionChange,
   onInitialDiagramTypeChange,
   onTemplateChange,
+  copy,
 }: NewProjectDrawerProps) {
   useEffect(() => {
     if (!isOpen) {
@@ -95,10 +95,9 @@ export function NewProjectDrawer({
       >
         <header className="workspace-drawer-header">
           <div>
-            <h3 id="new-project-title">Novo projeto</h3>
+            <h3 id="new-project-title">{copy.createDrawer.title}</h3>
             <p className="helper" id="new-project-description">
-              Crie o projeto com o essencial. Voce pode ajustar detalhes no Assistente e
-              no Editor depois.
+              {copy.createDrawer.description}
             </p>
           </div>
           <button
@@ -109,9 +108,9 @@ export function NewProjectDrawer({
                 onClose();
               }
             }}
-            aria-label="Fechar criacao de projeto"
+            aria-label={copy.createDrawer.closeAriaLabel}
           >
-            Fechar
+            {copy.createDrawer.closeButton}
           </button>
         </header>
 
@@ -121,38 +120,38 @@ export function NewProjectDrawer({
           data-testid="dashboard-create-project-form"
         >
           <div className="field">
-            <label htmlFor="project-name">Nome do projeto</label>
+            <label htmlFor="project-name">{copy.createDrawer.nameLabel}</label>
             <input
               ref={nameInputRef}
               id="project-name"
               data-testid="dashboard-project-name-input"
               value={name}
               onChange={(event) => onNameChange(event.target.value)}
-              placeholder="Ex.: Mapa de onboarding"
+              placeholder={copy.createDrawer.namePlaceholder}
               required
               aria-invalid={errorMessage ? "true" : "false"}
             />
             <span className="helper">
-              Use um nome curto e objetivo para facilitar buscas e listagens.
+              {copy.createDrawer.nameHelper}
             </span>
           </div>
 
           <div className="field">
-            <label htmlFor="project-description">Finalidade (opcional)</label>
+            <label htmlFor="project-description">{copy.createDrawer.descriptionLabel}</label>
             <textarea
               id="project-description"
               data-testid="dashboard-project-description-input"
               value={description}
               onChange={(event) => onDescriptionChange(event.target.value)}
               rows={3}
-              placeholder="Ex.: Mapear o fluxo entre RH, TI e lideranca."
+              placeholder={copy.createDrawer.descriptionPlaceholder}
             />
           </div>
 
           <div className="field">
-            <label>Tipo inicial do diagrama</label>
+            <label>{copy.createDrawer.initialDiagramTypeLabel}</label>
             <div className="grid-tiles dashboard-initial-type-grid">
-              {diagramTypeOptions.map((option) => (
+              {copy.diagramTypeOptions.map((option) => (
                 <CardOption
                   key={option.value}
                   title={option.label}
@@ -166,7 +165,7 @@ export function NewProjectDrawer({
           </div>
 
           <div className="field">
-            <label htmlFor="project-template">Template legado</label>
+            <label htmlFor="project-template">{copy.createDrawer.templateLabel}</label>
             <select
               id="project-template"
               data-testid="dashboard-project-template-select"
@@ -177,11 +176,11 @@ export function NewProjectDrawer({
             >
               {legacyTemplateOptions.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {getTemplateLabel(option.value, workspaceMode)}
+                  {copy.getTemplateLabel(option.value, workspaceMode)}
                 </option>
               ))}
             </select>
-            <span className="helper">{getTemplateDescription(template)}</span>
+            <span className="helper">{copy.getTemplateDescription(template)}</span>
           </div>
 
           {errorMessage ? (
@@ -201,7 +200,9 @@ export function NewProjectDrawer({
               disabled={isSubmitting}
               data-testid="dashboard-create-project-button"
             >
-              {isSubmitting ? "Criando..." : "Criar projeto"}
+              {isSubmitting
+                ? copy.createDrawer.createSubmittingButton
+                : copy.createDrawer.createButton}
             </button>
             <button
               className="btn"
@@ -209,7 +210,7 @@ export function NewProjectDrawer({
               disabled={isSubmitting}
               onClick={onClose}
             >
-              Cancelar
+              {copy.createDrawer.cancelButton}
             </button>
           </div>
         </form>

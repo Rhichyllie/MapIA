@@ -1,18 +1,17 @@
 import { CardOption } from "@/src/components/ui/card-option";
 import {
-  automationHumanLabels,
   buildDefaultContextForView,
-  getDetailLevelLabel,
-  getLayoutChoiceLabel,
   type AssistantDraft,
   type DetailLevel,
   type LayoutChoice,
 } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 import { DETAIL_LEVELS } from "../shared";
 
 type SettingsStepProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
+  labels: CreationAssistantLabels;
   layoutCatalog: {
     recommended: LayoutChoice[];
     advanced: LayoutChoice[];
@@ -28,6 +27,7 @@ type SettingsStepProps = {
 export function SettingsStep({
   draft,
   setDraft,
+  labels,
   layoutCatalog,
   contextBlocks,
   showAdvancedLayouts,
@@ -39,7 +39,7 @@ export function SettingsStep({
   return (
     <div className="stack-sm">
       <section className="tile">
-        <h3>Estrutura inicial</h3>
+        <h3>{labels.settingsStep.structureTitle}</h3>
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -56,7 +56,7 @@ export function SettingsStep({
                         createExamples: true,
                         suggestedBlockCount: 3,
                         createInitialRoot: false,
-                        initialRootName: "Nucleo",
+                        initialRootName: labels.defaults.rootName,
                       }
                     ),
                     createExamples: event.target.checked,
@@ -65,10 +65,12 @@ export function SettingsStep({
               }))
             }
           />
-          Criar exemplos automaticos
+          {labels.settingsStep.createExamples}
         </label>
         <div className="field">
-          <label htmlFor="adjust-setup-count">Quantidade inicial de blocos sugeridos</label>
+          <label htmlFor="adjust-setup-count">
+            {labels.settingsStep.suggestedBlocksLabel}
+          </label>
           <input
             id="adjust-setup-count"
             type="range"
@@ -87,7 +89,7 @@ export function SettingsStep({
                         createExamples: true,
                         suggestedBlockCount: 3,
                         createInitialRoot: false,
-                        initialRootName: "Nucleo",
+                        initialRootName: labels.defaults.rootName,
                       }
                     ),
                     suggestedBlockCount: Number(event.target.value),
@@ -96,7 +98,11 @@ export function SettingsStep({
               }))
             }
           />
-          <p className="helper">{draft.context.setup?.suggestedBlockCount ?? 3} blocos</p>
+          <p className="helper">
+            {labels.settingsStep.suggestedBlocksValue(
+              draft.context.setup?.suggestedBlockCount ?? 3,
+            )}
+          </p>
         </div>
         <div className="field">
           <button
@@ -104,7 +110,9 @@ export function SettingsStep({
             type="button"
             onClick={() => setShowAdvancedStructure((current) => !current)}
           >
-            {showAdvancedStructure ? "Ocultar avancado" : "Mostrar avancado"}
+            {showAdvancedStructure
+              ? labels.settingsStep.hideAdvanced
+              : labels.settingsStep.showAdvanced}
           </button>
         </div>
         {showAdvancedStructure ? (
@@ -123,11 +131,11 @@ export function SettingsStep({
                           current.context.setup ??
                           buildDefaultContextForView(current.initialView, current.profile)
                             .setup ?? {
-                            createExamples: true,
-                            suggestedBlockCount: 3,
-                            createInitialRoot: false,
-                            initialRootName: "Nucleo",
-                          }
+                              createExamples: true,
+                              suggestedBlockCount: 3,
+                              createInitialRoot: false,
+                              initialRootName: labels.defaults.rootName,
+                            }
                         ),
                         createInitialRoot: event.target.checked,
                       },
@@ -135,11 +143,13 @@ export function SettingsStep({
                   }))
                 }
               />
-              Criar no raiz inicial
+              {labels.settingsStep.createInitialRoot}
             </label>
             {draft.context.setup?.createInitialRoot ? (
               <div className="field">
-                <label htmlFor="adjust-setup-root-name">Nome do no raiz inicial</label>
+                <label htmlFor="adjust-setup-root-name">
+                  {labels.settingsStep.initialRootNameLabel}
+                </label>
                 <input
                   id="adjust-setup-root-name"
                   value={draft.context.setup.initialRootName ?? ""}
@@ -156,7 +166,7 @@ export function SettingsStep({
                               createExamples: true,
                               suggestedBlockCount: 3,
                               createInitialRoot: true,
-                              initialRootName: "Nucleo",
+                              initialRootName: labels.defaults.rootName,
                             }
                           ),
                           initialRootName: event.target.value,
@@ -172,15 +182,15 @@ export function SettingsStep({
       </section>
 
       <section className="tile">
-        <h3>Layout</h3>
+        <h3>{labels.settingsStep.layoutTitle}</h3>
         <div className="field">
-          <label>Recomendado</label>
+          <label>{labels.settingsStep.recommendedLayoutsLabel}</label>
           <div className="grid-tiles">
             {layoutCatalog.recommended.map((layout) => (
               <CardOption
                 key={layout}
-                title={getLayoutChoiceLabel(layout)}
-                description="Recomendado para a visao inicial."
+                title={labels.getLayoutChoiceLabel(layout)}
+                description={labels.settingsStep.recommendedLayoutDescription}
                 selected={draft.layout === layout}
                 onSelect={() => selectLayout(layout as LayoutChoice)}
               />
@@ -194,15 +204,17 @@ export function SettingsStep({
               type="button"
               onClick={() => setShowAdvancedLayouts((current) => !current)}
             >
-              {showAdvancedLayouts ? "Ocultar avancado" : "Mostrar avancado"}
+              {showAdvancedLayouts
+                ? labels.settingsStep.hideAdvanced
+                : labels.settingsStep.showAdvanced}
             </button>
             {showAdvancedLayouts ? (
               <div className="grid-tiles">
                 {layoutCatalog.advanced.map((layout) => (
                   <CardOption
                     key={layout}
-                    title={getLayoutChoiceLabel(layout)}
-                    description="Opcao avancada para casos especificos."
+                    title={labels.getLayoutChoiceLabel(layout)}
+                    description={labels.settingsStep.advancedLayoutDescription}
                     selected={draft.layout === layout}
                     onSelect={() => selectLayout(layout as LayoutChoice)}
                   />
@@ -214,13 +226,13 @@ export function SettingsStep({
       </section>
 
       <section className="tile">
-        <h3>Nivel de detalhe</h3>
+        <h3>{labels.settingsStep.detailLevelTitle}</h3>
         <div className="grid-tiles">
           {DETAIL_LEVELS.map((level) => (
             <CardOption
               key={level}
-              title={getDetailLevelLabel(level as DetailLevel)}
-              description="Nivel de profundidade inicial."
+              title={labels.getDetailLevelLabel(level as DetailLevel)}
+              description={labels.settingsStep.detailLevelDescription}
               selected={draft.detailLevel === level}
               onSelect={() =>
                 setDraft((current) => ({
@@ -234,9 +246,9 @@ export function SettingsStep({
       </section>
 
       <section className="tile">
-        <h3>Automacao</h3>
+        <h3>{labels.settingsStep.automationTitle}</h3>
         <div className="dashboard-form">
-          {Object.entries(automationHumanLabels).map(([key, value]) => (
+          {Object.entries(draft.automation).map(([key]) => (
             <label key={key} className="checkbox-row">
               <input
                 type="checkbox"
@@ -252,8 +264,13 @@ export function SettingsStep({
                 }
               />
               <span>
-                <strong>{value.label}</strong>
-                <span className="helper"> {value.help}</span>
+                <strong>
+                  {labels.getAutomationCopy(key as keyof typeof draft.automation).label}
+                </strong>
+                <span className="helper">
+                  {" "}
+                  {labels.getAutomationCopy(key as keyof typeof draft.automation).help}
+                </span>
               </span>
             </label>
           ))}
@@ -261,7 +278,7 @@ export function SettingsStep({
       </section>
 
       <section className="tile">
-        <h3>Contexto</h3>
+        <h3>{labels.settingsStep.contextTitle}</h3>
         {contextBlocks.has("erd") && draft.initialView === "erd" && draft.context.erd ? (
           <div className="dashboard-form">
             <label className="checkbox-row">
@@ -283,7 +300,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Usar "id" como PK padrao
+              {labels.settingsStep.erd.useDefaultIdPk}
             </label>
             <label className="checkbox-row">
               <input
@@ -304,7 +321,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Criar FKs automaticamente quando possivel
+              {labels.settingsStep.erd.autoCreateFk}
             </label>
             <label className="checkbox-row">
               <input
@@ -325,7 +342,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Sugerir tabela associativa para N:N
+              {labels.settingsStep.erd.suggestAssociativeForNN}
             </label>
             <label className="checkbox-row">
               <input
@@ -346,7 +363,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Exibir tipos de campo
+              {labels.settingsStep.erd.showFieldTypes}
             </label>
             <label className="checkbox-row">
               <input
@@ -367,7 +384,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Ativar validacao semantica de dados
+              {labels.settingsStep.erd.enableDataSemantics}
             </label>
             <label className="checkbox-row">
               <input
@@ -388,7 +405,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Gerar timestamps iniciais (createdAt, updatedAt)
+              {labels.settingsStep.erd.generateTimestamps}
             </label>
             <label className="checkbox-row">
               <input
@@ -409,7 +426,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Sugerir indices iniciais
+              {labels.settingsStep.erd.suggestIndexes}
             </label>
           </div>
         ) : null}
@@ -435,7 +452,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Criar inicio e fim automaticamente
+              {labels.settingsStep.flow.autoCreateStartEnd}
             </label>
             <label className="checkbox-row">
               <input
@@ -456,10 +473,12 @@ export function SettingsStep({
                   }))
                 }
               />
-              Permitir decisoes
+              {labels.settingsStep.flow.allowDecisions}
             </label>
             <div className="field">
-              <label htmlFor="adjust-flow-direction">Direcao do fluxo</label>
+              <label htmlFor="adjust-flow-direction">
+                {labels.settingsStep.flow.directionLabel}
+              </label>
               <select
                 id="adjust-flow-direction"
                 value={draft.context.flow.direction}
@@ -479,8 +498,8 @@ export function SettingsStep({
                   }))
                 }
               >
-                <option value="left-right">Horizontal</option>
-                <option value="top-down">Vertical</option>
+                <option value="left-right">{labels.settingsStep.orientation.horizontal}</option>
+                <option value="top-down">{labels.settingsStep.orientation.vertical}</option>
               </select>
             </div>
             <label className="checkbox-row">
@@ -502,7 +521,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Permitir multiplas saidas por etapa
+              {labels.settingsStep.flow.allowMultipleOutputs}
             </label>
           </div>
         ) : null}
@@ -530,7 +549,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Criar Home automaticamente
+              {labels.settingsStep.sitemap.autoCreateHome}
             </label>
             <label className="checkbox-row">
               <input
@@ -551,7 +570,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Gerar secoes principais
+              {labels.settingsStep.sitemap.generateMainSections}
             </label>
             <label className="checkbox-row">
               <input
@@ -572,7 +591,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Exibir profundidade de navegacao
+              {labels.settingsStep.sitemap.showNavDepth}
             </label>
           </div>
         ) : null}
@@ -600,10 +619,12 @@ export function SettingsStep({
                   }))
                 }
               />
-              Criar no raiz
+              {labels.settingsStep.hierarchy.createRoot}
             </label>
             <div className="field">
-              <label htmlFor="adjust-hierarchy-direction">Direcao</label>
+              <label htmlFor="adjust-hierarchy-direction">
+                {labels.settingsStep.hierarchy.directionLabel}
+              </label>
               <select
                 id="adjust-hierarchy-direction"
                 value={draft.context.hierarchy.direction}
@@ -623,12 +644,14 @@ export function SettingsStep({
                   }))
                 }
               >
-                <option value="top-down">Vertical</option>
-                <option value="left-right">Horizontal</option>
+                <option value="top-down">{labels.settingsStep.orientation.vertical}</option>
+                <option value="left-right">{labels.settingsStep.orientation.horizontal}</option>
               </select>
             </div>
             <div className="field">
-              <label htmlFor="adjust-hierarchy-depth">Profundidade inicial sugerida</label>
+              <label htmlFor="adjust-hierarchy-depth">
+                {labels.settingsStep.hierarchy.initialDepthHintLabel}
+              </label>
               <input
                 id="adjust-hierarchy-depth"
                 type="range"
@@ -675,7 +698,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Agrupar automaticamente
+              {labels.settingsStep.graph.autoGroup}
             </label>
             <label className="checkbox-row">
               <input
@@ -696,7 +719,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Reduzir cruzamento de linhas
+              {labels.settingsStep.graph.reduceCrossing}
             </label>
             <label className="checkbox-row">
               <input
@@ -717,7 +740,7 @@ export function SettingsStep({
                   }))
                 }
               />
-              Exibir rotulos de relacao
+              {labels.settingsStep.graph.showEdgeLabels}
             </label>
           </div>
         ) : null}

@@ -1,4 +1,5 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
+import type { EditorTranslationFn } from "./editor-i18n";
 import {
   getEdgeKindDescription,
   getEdgeKindLabel,
@@ -22,24 +23,25 @@ export type OperationalNodeDraft = {
   tagsText: string;
 };
 
-export function getFriendlyNodeKindLabel(kind: NodeKind) {
-  return getNodeKindLabel(kind, "operational");
+export function getFriendlyNodeKindLabel(kind: NodeKind, t?: EditorTranslationFn) {
+  return getNodeKindLabel(kind, "operational", t);
 }
 
-export function getFriendlyNodeKindDescription(kind: NodeKind) {
-  return getNodeKindDescription(kind);
+export function getFriendlyNodeKindDescription(kind: NodeKind, t?: EditorTranslationFn) {
+  return getNodeKindDescription(kind, t);
 }
 
-export function getFriendlyEdgeKindLabel(kind: EdgeKind) {
-  return getEdgeKindLabel(kind, "operational");
+export function getFriendlyEdgeKindLabel(kind: EdgeKind, t?: EditorTranslationFn) {
+  return getEdgeKindLabel(kind, "operational", t);
 }
 
-export function getFriendlyEdgeKindDescription(kind: EdgeKind) {
-  return getEdgeKindDescription(kind);
+export function getFriendlyEdgeKindDescription(kind: EdgeKind, t?: EditorTranslationFn) {
+  return getEdgeKindDescription(kind, t);
 }
 
 export function createOperationalNodeDraft(
   source: NodeInspectorSource,
+  t?: EditorTranslationFn,
 ): OperationalNodeDraft {
   const rawDescription = source.payload.description;
   const rawTags = source.payload.tags;
@@ -53,7 +55,7 @@ export function createOperationalNodeDraft(
     label: getOperationalDisplayLabel({
       label: source.label,
       payload: source.payload,
-    }),
+    }, t),
     kind: source.kind,
     description,
     tagsText: tagsArray.join(", "),

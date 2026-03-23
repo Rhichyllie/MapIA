@@ -1,15 +1,17 @@
 import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 
 type ProjectStepProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
+  labels: CreationAssistantLabels;
 };
 
-export function ProjectStep({ draft, setDraft }: ProjectStepProps) {
+export function ProjectStep({ draft, setDraft, labels }: ProjectStepProps) {
   return (
     <div className="dashboard-form">
       <div className="field">
-        <label htmlFor="assistant-project-name">Nome do projeto</label>
+        <label htmlFor="assistant-project-name">{labels.projectStep.projectNameLabel}</label>
         <input
           id="assistant-project-name"
           value={draft.projectName}
@@ -22,7 +24,9 @@ export function ProjectStep({ draft, setDraft }: ProjectStepProps) {
         />
       </div>
       <div className="field">
-        <label htmlFor="assistant-project-objective">Objetivo do projeto (opcional)</label>
+        <label htmlFor="assistant-project-objective">
+          {labels.projectStep.objectiveLabel}
+        </label>
         <textarea
           id="assistant-project-objective"
           rows={3}
@@ -35,9 +39,7 @@ export function ProjectStep({ draft, setDraft }: ProjectStepProps) {
           }
         />
       </div>
-      <p className="helper">
-        Voce podera ajustar estrutura, origem e visualizacao nas proximas etapas.
-      </p>
+      <p className="helper">{labels.projectStep.helper}</p>
     </div>
   );
 }

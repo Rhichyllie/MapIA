@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { useEditorTranslations } from "../use-editor-translations";
 import { useFlowSelectionMenu } from "./use-flow-selection-menu";
 
 type FlowSelectionHudAction = {
@@ -50,6 +51,7 @@ export function FlowSelectionHud({
   onDuplicate?: () => unknown;
   onRemove: () => unknown;
 }) {
+  const t = useEditorTranslations("selectionHud");
   const { isOpen, menuRef, closeMenu, toggleMenu } = useFlowSelectionMenu(dismissKey);
 
   const runHudAction = useCallback(
@@ -110,13 +112,13 @@ export function FlowSelectionHud({
           <button
             className="btn"
             type="button"
-            onClick={toggleMenu}
-            aria-expanded={isOpen}
-            aria-haspopup="menu"
-            data-testid="selection-hud-flow-more-button"
-          >
-            Mais acoes
-          </button>
+          onClick={toggleMenu}
+          aria-expanded={isOpen}
+          aria-haspopup="menu"
+          data-testid="selection-hud-flow-more-button"
+        >
+          {t("moreActions")}
+        </button>
           {isOpen ? (
             <div
               className="canvas-selection-hud-more-menu flow-selection-hud__menu-panel"
@@ -140,7 +142,7 @@ export function FlowSelectionHud({
                 onClick={() => runHudAction(onCenterView)}
                 data-testid="selection-hud-center-button"
               >
-                Centralizar
+                {t("center")}
               </button>
               {onDuplicate ? (
                 <button
@@ -149,7 +151,7 @@ export function FlowSelectionHud({
                   onClick={() => runHudAction(onDuplicate)}
                   data-testid="selection-hud-duplicate-button"
                 >
-                  Duplicar
+                  {t("duplicate")}
                 </button>
               ) : null}
               <button
@@ -158,7 +160,7 @@ export function FlowSelectionHud({
                 onClick={() => runHudAction(onRemove)}
                 data-testid="selection-hud-remove-button"
               >
-                Remover
+                {t("remove")}
               </button>
             </div>
           ) : null}

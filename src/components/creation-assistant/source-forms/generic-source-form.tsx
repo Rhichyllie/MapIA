@@ -2,18 +2,21 @@ import {
   type AssistantDraft,
   type SourceConfigPreview,
 } from "@/src/modules/creation-assistant/domain";
+import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 import { isGenericSourceConfig } from "../shared";
 
 type GenericSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
   sourcePreview: SourceConfigPreview | null;
+  labels: CreationAssistantLabels;
 };
 
 export function GenericSourceForm({
   draft,
   setDraft,
   sourcePreview,
+  labels,
 }: GenericSourceFormProps) {
   if (!isGenericSourceConfig(draft.sourceConfig)) {
     return null;
@@ -22,7 +25,7 @@ export function GenericSourceForm({
   return (
     <div className="dashboard-form">
       <div className="field">
-        <label htmlFor="origin-generic-mode">Entrada</label>
+        <label htmlFor="origin-generic-mode">{labels.sourceForms.generic.inputLabel}</label>
         <select
           id="origin-generic-mode"
           value={draft.sourceConfig.inputMode}
@@ -39,13 +42,15 @@ export function GenericSourceForm({
             }))
           }
         >
-          <option value="paste">Colar conteudo</option>
-          <option value="upload">Upload (em breve)</option>
+          <option value="paste">{labels.sourceForms.generic.pasteOption}</option>
+          <option value="upload">{labels.sourceForms.generic.uploadOption}</option>
         </select>
       </div>
       {draft.sourceConfig.kind === "csv" ? (
         <div className="field">
-          <label htmlFor="origin-csv-delimiter">Delimitador CSV</label>
+          <label htmlFor="origin-csv-delimiter">
+            {labels.sourceForms.generic.delimiterLabel}
+          </label>
           <select
             id="origin-csv-delimiter"
             value={draft.sourceConfig.delimiter ?? ","}
@@ -63,15 +68,15 @@ export function GenericSourceForm({
               }))
             }
           >
-            <option value=",">Virgula (,)</option>
-            <option value=";">Ponto e virgula (;)</option>
-            <option value={"\t"}>Tab</option>
+            <option value=",">{labels.sourceForms.generic.delimiterComma}</option>
+            <option value=";">{labels.sourceForms.generic.delimiterSemicolon}</option>
+            <option value={"\t"}>{labels.sourceForms.generic.delimiterTab}</option>
           </select>
         </div>
       ) : null}
       {draft.sourceConfig.inputMode === "paste" ? (
         <div className="field">
-          <label htmlFor="origin-generic-text">Conteudo da fonte</label>
+          <label htmlFor="origin-generic-text">{labels.sourceForms.generic.contentLabel}</label>
           <textarea
             id="origin-generic-text"
             rows={6}
@@ -95,14 +100,16 @@ export function GenericSourceForm({
         <div className="tile">
           <p className="helper">
             {sourcePreview.status === "ready"
-              ? "Preview assistido da fonte pronto."
-              : "Preview assistido parcial da fonte."}
+              ? labels.sourceForms.generic.readyPreview
+              : labels.sourceForms.generic.partialPreview}
           </p>
           <p>{sourcePreview.message}</p>
           {sourcePreview.fields && sourcePreview.fields.length > 0 ? (
             <div className="dashboard-form">
               <div className="field">
-                <label htmlFor="origin-mapping-id">Campo ID (opcional)</label>
+                <label htmlFor="origin-mapping-id">
+                  {labels.sourceForms.generic.idFieldLabel}
+                </label>
                 <select
                   id="origin-mapping-id"
                   value={draft.sourceConfig.mapping?.idField ?? ""}
@@ -122,7 +129,7 @@ export function GenericSourceForm({
                     }))
                   }
                 >
-                  <option value="">Nao mapear</option>
+                  <option value="">{labels.sourceForms.generic.noMapping}</option>
                   {sourcePreview.fields.map((field) => (
                     <option key={`id-${field}`} value={field}>
                       {field}
@@ -131,7 +138,9 @@ export function GenericSourceForm({
                 </select>
               </div>
               <div className="field">
-                <label htmlFor="origin-mapping-label">Campo rotulo</label>
+                <label htmlFor="origin-mapping-label">
+                  {labels.sourceForms.generic.labelFieldLabel}
+                </label>
                 <select
                   id="origin-mapping-label"
                   value={draft.sourceConfig.mapping?.labelField ?? ""}
@@ -151,7 +160,7 @@ export function GenericSourceForm({
                     }))
                   }
                 >
-                  <option value="">Nao mapear</option>
+                  <option value="">{labels.sourceForms.generic.noMapping}</option>
                   {sourcePreview.fields.map((field) => (
                     <option key={`label-${field}`} value={field}>
                       {field}
@@ -160,7 +169,9 @@ export function GenericSourceForm({
                 </select>
               </div>
               <div className="field">
-                <label htmlFor="origin-mapping-parent">Campo pai/dependencia</label>
+                <label htmlFor="origin-mapping-parent">
+                  {labels.sourceForms.generic.parentFieldLabel}
+                </label>
                 <select
                   id="origin-mapping-parent"
                   value={draft.sourceConfig.mapping?.parentField ?? ""}
@@ -180,7 +191,7 @@ export function GenericSourceForm({
                     }))
                   }
                 >
-                  <option value="">Nao mapear</option>
+                  <option value="">{labels.sourceForms.generic.noMapping}</option>
                   {sourcePreview.fields.map((field) => (
                     <option key={`parent-${field}`} value={field}>
                       {field}
@@ -192,15 +203,13 @@ export function GenericSourceForm({
           ) : null}
           {sourcePreview.sample && sourcePreview.sample.length > 0 ? (
             <div className="stack-sm">
-              <p className="helper">Amostra</p>
+              <p className="helper">{labels.sourceForms.generic.sampleLabel}</p>
               <pre>{JSON.stringify(sourcePreview.sample.slice(0, 3), null, 2)}</pre>
             </div>
           ) : null}
         </div>
       ) : null}
-      <p className="helper">
-        Esta fonte permite configuracao e preview inicial. Importacao automatica completa pode ser feita depois.
-      </p>
+      <p className="helper">{labels.sourceForms.generic.previewHint}</p>
     </div>
   );
 }

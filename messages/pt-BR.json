@@ -1,0 +1,683 @@
+{
+  "Metadata": {
+    "title": "MapIA",
+    "description": "Mapeamento de arquitetura da informacao com assistente de criacao e editor nodal"
+  },
+  "Common": {
+    "appName": "MapIA",
+    "userFallback": "Usuario",
+    "buttons": {
+      "close": "Fechar",
+      "cancel": "Cancelar",
+      "back": "Voltar",
+      "continue": "Continuar",
+      "saveDraft": "Salvar rascunho",
+      "create": "Criar",
+      "open": "Abrir",
+      "refresh": "Atualizar"
+    },
+    "theme": {
+      "toggleToLightAria": "Alternar tema para claro",
+      "toggleToDarkAria": "Alternar tema para escuro",
+      "currentDarkTitle": "Tema atual: Escuro",
+      "currentLightTitle": "Tema atual: Claro",
+      "switchToLight": "Tema: Claro",
+      "switchToDark": "Tema: Escuro"
+    },
+    "stepper": {
+      "currentStepAria": "Passo atual: {title}",
+      "goToStepAria": "Ir para passo: {title}",
+      "currentStepButton": "Atual",
+      "goToStepButton": "Ir para passo"
+    },
+    "cardOption": {
+      "selected": "Selecionado",
+      "select": "Selecionar"
+    }
+  },
+  "Auth": {
+    "page": {
+      "badge": "Fase 0 / Bootstrap",
+      "title": "Entrar no MapIA",
+      "description": "Auth atual usa credenciais de desenvolvimento para bootstrap local. Em producao este provider fica desabilitado."
+    },
+    "form": {
+      "emailLabel": "Email",
+      "passwordLabel": "Senha",
+      "credentialsHint": "Credenciais padrao configuraveis via DEV_LOGIN_EMAIL e DEV_LOGIN_PASSWORD.",
+      "submit": "Entrar",
+      "submitting": "Entrando...",
+      "disabledMessage": "O login por credenciais de desenvolvimento esta desabilitado fora de NODE_ENV=development."
+    },
+    "errors": {
+      "credentialsSignin": "Credenciais invalidas. Confira email e senha de desenvolvimento.",
+      "default": "Nao foi possivel autenticar. Tente novamente."
+    },
+    "signOut": "Sair"
+  },
+  "Shell": {
+    "brand": {
+      "subtitle": "Arquitetura da informacao e diagramas"
+    },
+    "authenticatedUser": "Usuario autenticado",
+    "navigation": {
+      "ariaLabel": "Navegacao principal",
+      "dashboard": "Area de trabalho",
+      "create": "Assistente de criacao",
+      "editor": "Editor"
+    }
+  },
+  "Dashboard": {
+    "page": {
+      "title": "Hub da area de trabalho",
+      "description": "Gerencie projetos e avance no fluxo Workspace -> Assistente de criacao -> Editor.",
+      "projectListTitle": "Projetos",
+      "projectListDescription": "{count} projeto(s) na visualizacao atual."
+    },
+    "stats": {
+      "projects": "Projetos",
+      "generated": "Snapshot gerado",
+      "pending": "Snapshot pendente"
+    },
+    "emptyStates": {
+      "noneCreatedTitle": "Nenhum projeto criado ainda",
+      "noneCreatedDescription": "Crie seu primeiro projeto para iniciar o fluxo workspace -> Assistente de criacao -> Editor.",
+      "noneFilteredTitle": "Nenhum projeto encontrado",
+      "noneFilteredDescription": "Ajuste busca, filtros ou ordenacao para encontrar projetos."
+    },
+    "filters": {
+      "searchLabel": "Buscar",
+      "searchPlaceholder": "Buscar por nome, descricao, tipo...",
+      "searchAriaLabel": "Buscar projeto",
+      "clearSearchAriaLabel": "Limpar busca",
+      "clearSearchButton": "Limpar",
+      "diagramLabel": "Tipo de diagrama",
+      "templateLabelOperational": "Modelo",
+      "templateLabelTechnical": "Template legado",
+      "snapshotLabel": "Status de snapshot",
+      "sortLabel": "Ordenar por",
+      "allOption": "Todos",
+      "generatedOption": "Gerado",
+      "pendingOption": "Pendente",
+      "sortNameAsc": "Nome (A-Z)",
+      "sortUpdatedDesc": "Atualizado (mais recente)",
+      "sortCreatedDesc": "Criado (mais recente)",
+      "viewModeAriaLabel": "Alternar visualizacao",
+      "densityAriaLabel": "Densidade da visualizacao",
+      "workspaceModeAriaLabel": "Modo do workspace",
+      "clearFiltersButton": "Limpar filtros",
+      "newProjectButton": "Novo projeto",
+      "counterLabel": "Exibindo {filteredCount} de {totalCount} projetos"
+    },
+    "viewMode": {
+      "grid": "Grid",
+      "list": "Lista"
+    },
+    "density": {
+      "compact": "Compacta",
+      "comfortable": "Confortavel"
+    },
+    "workspaceMode": {
+      "operational": "Operacional",
+      "technical": "Tecnico"
+    },
+    "project": {
+      "fallbackDescription": "Sem finalidade informada",
+      "updatedAtLabel": "Atualizado em {date}",
+      "updatedFallback": "—",
+      "open": "Abrir",
+      "openAssistant": "Abrir Assistente",
+      "openEditor": "Abrir Editor",
+      "viewVersions": "Ver versoes",
+      "copyTechnicalId": "Copiar ID tecnico",
+      "moreActionsAriaLabel": "Mais acoes para {projectName}",
+      "listAriaLabel": "Lista de projetos",
+      "headers": {
+        "project": "Projeto",
+        "type": "Tipo",
+        "status": "Status",
+        "updated": "Atualizado",
+        "actions": "Acoes"
+      }
+    },
+    "createDrawer": {
+      "title": "Novo projeto",
+      "description": "Crie o projeto com o essencial. Voce pode ajustar detalhes no Assistente e no Editor depois.",
+      "closeAriaLabel": "Fechar criacao de projeto",
+      "closeButton": "Fechar",
+      "nameLabel": "Nome do projeto",
+      "namePlaceholder": "Ex.: Mapa de onboarding",
+      "nameHelper": "Use um nome curto e objetivo para facilitar buscas e listagens.",
+      "descriptionLabel": "Finalidade (opcional)",
+      "descriptionPlaceholder": "Ex.: Mapear o fluxo entre RH, TI e lideranca.",
+      "initialDiagramTypeLabel": "Tipo inicial do diagrama",
+      "templateLabel": "Template legado",
+      "createButton": "Criar projeto",
+      "createSubmittingButton": "Criando...",
+      "cancelButton": "Cancelar"
+    },
+    "diagramTypes": {
+      "wizard": {
+        "label": "Decidir no Assistente",
+        "description": "Defina o tipo durante o fluxo guiado de criacao."
+      },
+      "tree": {
+        "label": "Hierarquia",
+        "description": "Estruturas com niveis e relacao pai-filho."
+      },
+      "flow": {
+        "label": "Processo",
+        "description": "Etapas de processo com sequencia."
+      },
+      "mindmap": {
+        "label": "Mapa mental",
+        "description": "Exploracao radial de ideias e temas."
+      },
+      "undefined": {
+        "label": "Definir durante a criacao",
+        "description": "Tipo ainda nao definido."
+      }
+    },
+    "templates": {
+      "graph": {
+        "operationalLabel": "Estrutura livre",
+        "technicalLabel": "graph (legado)",
+        "description": "Estrutura generica para compatibilidade."
+      },
+      "sitemap": {
+        "operationalLabel": "Mapa de navegacao",
+        "technicalLabel": "sitemap (legado)",
+        "description": "Navegacao de paginas e secoes."
+      },
+      "flowchart": {
+        "operationalLabel": "Fluxograma",
+        "technicalLabel": "flowchart (legado)",
+        "description": "Fluxograma classico de processos."
+      },
+      "erd": {
+        "operationalLabel": "Modelo de dados",
+        "technicalLabel": "erd (legado)",
+        "description": "Relacionamento de entidades e dados."
+      },
+      "fallbackDescription": "Template legado para compatibilidade."
+    },
+    "snapshotStatus": {
+      "generated": "Snapshot gerado",
+      "pending": "Snapshot pendente"
+    },
+    "messages": {
+      "nameRequired": "Informe um nome para criar o projeto.",
+      "nameTooShort": "Use ao menos 3 caracteres no nome.",
+      "nameTooLong": "Use no maximo 120 caracteres no nome.",
+      "copyTechnicalIdSuccess": "ID tecnico copiado: {id}",
+      "copyTechnicalIdError": "Nao foi possivel copiar o ID tecnico.",
+      "createSuccess": "Projeto \"{projectName}\" criado com sucesso.",
+      "createError": "Nao foi possivel criar o projeto.",
+      "networkError": "Falha de rede ao criar projeto."
+    }
+  },
+  "Create": {
+    "page": {
+      "title": "Assistente de criacao",
+      "newDescription": "Fluxo guiado para criar projeto e mapa inicial coerente.",
+      "existingDescription": "Aplicar configuracao inicial em um projeto existente.",
+      "loadErrorFallback": "Nao foi possivel carregar o projeto para configuracao inicial.",
+      "backToDashboard": "Voltar para Dashboard"
+    },
+    "defaults": {
+      "projectName": "Novo projeto",
+      "rootName": "Nucleo"
+    },
+    "steps": {
+      "project": {
+        "title": "Projeto",
+        "description": "Nome e objetivo do projeto."
+      },
+      "scope": {
+        "title": "Escopo",
+        "description": "Perfil do que voce quer mapear."
+      },
+      "origin": {
+        "title": "Origem",
+        "description": "Como comecar o mapa inicial."
+      },
+      "view": {
+        "title": "Visao inicial",
+        "description": "Modo de leitura inicial."
+      },
+      "adjustments": {
+        "title": "Ajustes",
+        "description": "Layout, detalhe, automacao e contexto."
+      },
+      "review": {
+        "title": "Revisao",
+        "description": "Resumo final antes de criar."
+      }
+    },
+    "shell": {
+      "modeBadge": {
+        "new": "Novo projeto guiado",
+        "existing": "Configuracao inicial do projeto"
+      },
+      "draftVersion": "Rascunho v{version}",
+      "stepCounter": "Passo {current} de {total}",
+      "progressAriaLabel": "Progresso do Assistente de criacao",
+      "recommendedBecause": "Recomendado porque: {reason}",
+      "useRecommended": "Usar recomendado",
+      "recommendedActive": "Recomendado ativo",
+      "sourceStatusTitle": "Status da fonte",
+      "sourceConnectionTitle": "Conexao da fonte",
+      "connectLater": "Conectar depois",
+      "configureNow": "Configurar agora",
+      "configureSourceNow": "Configurar fonte agora",
+      "connectLaterButton": "Conectar depois",
+      "connectLaterDescription": "Conectar depois mantem o fluxo honesto: o mapa inicial sera criado sem importar dados automaticamente.",
+      "hybridOptionalConfiguration": "Configuracao opcional no modo hibrido.",
+      "hybridConnectLater": "Conectar depois",
+      "back": "Voltar",
+      "saveDraft": "Salvar rascunho",
+      "continue": "Continuar",
+      "finishNew": "Criar mapa inicial",
+      "finishExisting": "Aplicar e criar mapa inicial"
+    },
+    "projectStep": {
+      "projectNameLabel": "Nome do projeto",
+      "objectiveLabel": "Objetivo do projeto (opcional)",
+      "helper": "Voce podera ajustar estrutura, origem e visualizacao nas proximas etapas."
+    },
+    "initialViewStep": {
+      "recommendedLabel": "Recomendado para este perfil",
+      "otherViewsLabel": "Outras visoes possiveis"
+    },
+    "originStep": {
+      "strategyRecommendedDescription": "Recomendado para este escopo.",
+      "templatePresetDescription": "Preset inicial para o perfil escolhido.",
+      "sourceDescription": "Fonte de origem."
+    },
+    "settingsStep": {
+      "structureTitle": "Estrutura inicial",
+      "createExamples": "Criar exemplos automaticos",
+      "suggestedBlocksLabel": "Quantidade inicial de blocos sugeridos",
+      "suggestedBlocksValue": "{count} blocos",
+      "showAdvanced": "Mostrar avancado",
+      "hideAdvanced": "Ocultar avancado",
+      "createInitialRoot": "Criar no raiz inicial",
+      "initialRootNameLabel": "Nome do no raiz inicial",
+      "layoutTitle": "Layout",
+      "recommendedLayoutsLabel": "Recomendado",
+      "recommendedLayoutDescription": "Recomendado para a visao inicial.",
+      "advancedLayoutDescription": "Opcao avancada para casos especificos.",
+      "detailLevelTitle": "Nivel de detalhe",
+      "detailLevelDescription": "Nivel de profundidade inicial.",
+      "automationTitle": "Automacao",
+      "contextTitle": "Contexto",
+      "orientation": {
+        "horizontal": "Horizontal",
+        "vertical": "Vertical"
+      },
+      "erd": {
+        "useDefaultIdPk": "Usar \"id\" como PK padrao",
+        "autoCreateFk": "Criar FKs automaticamente quando possivel",
+        "suggestAssociativeForNN": "Sugerir tabela associativa para N:N",
+        "showFieldTypes": "Exibir tipos de campo",
+        "enableDataSemantics": "Ativar validacao semantica de dados",
+        "generateTimestamps": "Gerar timestamps iniciais (createdAt, updatedAt)",
+        "suggestIndexes": "Sugerir indices iniciais"
+      },
+      "flow": {
+        "autoCreateStartEnd": "Criar inicio e fim automaticamente",
+        "allowDecisions": "Permitir decisoes",
+        "directionLabel": "Direcao do fluxo",
+        "allowMultipleOutputs": "Permitir multiplas saidas por etapa"
+      },
+      "sitemap": {
+        "autoCreateHome": "Criar Home automaticamente",
+        "generateMainSections": "Gerar secoes principais",
+        "showNavDepth": "Exibir profundidade de navegacao"
+      },
+      "hierarchy": {
+        "createRoot": "Criar no raiz",
+        "directionLabel": "Direcao",
+        "initialDepthHintLabel": "Profundidade inicial sugerida"
+      },
+      "graph": {
+        "autoGroup": "Agrupar automaticamente",
+        "reduceCrossing": "Reduzir cruzamento de linhas",
+        "showEdgeLabels": "Exibir rotulos de relacao"
+      }
+    },
+    "reviewStep": {
+      "nameLabel": "Nome:",
+      "profileLabel": "Perfil:",
+      "originLabel": "Origem:",
+      "viewLabel": "Visao:",
+      "layoutLabel": "Layout:",
+      "detailLabel": "Detalhe:",
+      "suggestedBlocksLabel": "Blocos sugeridos:",
+      "initialRootLabel": "No raiz inicial:",
+      "enabledAutomationLabel": "Automacao:",
+      "sourceLabel": "Fonte:",
+      "sourceStatusLabel": "Status da fonte:",
+      "recommendedStrategyLabel": "Estrategia recomendada:",
+      "rootEnabledFallback": "Ativo",
+      "rootDisabledFallback": "Desativado",
+      "noAutomation": "Sem automacoes ativas",
+      "noTemplateSelected": "Nao selecionado",
+      "noSourceSelected": "Nao selecionada"
+    },
+    "sourceForms": {
+      "prisma": {
+        "inputLabel": "Entrada",
+        "pasteOption": "Colar schema",
+        "uploadOption": "Upload (em breve)",
+        "schemaLabel": "Schema Prisma",
+        "schemaPlaceholder": "model User ...",
+        "validateNowButton": "Verificacao inicial e importar agora",
+        "validateOnCreateHint": "A verificacao inicial sera aplicada ao criar o mapa inicial."
+      },
+      "postgres": {
+        "connectionModeLabel": "Modo de conexao",
+        "connectionStringOption": "Connection string",
+        "separateFieldsOption": "Campos separados",
+        "connectionStringLabel": "Connection string",
+        "connectionStringPlaceholder": "postgresql://usuario:***@host:5432/banco",
+        "hostLabel": "Host",
+        "hostPlaceholder": "db.exemplo.internal",
+        "portLabel": "Porta",
+        "portPlaceholder": "5432",
+        "databaseLabel": "Banco",
+        "databasePlaceholder": "mapia",
+        "schemaLabel": "Schema (opcional)",
+        "schemaPlaceholder": "public",
+        "authModeLabel": "Autenticacao",
+        "userPassOption": "Usuario e senha",
+        "iamOption": "IAM/Token temporario",
+        "usernameLabel": "Usuario",
+        "usernamePlaceholder": "readonly_user",
+        "passwordLabel": "Senha (opcional)",
+        "passwordPlaceholder": "Digite apenas para teste imediato",
+        "draftSafetyHint": "Credenciais nao sao salvas no rascunho nem nas configuracoes aplicadas. Informe novamente quando executar importacao conectada.",
+        "securityHint": "Seguranca: prefira usuario tecnico de leitura e conecte credenciais definitivas apenas no momento da integracao."
+      },
+      "openApi": {
+        "inputLabel": "Entrada OpenAPI",
+        "urlOption": "URL",
+        "pasteOption": "Colar",
+        "uploadOption": "Upload (em breve)",
+        "urlLabel": "URL",
+        "urlPlaceholder": "https://api.exemplo.com/openapi.json",
+        "specLabel": "Especificacao",
+        "specPlaceholder": "Cole JSON/YAML OpenAPI aqui",
+        "verificationHint": "Verificacao online sera habilitada quando o conector remoto estiver disponivel."
+      },
+      "graphQl": {
+        "endpointLabel": "Endpoint GraphQL (opcional)",
+        "endpointPlaceholder": "https://api.exemplo.com/graphql",
+        "schemaLabel": "SDL GraphQL (opcional)",
+        "schemaPlaceholder": "type Query ...",
+        "verificationHint": "Informe endpoint ou SDL para verificacao inicial da fonte."
+      },
+      "generic": {
+        "inputLabel": "Entrada",
+        "pasteOption": "Colar conteudo",
+        "uploadOption": "Upload (em breve)",
+        "delimiterLabel": "Delimitador CSV",
+        "delimiterComma": "Virgula (,)",
+        "delimiterSemicolon": "Ponto e virgula (;)",
+        "delimiterTab": "Tab",
+        "contentLabel": "Conteudo da fonte",
+        "readyPreview": "Preview assistido da fonte pronto.",
+        "partialPreview": "Preview assistido parcial da fonte.",
+        "idFieldLabel": "Campo ID (opcional)",
+        "labelFieldLabel": "Campo rotulo",
+        "parentFieldLabel": "Campo pai/dependencia",
+        "noMapping": "Nao mapear",
+        "sampleLabel": "Amostra",
+        "previewHint": "Esta fonte permite configuracao e preview inicial. Importacao automatica completa pode ser feita depois."
+      }
+    },
+    "hooks": {
+      "localDraftSaved": "Rascunho salvo localmente.",
+      "serverDraftSaved": "Rascunho salvo no servidor.",
+      "serverDraftConflict": "Havia uma versao mais recente do rascunho no servidor. Carregamos a ultima versao para continuar.",
+      "saveDraftFallbackError": "Falha ao salvar rascunho.",
+      "currentStepInvalid": "Revise os dados da etapa atual.",
+      "moveNextFallbackError": "Falha ao avancar etapa.",
+      "prismaSourceRequired": "Cole um schema Prisma valido para verificacao inicial/importacao.",
+      "prismaValidationFallbackError": "Falha na verificacao inicial do schema Prisma.",
+      "prismaValidationSuccess": "Verificacao inicial concluida e importacao executada no projeto atual.",
+      "sourceValidationFallbackError": "Falha na verificacao inicial da fonte.",
+      "finishCreationFallbackError": "Falha ao criar mapa inicial."
+    },
+    "labels": {
+      "projectProfiles": {
+        "blank": {
+          "title": "Em branco",
+          "description": "Comece sem estrutura fixa.",
+          "summary": "em branco"
+        },
+        "information-structure": {
+          "title": "Estrutura da informacao",
+          "description": "Conteudo e navegacao.",
+          "summary": "estrutura da informacao"
+        },
+        "process": {
+          "title": "Processo",
+          "description": "Etapas e decisoes.",
+          "summary": "processo"
+        },
+        "data-model": {
+          "title": "Modelo de dados",
+          "description": "Entidades e relacionamentos.",
+          "summary": "modelo de dados"
+        },
+        "system-architecture": {
+          "title": "Arquitetura do sistema",
+          "description": "Servicos e dependencias.",
+          "summary": "arquitetura do sistema"
+        },
+        "documents-governance": {
+          "title": "Documentos e governanca",
+          "description": "Politicas e trilhas.",
+          "summary": "documentos e governanca"
+        },
+        "mixed": {
+          "title": "Misto",
+          "description": "Cenario hibrido.",
+          "summary": "misto"
+        }
+      },
+      "startStrategies": {
+        "manual": {
+          "title": "Criar manualmente",
+          "description": "Canvas limpo com edicao manual."
+        },
+        "import": {
+          "title": "Importar do sistema",
+          "description": "Partir de fonte estruturada."
+        },
+        "template": {
+          "title": "Usar modelo inicial",
+          "description": "Preset inicial recomendado."
+        },
+        "hybrid": {
+          "title": "Combinar importacao e edicao manual",
+          "description": "Importa e complementa manualmente."
+        }
+      },
+      "startSources": {
+        "postgres": "PostgreSQL",
+        "mysql": "MySQL",
+        "sqlserver": "SQL Server",
+        "prisma-schema": "Prisma schema",
+        "sql-file": "Arquivo SQL",
+        "relational-json": "JSON relacional",
+        "openapi": "OpenAPI",
+        "graphql": "GraphQL",
+        "code-routes": "Rotas de codigo",
+        "folder-structure": "Estrutura de pastas",
+        "events": "Eventos",
+        "yaml-json": "YAML/JSON",
+        "csv": "CSV",
+        "json": "JSON",
+        "spreadsheet": "Planilha",
+        "cms-export": "Exportacao de CMS",
+        "existing-map": "Mapa existente",
+        "document-repository": "Repositorio de documentos",
+        "custom-import": "Importacao personalizada"
+      },
+      "templatePresets": {
+        "erd-basic": "ERD basico",
+        "process-basic": "Processo basico",
+        "sitemap-basic": "Sitemap basico",
+        "architecture-basic": "Arquitetura basica",
+        "blank-canvas": "Canvas em branco"
+      },
+      "initialViews": {
+        "free": {
+          "label": "Livre",
+          "description": "Canvas livre para organizar ideias sem restricoes iniciais."
+        },
+        "hierarchy": {
+          "label": "Hierarquia",
+          "description": "Estrutura em niveis para organizacao pai-filho."
+        },
+        "flow": {
+          "label": "Fluxo",
+          "description": "Fluxo de etapas com transicoes e decisoes."
+        },
+        "graph": {
+          "label": "Grafo",
+          "description": "Rede de relacoes entre elementos conectados."
+        },
+        "erd": {
+          "label": "ERD",
+          "description": "Modelo entidade-relacionamento para dados."
+        },
+        "sitemap": {
+          "label": "Sitemap",
+          "description": "Mapa de paginas e navegacao da informacao."
+        },
+        "timeline": {
+          "label": "Timeline",
+          "description": "Sequencia temporal de marcos e eventos."
+        },
+        "mindmap": {
+          "label": "Mapa mental",
+          "description": "Mapa mental com ramificacoes a partir de um tema central."
+        }
+      },
+      "layouts": {
+        "auto": "Automatico",
+        "vertical": "Vertical",
+        "horizontal": "Horizontal",
+        "radial": "Radial",
+        "relational": "Relacional",
+        "free": "Livre"
+      },
+      "detailLevels": {
+        "essential": "Essencial",
+        "intermediate": "Intermediario",
+        "detailed": "Detalhado"
+      },
+      "automation": {
+        "inferRelations": {
+          "label": "Inferir relacoes",
+          "help": "Propõe relacoes iniciais coerentes com o perfil e a origem."
+        },
+        "createLinkFields": {
+          "label": "Criar campos de ligacao",
+          "help": "Sugere campos auxiliares para vinculos e referencias."
+        },
+        "applySuggestedNames": {
+          "label": "Aplicar nomes sugeridos",
+          "help": "Normaliza nomes iniciais para reduzir retrabalho no editor."
+        },
+        "autoOrganizeOnCreate": {
+          "label": "Organizar automaticamente ao criar",
+          "help": "Aplica o layout inicial recomendado ao gerar o mapa."
+        },
+        "detectInconsistenciesEarly": {
+          "label": "Detectar inconsistencias cedo",
+          "help": "Executa validacoes semanticas iniciais durante a criacao."
+        }
+      },
+      "sourceStatus": {
+        "not_configured": "Fonte nao configurada",
+        "configured": "Configurada para importacao",
+        "precheck_ok": "Pre-verificacao OK",
+        "ready_to_attempt_import": "Pronta para tentar importar",
+        "imported": "Importada com sucesso",
+        "failed": "Falha na configuracao da fonte"
+      },
+      "sourceStatusSummary": {
+        "notSelected": "Fonte nao selecionada.",
+        "selected": "Fonte selecionada.",
+        "withPrecheck": "{status} ({summary})"
+      },
+      "viewCompatibility": {
+        "primary": "Principal",
+        "secondary": "Secundaria",
+        "experimental": "Experimental",
+        "incompatible": "Incompativel"
+      },
+      "summary": {
+        "semanticValidationEnabled": "ativada",
+        "semanticValidationDisabled": "desativada",
+        "sourceStatusSentence": " Estado da fonte: {status}.",
+        "created": "Sera criado um projeto de {profile} com visao inicial {initialView}, layout {layout} e validacao semantica {semanticValidation}.{sourceStatusSummary}"
+      }
+    }
+  },
+  "Editor": {
+    "page": {
+      "title": "Editor visual",
+      "description": "Ambiente de trabalho diario com salvamento, versoes e inspetor tecnico.",
+      "emptyProjectSelectionDescription": "Selecione um projeto na area de trabalho para abrir o editor.",
+      "emptyProjectSelectionBody": "O editor trabalha sobre o snapshot de trabalho persistido do projeto.",
+      "loadErrorFallback": "Nao foi possivel carregar o editor deste projeto.",
+      "loadErrorDescription": "Falha ao carregar o projeto solicitado.",
+      "emptyInitialMapTitle": "Mapa inicial ainda nao criado",
+      "emptyInitialMapDescription": "Execute o Assistente de criacao para gerar o mapa inicial antes de editar.",
+      "openAssistant": "Abrir Assistente"
+    },
+    "canvasToolbar": {
+      "toolbarAria": "Ferramentas do canvas",
+      "zoomOutAria": "Reduzir zoom",
+      "zoomInAria": "Aumentar zoom",
+      "centerAria": "Centralizar selecao"
+    },
+    "commandPalette": {
+      "dialogAria": "Buscar no do canvas",
+      "label": "Buscar no",
+      "placeholder": "Digite para localizar por nome",
+      "emptyState": "Nenhum no encontrado.",
+      "technicalKind": " (kind: {kind})"
+    },
+    "selectionHud": {
+      "moreActions": "Mais acoes",
+      "center": "Centralizar",
+      "duplicate": "Duplicar",
+      "remove": "Remover"
+    },
+    "semantics": {
+      "connectionAssistant": {
+        "dialogAria": "Assistente de conexao",
+        "title": "Conexao invalida",
+        "attemptLabel": "Tentativa:",
+        "keyboardHint": "Use setas para navegar e Enter para confirmar uma relacao.",
+        "technicalKind": " (kind: {kind})",
+        "recommendedBadge": "Recomendado",
+        "emptyState": "Nenhuma relacao valida disponivel para esta conexao.",
+        "cancel": "Cancelar"
+      },
+      "repairDialog": {
+        "dialogAria": "Reparo semantico",
+        "defaultTitle": "Reparo semantico necessario",
+        "applyRepair": "Aplicar e corrigir",
+        "applyRemoveInvalid": "Aplicar e remover invalidas",
+        "cancel": "Cancelar"
+      }
+    }
+  }
+}
