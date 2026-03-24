@@ -2,11 +2,13 @@
 
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import { useLocale, useTranslations } from "next-intl";
+import { useLocale, useMessages, useTranslations } from "next-intl";
 import { Link, usePathname } from "@/src/i18n/navigation";
 import {
   buildLocaleSwitcherHref,
+  resolveLocaleSwitcherOptions,
 } from "@/src/i18n/locale-switcher";
+import type { AppMessages } from "@/src/i18n/messages";
 import { locales, type AppLocale } from "@/src/i18n/routing";
 
 type LocaleSwitcherProps = {
@@ -14,11 +16,6 @@ type LocaleSwitcherProps = {
   variant?: "compact" | "panel";
   className?: string;
 };
-
-const localeOptionKeys = {
-  "pt-BR": "ptBR",
-  "en-US": "enUS",
-} as const satisfies Record<AppLocale, "ptBR" | "enUS">;
 
 function joinClassNames(...values: Array<string | undefined | false>) {
   return values.filter(Boolean).join(" ");
@@ -30,31 +27,33 @@ export function LocaleSwitcher({
   className,
 }: LocaleSwitcherProps) {
   const t = useTranslations("Common.localeSwitcher");
+  const messages = useMessages() as AppMessages;
   const pathname = usePathname();
   const locale = useLocale() as AppLocale;
   const searchParams = useSearchParams();
   const currentPathname = pathname || "/";
   const currentSearch = searchParams?.toString() ?? "";
+  const optionCopy = messages.Common.localeSwitcher.options;
 
   const options = useMemo(
     () =>
-      locales.map((nextLocale) => {
-        const optionKey = localeOptionKeys[nextLocale];
+      resolveLocaleSwitcherOptions(optionCopy, locales).map((option) => {
         const href = buildLocaleSwitcherHref({
           pathname: currentPathname,
           search: currentSearch,
-          locale: nextLocale,
+          locale: option.locale,
         });
 
         return {
-          locale: nextLocale,
+          ...option,
           href,
-          label: t(`options.${optionKey}.label`),
-          description: t(`options.${optionKey}.description`),
         };
       }),
-    [currentPathname, currentSearch, t],
+    [currentPathname, currentSearch, optionCopy],
   );
+
+  const currentLocaleDescription =
+    optionCopy[locale]?.description ?? locale;
 
   return (
     <div
@@ -74,6 +73,7 @@ export function LocaleSwitcher({
         className="locale-switcher-options"
         role="group"
         aria-label={t("ariaLabel")}
+        title={t("currentLocaleTitle", { locale: currentLocaleDescription })}
       >
         {options.map((option) =>
           option.locale === locale ? (

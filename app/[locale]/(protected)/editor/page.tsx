@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/src/i18n/navigation";
+import { buildLocalizedPageMetadata } from "@/src/i18n/metadata";
+import type { AppLocale } from "@/src/i18n/routing";
 import { AppError } from "@/src/lib/app-error";
 import { appRoutes } from "@/src/lib/routes";
 import { EditorShell } from "@/src/components/editor/editor-shell";
@@ -23,8 +26,16 @@ import {
 import { withServerTelemetrySpan } from "@/src/server/observability/server-telemetry";
 
 type EditorPageProps = {
+  params: Promise<{ locale: AppLocale }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+export async function generateMetadata({
+  params,
+}: Pick<EditorPageProps, "params">): Promise<Metadata> {
+  const { locale } = await params;
+  return buildLocalizedPageMetadata(locale, "editor");
+}
 
 function getStringParam(
   searchParams: Record<string, string | string[] | undefined>,

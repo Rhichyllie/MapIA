@@ -23,6 +23,18 @@ describe("i18n convergence proof", () => {
     expect(source).not.toContain("enUSEditorMessages");
   });
 
+  it("keeps metadata localized through the locale segment instead of a single global title", () => {
+    const rootLayoutSource = readRepoFile("app/layout.tsx");
+    const localeLayoutSource = readRepoFile("app/[locale]/layout.tsx");
+    const metadataSource = readRepoFile("src/i18n/metadata.ts");
+
+    expect(rootLayoutSource).not.toContain("generateMetadata");
+    expect(localeLayoutSource).toContain("generateMetadata");
+    expect(localeLayoutSource).toContain("buildLocalizedLayoutMetadata");
+    expect(metadataSource).toContain("Metadata.routes");
+    expect(metadataSource).toContain("buildLocalizedPathname");
+  });
+
   it("does not keep legacy editor catalog files on disk", () => {
     expect(existsSync(join(process.cwd(), "messages/editor"))).toBe(false);
   });
@@ -52,6 +64,16 @@ describe("i18n convergence proof", () => {
     expect(recipeSource).not.toContain("addConfirm");
     expect(recipeSource).not.toContain("quickActionHint");
     expect(personaSource).not.toContain("labels:");
+  });
+
+  it("keeps the visible locale switcher keyed by locale ids instead of hardcoded aliases", () => {
+    const switcherSource = readRepoFile("src/components/i18n/locale-switcher.tsx");
+    const helperSource = readRepoFile("src/i18n/locale-switcher.ts");
+
+    expect(switcherSource).not.toContain("localeOptionKeys");
+    expect(switcherSource).not.toContain("options.ptBR");
+    expect(switcherSource).not.toContain("options.enUS");
+    expect(helperSource).toContain("resolveLocaleSwitcherOptions");
   });
 
   it("keeps recipe and editor personas technical, without UI label payloads", () => {

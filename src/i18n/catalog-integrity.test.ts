@@ -71,6 +71,9 @@ describe("catalog integrity", () => {
     expect(diff.typeMismatches).toContain("Metadata");
     expect(diff.missingNamespaces).toContain("Common");
     expect(diff.missingRequiredPaths).toContain(
+      "Metadata.routes.login",
+    );
+    expect(diff.missingRequiredPaths).toContain(
       "Create.labels.sourcePreviewSummary",
     );
     expect(diff.missingRequiredPaths).toContain("Editor.presentation");

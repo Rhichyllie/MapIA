@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLocaleSwitcherHref,
   localizeInternalCallbackUrl,
+  resolveLocaleSwitcherOptions,
 } from "./locale-switcher";
 
 describe("locale switcher helpers", () => {
@@ -40,5 +41,43 @@ describe("locale switcher helpers", () => {
         "en-US",
       ),
     ).toBe("https://accounts.example.com/sso/complete");
+  });
+
+  it("maps locale options by locale id so the same helper scales to future locales", () => {
+    expect(
+      resolveLocaleSwitcherOptions(
+        {
+          "pt-BR": {
+            label: "PT-BR",
+            description: "Portugues (Brasil)",
+          },
+          "en-US": {
+            label: "EN-US",
+            description: "English (US)",
+          },
+          "es-ES": {
+            label: "ES-ES",
+            description: "Espanol (Espana)",
+          },
+        },
+        ["pt-BR", "en-US", "es-ES"] as const,
+      ),
+    ).toEqual([
+      {
+        locale: "pt-BR",
+        label: "PT-BR",
+        description: "Portugues (Brasil)",
+      },
+      {
+        locale: "en-US",
+        label: "EN-US",
+        description: "English (US)",
+      },
+      {
+        locale: "es-ES",
+        label: "ES-ES",
+        description: "Espanol (Espana)",
+      },
+    ]);
   });
 });

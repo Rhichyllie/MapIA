@@ -24,7 +24,13 @@ export const expectedCatalogNamespaces = [
 ] as const;
 
 export const expectedCatalogPaths = [
+  "Metadata.titleTemplate",
+  "Metadata.routes.login",
+  "Metadata.routes.dashboard",
+  "Metadata.routes.create",
+  "Metadata.routes.editor",
   "Common.localeSwitcher",
+  "Common.localeSwitcher.options",
   "Create.defaults.hierarchyRootName",
   "Create.labels.strictValidationIssues",
   "Create.labels.sourceStatusSummary",

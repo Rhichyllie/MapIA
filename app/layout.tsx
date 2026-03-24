@@ -1,7 +1,6 @@
-import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages, getTranslations } from "next-intl/server";
+import { getLocale, getMessages } from "next-intl/server";
 import "@xyflow/react/dist/style.css";
 import { IntlErrorHandlingProvider } from "@/src/i18n/intl-error-handling-provider";
 import { formats } from "@/src/i18n/request";
@@ -54,15 +53,6 @@ const ibmPlexMono = localFont({
   variable: "--font-mono",
   display: "swap",
 });
-
-export async function generateMetadata(): Promise<Metadata> {
-  const t = await getTranslations("Metadata");
-
-  return {
-    title: t("title"),
-    description: t("description"),
-  };
-}
 
 export default async function RootLayout({
   children,

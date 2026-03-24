@@ -1,5 +1,8 @@
+import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { Link } from "@/src/i18n/navigation";
+import { buildLocalizedPageMetadata } from "@/src/i18n/metadata";
+import type { AppLocale } from "@/src/i18n/routing";
 import { AppError } from "@/src/lib/app-error";
 import { appRoutes } from "@/src/lib/routes";
 import { CreationAssistantShell } from "@/src/components/creation-assistant/creation-assistant-shell";
@@ -18,8 +21,16 @@ import {
 } from "@/src/server/observability/creation-assistant-transition-telemetry";
 
 type CreatePageProps = {
+  params: Promise<{ locale: AppLocale }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+export async function generateMetadata({
+  params,
+}: Pick<CreatePageProps, "params">): Promise<Metadata> {
+  const { locale } = await params;
+  return buildLocalizedPageMetadata(locale, "create");
+}
 
 function getStringParam(
   searchParams: Record<string, string | string[] | undefined>,

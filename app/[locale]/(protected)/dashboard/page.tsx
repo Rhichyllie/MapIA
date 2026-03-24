@@ -1,10 +1,24 @@
+import type { Metadata } from "next";
 import { DashboardProjectsPanel } from "@/src/components/dashboard/dashboard-projects-panel";
+import { buildLocalizedPageMetadata } from "@/src/i18n/metadata";
+import type { AppLocale } from "@/src/i18n/routing";
 import { isSupportedDiagramType } from "@/src/modules/graph/domain";
 import { createServerUseCases } from "@/src/server/app/container";
 import {
   requireSession,
   requireSessionIdentity,
 } from "@/src/server/auth/session";
+
+type DashboardPageProps = {
+  params: Promise<{ locale: AppLocale }>;
+};
+
+export async function generateMetadata({
+  params,
+}: DashboardPageProps): Promise<Metadata> {
+  const { locale } = await params;
+  return buildLocalizedPageMetadata(locale, "dashboard");
+}
 
 export default async function DashboardPage() {
   const session = await requireSession();

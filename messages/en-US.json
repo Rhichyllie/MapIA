@@ -1,7 +1,26 @@
 {
   "Metadata": {
     "title": "MapIA",
-    "description": "Information architecture mapping with a creation assistant and node-based editor"
+    "titleTemplate": "%s | MapIA",
+    "description": "Structural mapping platform with a creation assistant and visual editor.",
+    "routes": {
+      "login": {
+        "title": "Sign in",
+        "description": "Access the MapIA environment with the credentials configured for your current flow."
+      },
+      "dashboard": {
+        "title": "Workspace",
+        "description": "Manage projects, review snapshots and move into the assistant or editor."
+      },
+      "create": {
+        "title": "Creation assistant",
+        "description": "Define the source, structure and initial settings required to generate a consistent map."
+      },
+      "editor": {
+        "title": "Visual editor",
+        "description": "Edit the current map, review versions and adjust the structure with technical context."
+      }
+    }
   },
   "Common": {
     "appName": "MapIA",
@@ -36,14 +55,14 @@
     },
     "localeSwitcher": {
       "label": "Language",
-      "ariaLabel": "Select the interface language",
-      "currentLocaleTitle": "Current language: {locale}",
+      "ariaLabel": "Choose the interface language",
+      "currentLocaleTitle": "Active language: {locale}",
       "options": {
-        "ptBR": {
+        "pt-BR": {
           "label": "PT-BR",
           "description": "Portuguese (Brazil)"
         },
-        "enUS": {
+        "en-US": {
           "label": "EN-US",
           "description": "English (US)"
         }
@@ -52,9 +71,9 @@
   },
   "Auth": {
     "page": {
-      "badge": "Phase 0 / Bootstrap",
+      "badge": "Authenticated access",
       "title": "Sign in to MapIA",
-      "description": "The current auth flow uses development credentials for local bootstrap. This provider is disabled in production."
+      "description": "Sign in with the credentials configured for the local environment. This provider remains disabled in production."
     },
     "form": {
       "emailLabel": "Email",
@@ -72,7 +91,7 @@
   },
   "Shell": {
     "brand": {
-      "subtitle": "Information architecture and diagrams"
+      "subtitle": "Structural mapping and diagrams"
     },
     "authenticatedUser": "Authenticated user",
     "navigation": {
@@ -84,8 +103,8 @@
   },
   "Dashboard": {
     "page": {
-      "title": "Workspace hub",
-      "description": "Manage projects and move through the Workspace -> Creation assistant -> Editor flow.",
+      "title": "Workspace",
+      "description": "Manage projects and move from the assistant to the editor with context preserved.",
       "projectListTitle": "Projects",
       "projectListDescription": "{count} project(s) in the current view."
     },
@@ -234,8 +253,8 @@
   "Create": {
     "page": {
       "title": "Creation assistant",
-      "newDescription": "Guided flow to create a project and a coherent initial map.",
-      "existingDescription": "Apply initial configuration to an existing project.",
+      "newDescription": "Set up a new project and generate a coherent initial map.",
+      "existingDescription": "Apply the initial configuration to an existing project.",
       "loadErrorFallback": "The project could not be loaded for the initial configuration flow.",
       "backToDashboard": "Back to dashboard"
     },
@@ -749,7 +768,7 @@
   "Editor": {
     "page": {
       "title": "Visual editor",
-      "description": "Daily workspace with saving, versions and a technical inspector.",
+      "description": "Primary editing workspace with saving, versions and technical inspection.",
       "emptyProjectSelectionDescription": "Select a project in the workspace to open the editor.",
       "emptyProjectSelectionBody": "The editor works on the project's persisted working snapshot.",
       "loadErrorFallback": "The editor for this project could not be loaded.",

@@ -185,6 +185,7 @@ select {
   top: 0;
   z-index: 20;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
@@ -207,7 +208,13 @@ select {
 .brand {
   display: flex;
   align-items: center;
+  flex: 1 1 18rem;
+  min-width: 0;
   gap: 0.75rem;
+}
+
+.brand > div {
+  min-width: 0;
 }
 
 .brand-mark {
@@ -231,6 +238,7 @@ select {
 .brand p {
   color: var(--muted);
   font-size: 0.92rem;
+  max-width: 42ch;
 }
 
 .shell-body {
@@ -301,6 +309,21 @@ select {
   justify-content: space-between;
   align-items: center;
   gap: 0.75rem;
+}
+
+.panel-header-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.panel-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
 }
 
 .panel-header h2,
@@ -485,7 +508,7 @@ select {
 }
 
 .login-card {
-  width: min(100%, 420px);
+  width: min(100%, 460px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface-elevation-2);
@@ -497,6 +520,7 @@ select {
 
 .login-card-header {
   align-items: flex-start;
+  gap: 0.85rem;
 }
 
 .stack-sm {
@@ -507,10 +531,15 @@ select {
 .locale-switcher {
   display: inline-flex;
   align-items: center;
+  min-width: 0;
   gap: 0.55rem;
 }
 
 .locale-switcher--panel {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-overlay) 78%, transparent);
   flex-wrap: wrap;
 }
 
@@ -525,6 +554,7 @@ select {
 .locale-switcher-options {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.2rem;
   padding: 0.18rem;
   border-radius: 999px;
@@ -536,7 +566,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 4.3rem;
+  min-width: 0;
   padding: 0.42rem 0.72rem;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -544,6 +574,7 @@ select {
   font-size: 0.82rem;
   font-weight: 700;
   line-height: 1.2;
+  white-space: nowrap;
   transition:
     background-color 120ms ease,
     border-color 120ms ease,
@@ -3704,6 +3735,7 @@ a.locale-switcher-option:focus-visible {
 
   .locale-switcher {
     width: 100%;
+    align-items: stretch;
     justify-content: space-between;
   }
 
@@ -3714,6 +3746,11 @@ a.locale-switcher-option:focus-visible {
   .locale-switcher-option {
     flex: 1 1 0;
     min-width: 0;
+  }
+
+  .panel-header-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .erd-fields-grid-header,

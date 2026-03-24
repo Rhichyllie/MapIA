@@ -105,7 +105,8 @@ Na Fase 1.1, a excecao anterior do editor foi removida:
 - o locale agora tambem pode ser trocado pela interface via `LocaleSwitcher`, exposto no login e no top bar do shell protegido, cobrindo dashboard, create assistant e editor sem duplicar controles.
 - a preferencia do usuario e persistida pelo cookie oficial `NEXT_LOCALE`, configurado centralmente em `src/i18n/routing.ts`.
 - a troca de idioma preserva a rota atual e os query params; no login, `callbackUrl` interno e relocalizado para o idioma escolhido para evitar saltos inconsistentes apos autenticar.
-- para adicionar um novo idioma na UX, basta incluir o locale em `routing.ts`, completar o catalogo oficial e deixar o switcher reutilizar `routing.locales`.
+- metadata principal agora e resolvida por locale no proprio segmento `app/[locale]`, com titulos e descricoes dedicados para login, dashboard, create e editor.
+- para adicionar um novo idioma na UX, basta incluir o locale em `routing.ts`, completar o catalogo oficial e deixar o switcher reutilizar `routing.locales`; o componente nao depende mais de aliases visuais fixos como `ptBR` ou `enUS`.
 
 ### Fonte oficial unica
 
@@ -125,6 +126,7 @@ Positivas:
 - Adicionar novos idiomas virou tarefa de catalogo e configuracao, nao de refactor em componentes.
 - O editor passou a usar um catalogo oficial unico em JSON, sem camada paralela de mensagens.
 - Divergencia estrutural entre catalogos virou falha de teste, nao debt silenciosa.
+- Metadata e copy principal das rotas mais visiveis agora acompanham o locale ativo e usam a mesma fonte oficial de mensagens.
 
 Trade-off:
 

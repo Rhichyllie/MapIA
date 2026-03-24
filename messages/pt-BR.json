@@ -1,7 +1,26 @@
 {
   "Metadata": {
     "title": "MapIA",
-    "description": "Mapeamento de arquitetura da informacao com assistente de criacao e editor nodal"
+    "titleTemplate": "%s | MapIA",
+    "description": "Plataforma de mapeamento estrutural com assistente de criacao e editor visual.",
+    "routes": {
+      "login": {
+        "title": "Entrar",
+        "description": "Acesse o ambiente do MapIA com as credenciais configuradas para o seu fluxo atual."
+      },
+      "dashboard": {
+        "title": "Area de trabalho",
+        "description": "Gerencie projetos, acompanhe snapshots e avance para o assistente ou editor."
+      },
+      "create": {
+        "title": "Assistente de criacao",
+        "description": "Defina origem, estrutura e configuracoes iniciais para gerar um mapa consistente."
+      },
+      "editor": {
+        "title": "Editor visual",
+        "description": "Edite o mapa atual, acompanhe versoes e ajuste a estrutura com contexto tecnico."
+      }
+    }
   },
   "Common": {
     "appName": "MapIA",
@@ -36,14 +55,14 @@
     },
     "localeSwitcher": {
       "label": "Idioma",
-      "ariaLabel": "Selecionar idioma da interface",
-      "currentLocaleTitle": "Idioma atual: {locale}",
+      "ariaLabel": "Escolher idioma da interface",
+      "currentLocaleTitle": "Idioma ativo: {locale}",
       "options": {
-        "ptBR": {
+        "pt-BR": {
           "label": "PT-BR",
           "description": "Portugues (Brasil)"
         },
-        "enUS": {
+        "en-US": {
           "label": "EN-US",
           "description": "English (US)"
         }
@@ -52,9 +71,9 @@
   },
   "Auth": {
     "page": {
-      "badge": "Fase 0 / Bootstrap",
+      "badge": "Acesso autenticado",
       "title": "Entrar no MapIA",
-      "description": "Auth atual usa credenciais de desenvolvimento para bootstrap local. Em producao este provider fica desabilitado."
+      "description": "Entre com as credenciais configuradas para o ambiente local. Em producao, este provider permanece desabilitado."
     },
     "form": {
       "emailLabel": "Email",
@@ -72,7 +91,7 @@
   },
   "Shell": {
     "brand": {
-      "subtitle": "Arquitetura da informacao e diagramas"
+      "subtitle": "Mapeamento estrutural e diagramas"
     },
     "authenticatedUser": "Usuario autenticado",
     "navigation": {
@@ -84,8 +103,8 @@
   },
   "Dashboard": {
     "page": {
-      "title": "Hub da area de trabalho",
-      "description": "Gerencie projetos e avance no fluxo Workspace -> Assistente de criacao -> Editor.",
+      "title": "Area de trabalho",
+      "description": "Gerencie projetos e avance do assistente para o editor com contexto preservado.",
       "projectListTitle": "Projetos",
       "projectListDescription": "{count} projeto(s) na visualizacao atual."
     },
@@ -234,8 +253,8 @@
   "Create": {
     "page": {
       "title": "Assistente de criacao",
-      "newDescription": "Fluxo guiado para criar projeto e mapa inicial coerente.",
-      "existingDescription": "Aplicar configuracao inicial em um projeto existente.",
+      "newDescription": "Configure um novo projeto e gere um mapa inicial coerente.",
+      "existingDescription": "Aplique a configuracao inicial em um projeto existente.",
       "loadErrorFallback": "Nao foi possivel carregar o projeto para configuracao inicial.",
       "backToDashboard": "Voltar para Dashboard"
     },
@@ -749,7 +768,7 @@
   "Editor": {
     "page": {
       "title": "Editor visual",
-      "description": "Ambiente de trabalho diario com salvamento, versoes e inspetor tecnico.",
+      "description": "Ambiente principal de edicao com salvamento, versoes e inspecao tecnica.",
       "emptyProjectSelectionDescription": "Selecione um projeto na area de trabalho para abrir o editor.",
       "emptyProjectSelectionBody": "O editor trabalha sobre o snapshot de trabalho persistido do projeto.",
       "loadErrorFallback": "Nao foi possivel carregar o editor deste projeto.",

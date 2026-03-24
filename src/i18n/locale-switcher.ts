@@ -5,8 +5,23 @@ import {
   type AppLocale,
 } from "./routing";
 
+export type LocaleSwitcherOptionCopy = {
+  label: string;
+  description: string;
+};
+
 function isAbsoluteUrl(value: string) {
   return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value);
+}
+
+export function resolveLocaleSwitcherOptions<TLocale extends string>(
+  options: Record<TLocale, LocaleSwitcherOptionCopy>,
+  availableLocales: readonly TLocale[],
+) {
+  return availableLocales.map((locale) => ({
+    locale,
+    ...options[locale],
+  }));
 }
 
 export function localizeInternalCallbackUrl(

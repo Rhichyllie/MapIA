@@ -42,8 +42,11 @@ describe("i18n messages", () => {
     const messages = await loadMessages("en-US");
 
     expect(messages.Common.appName).toBe("MapIA");
+    expect(messages.Common.localeSwitcher.options["en-US"].label).toBe("EN-US");
     expect(messages.Create.page.title).toBe("Creation assistant");
     expect(messages.Editor.page.openAssistant).toBe("Open assistant");
+    expect(messages.Metadata.routes.dashboard.title).toBe("Workspace");
+    expect(messages.Metadata.titleTemplate).toBe("%s | MapIA");
     expect(messages.Editor.shell.applyChanges).toBe("Apply changes");
     expect(messages.Editor.shell.topBar.canvasBarAriaLabel).toBe("Canvas top bar");
     expect(messages.Editor.process.quickActions["flow-add-next-step"].label).toBe(

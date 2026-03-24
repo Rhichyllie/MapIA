@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { hasLocale } from "next-intl";
 import { setRequestLocale } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { buildLocalizedLayoutMetadata } from "@/src/i18n/metadata";
 import { routing } from "@/src/i18n/routing";
 
 type LocaleLayoutProps = {
@@ -10,6 +12,17 @@ type LocaleLayoutProps = {
 
 export function generateStaticParams() {
   return routing.locales.map((locale) => ({ locale }));
+}
+
+export async function generateMetadata({
+  params,
+}: Omit<LocaleLayoutProps, "children">): Promise<Metadata> {
+  const { locale } = await params;
+  const resolvedLocale = hasLocale(routing.locales, locale)
+    ? locale
+    : routing.defaultLocale;
+
+  return buildLocalizedLayoutMetadata(resolvedLocale);
 }
 
 export default async function LocaleLayout({
