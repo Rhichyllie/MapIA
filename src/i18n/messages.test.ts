@@ -44,7 +44,28 @@ describe("i18n messages", () => {
     expect(messages.Common.appName).toBe("MapIA");
     expect(messages.Create.page.title).toBe("Creation assistant");
     expect(messages.Editor.page.openAssistant).toBe("Open assistant");
+    expect(messages.Editor.shell.applyChanges).toBe("Apply changes");
+    expect(messages.Editor.shell.topBar.canvasBarAriaLabel).toBe("Canvas top bar");
+    expect(messages.Editor.process.quickActions["flow-add-next-step"].label).toBe(
+      "Continue flow",
+    );
+    expect(messages.Editor.process.quickAddRoles["flow-decision"].label).toBe(
+      "Decision",
+    );
+    expect(messages.Editor.process.roles["flow-start"].badgeLabel).toBe("Start");
+    expect(messages.Editor.process.edgeKinds["flows-to"].edgeBadgeLabel).toBe(
+      "Transition",
+    );
     expect(messages.Editor.shell.topBar.quickFind).toBe("Search (Ctrl+K)");
+    expect(messages.Editor.shell.quickAdd.copy.flow.addPrimary).toBe(
+      "Add activity",
+    );
+    expect(messages.Editor.shell.quickAdd.copy.graph.dialogTitle).toBe(
+      "Architecture quick add",
+    );
+    expect(messages.Editor.shell.diagram.current).toBe(
+      "Current diagram: {diagramType}",
+    );
     expect(messages.Metadata.title).toBe(ptBRMessages.Metadata.title);
   });
 
@@ -54,6 +75,6 @@ describe("i18n messages", () => {
         namespace: "Editor.page",
         key: "missingKey",
       }),
-    ).toBe("Editor.page.missingKey");
+    ).toBe("[missing] Editor.page.missingKey");
   });
 });

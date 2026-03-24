@@ -4,7 +4,6 @@ import {
   getAllowedStartSourcesForProfile,
   getAllowedTemplatePresetsForProfile,
   type AssistantDraft,
-  type SourceConfigPreview,
   type StartSource,
   type StartStrategyRecommendation,
   type TemplatePreset,
@@ -26,7 +25,9 @@ type OriginStepProps = {
   sourceStatusLabel: string;
   sourceStatusSummary: string;
   isConnectLaterSelected: boolean;
-  sourcePreview: SourceConfigPreview | null;
+  sourcePreview: NonNullable<
+    ReturnType<CreationAssistantLabels["getSourcePreviewCopy"]>
+  > | null;
   mode: "new" | "existing";
   fromProjectId?: string;
   isBusy: boolean;
@@ -55,7 +56,11 @@ export function OriginStep({
       <div className="tile">
         <div className="row-actions row-actions-between">
           <p className="helper">
-            {labels.shell.recommendedBecause(recommendedStartStrategy.reason)}
+            {labels.shell.recommendedBecause(
+              labels.getStartStrategyRecommendationReason(
+                recommendedStartStrategy.reasonCode,
+              ),
+            )}
           </p>
           {draft.startStrategy !== recommendedStartStrategy.strategy ? (
             <button

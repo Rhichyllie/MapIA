@@ -4,7 +4,9 @@ import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 type GraphQlSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
-  sourcePreview: { message: string } | null;
+  sourcePreview: NonNullable<
+    ReturnType<CreationAssistantLabels["getSourcePreviewCopy"]>
+  > | null;
   labels: CreationAssistantLabels;
 };
 
@@ -65,7 +67,16 @@ export function GraphQlSourceForm({
           }
         />
       </div>
-      {sourcePreview ? <p className="helper">{sourcePreview.message}</p> : null}
+      {sourcePreview ? (
+        <div className="stack-xs">
+          <p className="helper">{sourcePreview.summary}</p>
+          {sourcePreview.details.map((detail) => (
+            <p key={detail} className="helper">
+              {detail}
+            </p>
+          ))}
+        </div>
+      ) : null}
       <p className="helper">{labels.sourceForms.graphQl.verificationHint}</p>
     </div>
   );

@@ -29,6 +29,7 @@
     "db:check:wait": "tsx scripts/db-check.ts --wait=30000",
     "db:seed": "prisma db seed",
     "db:reset-local": "docker compose down -v && docker compose up -d postgres && pnpm prisma migrate deploy && pnpm db:seed",
+    "telemetry:local:smoke": "tsx scripts/telemetry-local-smoke.ts",
     "telemetry:retention:cleanup": "tsx scripts/creation-telemetry-retention-cleanup.ts --dry-run=true",
     "telemetry:retention:cleanup:execute": "tsx scripts/creation-telemetry-retention-cleanup.ts --dry-run=false --confirm=execute",
     "observability:validate": "python infra/observability/scripts/validate-observability.py --smoke-render --smoke-apply-script --smoke-evidence-scripts",

@@ -1,5 +1,7 @@
 # OpenTelemetry (runtime + importing)
 
+Runbook curto para dev local: `docs/observability/local-telemetry.md`
+
 ## Visao geral
 
 O projeto usa OpenTelemetry server-side (Node) para traces e metricas de importing e sinais de plataforma (HTTP/Prisma) na camada de observabilidade.

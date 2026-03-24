@@ -309,6 +309,7 @@ export function ProcessOperationalNodeInspector({
               {t("processInspector.node.relationsHelper", {
                 incomingCount: relations.incomingCount,
                 outgoingCount: relations.outgoingCount,
+                previewCount: relations.preview.length,
               })}
             </p>
           </div>

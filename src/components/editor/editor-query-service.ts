@@ -1,4 +1,5 @@
 import type { GraphSnapshot } from "@/src/domain";
+import { getEditorBaseMessage } from "./editor-i18n";
 
 export type EditorApiErrorPayload = {
   error?: string;
@@ -248,7 +249,7 @@ export async function loadWorkingSnapshotForEditor(projectId: string) {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel carregar o snapshot.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.loadSnapshot"),
     });
   }
 
@@ -287,7 +288,7 @@ export async function saveWorkingSnapshotForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel salvar o snapshot.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.saveSnapshot"),
     });
   }
 
@@ -324,12 +325,12 @@ export async function createSnapshotVersionForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel criar a versao.",
+      fallbackMessage: getEditorBaseMessage("shell.versions.errors.create"),
     });
   }
 
   return {
-    message: payload.data.message ?? "Versao criada com sucesso.",
+    message: payload.data.message ?? getEditorBaseMessage("shell.versions.createSuccess"),
     snapshotVersion: payload.data.snapshotVersion,
   };
 }
@@ -351,7 +352,7 @@ export async function listSnapshotVersionsForEditor(projectId: string) {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel listar as versoes.",
+      fallbackMessage: getEditorBaseMessage("shell.versions.errors.load"),
     });
   }
 
@@ -381,7 +382,7 @@ export async function loadSnapshotVersionDetailForEditor(
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel carregar a versao.",
+      fallbackMessage: getEditorBaseMessage("shell.versions.errors.load"),
     });
   }
 
@@ -411,7 +412,7 @@ export async function loadSnapshotVersionDiffForEditor(
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel comparar a versao.",
+      fallbackMessage: getEditorBaseMessage("shell.versions.errors.compare"),
     });
   }
 
@@ -459,12 +460,13 @@ export async function restoreSnapshotVersionForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel restaurar a versao.",
+      fallbackMessage: getEditorBaseMessage("shell.versions.errors.restore"),
     });
   }
 
   return {
-    message: payload.data.message ?? "Snapshot de trabalho restaurado com sucesso.",
+    message:
+      payload.data.message ?? getEditorBaseMessage("shell.versions.restoreCompleted"),
     restoredFromVersionId: payload.data.restoredFromVersionId,
     workingSnapshot: payload.data.workingSnapshot,
     newRevision: payload.data.newRevision ?? payload.data.workingSnapshot.revision,
@@ -506,14 +508,12 @@ export async function importPrismaSchemaForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel importar o schema Prisma.",
+      fallbackMessage: getEditorBaseMessage("shell.prisma.errors.import"),
     });
   }
 
   return {
-    message:
-      payload.data.message ??
-      "Schema Prisma importado com sucesso para o snapshot de trabalho.",
+    message: payload.data.message ?? getEditorBaseMessage("shell.prisma.feedbackSuccess"),
     importSummary: payload.data.importSummary,
     workingSnapshot: payload.data.workingSnapshot,
     newRevision: payload.data.newRevision ?? payload.data.workingSnapshot.revision,
@@ -537,7 +537,7 @@ export async function loadSemanticPolicyForEditor(projectId: string) {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel carregar a politica semantica.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.loadSemanticPolicy"),
     });
   }
 
@@ -574,7 +574,7 @@ export async function updateSemanticPolicyForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel atualizar a politica semantica.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.updateSemanticPolicy"),
     });
   }
 
@@ -605,7 +605,7 @@ export async function validateSemanticDraftForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel validar o draft no servidor.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.validateSemanticDraft"),
     });
   }
 
@@ -634,7 +634,7 @@ export async function runSemanticAuditForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel executar auditoria semantica no servidor.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.serverSemanticAudit"),
     });
   }
 
@@ -668,7 +668,7 @@ export async function exportErdPreviewForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel gerar preview de exportacao ERD.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.erdExportPreview"),
     });
   }
 
@@ -713,7 +713,7 @@ export async function createEdgeForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel criar a relacao.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.createRelationOnServer"),
     });
   }
 
@@ -759,7 +759,7 @@ export async function updateEdgeForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel atualizar a relacao.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.updateRelationOnServer"),
     });
   }
 
@@ -805,7 +805,7 @@ export async function updateNodeForEditor(input: {
     throwQueryError({
       response,
       payload,
-      fallbackMessage: "Nao foi possivel atualizar o no.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.updateNodeOnServer"),
     });
   }
 

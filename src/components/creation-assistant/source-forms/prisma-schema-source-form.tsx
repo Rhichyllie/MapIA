@@ -4,7 +4,9 @@ import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 type PrismaSchemaSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
-  sourcePreview: { message: string } | null;
+  sourcePreview: NonNullable<
+    ReturnType<CreationAssistantLabels["getSourcePreviewCopy"]>
+  > | null;
   mode: "new" | "existing";
   fromProjectId?: string;
   validatePrismaSource: () => Promise<void>;
@@ -71,7 +73,16 @@ export function PrismaSchemaSourceForm({
           }
         />
       </div>
-      {sourcePreview ? <p className="helper">{sourcePreview.message}</p> : null}
+      {sourcePreview ? (
+        <div className="stack-xs">
+          <p className="helper">{sourcePreview.summary}</p>
+          {sourcePreview.details.map((detail) => (
+            <p key={detail} className="helper">
+              {detail}
+            </p>
+          ))}
+        </div>
+      ) : null}
       {mode === "existing" && fromProjectId ? (
         <div className="row-actions">
           <button

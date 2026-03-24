@@ -6,6 +6,7 @@ import {
   EditorCommandSchema,
   type EditorCommand,
 } from "@/src/modules/editor/application";
+import { getEditorBaseMessage } from "./editor-i18n";
 
 export type EditorSemanticMode = "operational" | "technical";
 
@@ -161,7 +162,7 @@ export async function applyEditorCommandRemotely(
     throw buildRemoteError({
       response,
       payload,
-      fallbackMessage: "Falha ao aplicar comando no backend.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.applyCommand"),
     });
   }
 
@@ -205,7 +206,7 @@ export async function applyEditorCommandsRemotely(
     throw buildRemoteError({
       response,
       payload,
-      fallbackMessage: "Falha ao aplicar comandos no backend.",
+      fallbackMessage: getEditorBaseMessage("shell.errors.applyCommands"),
     });
   }
 

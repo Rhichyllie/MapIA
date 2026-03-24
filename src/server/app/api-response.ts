@@ -38,6 +38,16 @@ function flattenZodIssues(error: ZodError) {
     path: issue.path.join("."),
     message: issue.message,
     code: issue.code,
+    ...(
+      "params" in issue &&
+      (issue as { params?: unknown }).params
+        ? {
+            params: redactErrorDetails(
+              (issue as { params?: unknown }).params,
+            ),
+          }
+        : {}
+    ),
   }));
 }
 

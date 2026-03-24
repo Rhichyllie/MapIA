@@ -10,7 +10,7 @@ import {
   evaluateCreationTransitionGateWarnings,
   recordCreationTransitionSnapshotAccessDenied,
   recordCreationTransitionSnapshotAccessed,
-} from "@/src/server/observability";
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 
 export async function POST(request: Request) {
   const auth = await getApiSessionIdentity();

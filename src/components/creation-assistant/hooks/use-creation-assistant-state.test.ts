@@ -51,6 +51,50 @@ describe("useCreationAssistantState helpers", () => {
     expect(initial.hydratedInitialDraftState.draft.initialView).toBe("flow");
   });
 
+  it("localizes legacy root-name defaults at the assistant boundary", () => {
+    const initialSettings = AssistantCreationSettingsSchema.parse({
+      profile: "information-structure",
+      startStrategy: "manual",
+      initialView: "hierarchy",
+      layout: "vertical",
+      detailLevel: "intermediate",
+      automation: {
+        inferRelations: true,
+        createLinkFields: true,
+        applySuggestedNames: true,
+        autoOrganizeOnCreate: true,
+        detectInconsistenciesEarly: true,
+      },
+      context: {
+        setup: {
+          createExamples: true,
+          suggestedBlockCount: 3,
+          createInitialRoot: true,
+          initialRootName: "No raiz",
+        },
+        hierarchy: {
+          createRoot: true,
+          direction: "top-down",
+          initialDepthHint: 2,
+        },
+      },
+    });
+
+    const initial = resolveInitialAssistantState({
+      mode: "new",
+      initialSettings,
+      labels: {
+        projectName: "New project",
+        rootName: "Core",
+        hierarchyRootName: "Root node",
+      },
+    });
+
+    expect(initial.hydratedInitialDraftState.draft.context.setup?.initialRootName).toBe(
+      "Root node",
+    );
+  });
+
   it("computes next/back transitions while draft payload stays untouched", () => {
     const originalDraftPayload = { projectName: "Mapa X" };
     const forward = getNextStepState({

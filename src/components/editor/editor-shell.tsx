@@ -320,6 +320,14 @@ type QuickAddRoleOption = {
   baseKind: NodeKind;
 };
 
+type QuickAddCopy = {
+  addPrimary: string;
+  dialogTitle: string;
+  dialogHint: string;
+  addConfirm: string;
+  quickActionHint: string;
+};
+
 type ContextualInsertMode =
   | "default"
   | "tree-child"
@@ -453,6 +461,11 @@ const DEFAULT_ADD_NODE_OFFSET = {
 };
 
 function formatErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof EditorQueryError || error instanceof EditorRemoteError) {
+    const payloadMessage = error.payload?.message?.trim();
+    return payloadMessage ? payloadMessage : fallback;
+  }
+
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -475,7 +488,7 @@ function formatVersionOriginLabel(
   t?: EditorTranslationFn,
 ) {
   if (origin === "manual") {
-    return t ? t("shell.versions.origin.manual") : "Manual";
+    return translateEditor(t, "shell.versions.origin.manual");
   }
 
   return origin;
@@ -486,62 +499,48 @@ function buildVersionDiffFeedbackMessage(
   t?: EditorTranslationFn,
 ) {
   if (!diff.hasChanges) {
-    return t
-      ? t("shell.versions.diff.noChanges")
-      : "Sem alteracoes entre a versao selecionada e o snapshot de trabalho.";
+    return translateEditor(t, "shell.versions.diff.noChanges");
   }
 
   const parts: string[] = [];
 
   if (diff.nodesAdded.length > 0) {
-    parts.push(
-      t
-        ? t("shell.versions.diff.nodesAdded", { count: diff.nodesAdded.length })
-        : `${diff.nodesAdded.length} no(s) adicionados`,
-    );
+    parts.push(translateEditor(t, "shell.versions.diff.nodesAdded", {
+      count: diff.nodesAdded.length,
+    }));
   }
   if (diff.nodesRemoved.length > 0) {
-    parts.push(
-      t
-        ? t("shell.versions.diff.nodesRemoved", { count: diff.nodesRemoved.length })
-        : `${diff.nodesRemoved.length} no(s) removidos`,
-    );
+    parts.push(translateEditor(t, "shell.versions.diff.nodesRemoved", {
+      count: diff.nodesRemoved.length,
+    }));
   }
   if (diff.nodesChanged.length > 0) {
-    parts.push(
-      t
-        ? t("shell.versions.diff.nodesChanged", { count: diff.nodesChanged.length })
-        : `${diff.nodesChanged.length} no(s) alterados`,
-    );
+    parts.push(translateEditor(t, "shell.versions.diff.nodesChanged", {
+      count: diff.nodesChanged.length,
+    }));
   }
   if (diff.edgesAdded.length > 0) {
-    parts.push(
-      t
-        ? t("shell.versions.diff.edgesAdded", { count: diff.edgesAdded.length })
-        : `${diff.edgesAdded.length} aresta(s) adicionadas`,
-    );
+    parts.push(translateEditor(t, "shell.versions.diff.edgesAdded", {
+      count: diff.edgesAdded.length,
+    }));
   }
   if (diff.edgesRemoved.length > 0) {
-    parts.push(
-      t
-        ? t("shell.versions.diff.edgesRemoved", { count: diff.edgesRemoved.length })
-        : `${diff.edgesRemoved.length} aresta(s) removidas`,
-    );
+    parts.push(translateEditor(t, "shell.versions.diff.edgesRemoved", {
+      count: diff.edgesRemoved.length,
+    }));
   }
   if (diff.edgesChanged.length > 0) {
-    parts.push(
-      t
-        ? t("shell.versions.diff.edgesChanged", { count: diff.edgesChanged.length })
-        : `${diff.edgesChanged.length} aresta(s) alteradas`,
-    );
+    parts.push(translateEditor(t, "shell.versions.diff.edgesChanged", {
+      count: diff.edgesChanged.length,
+    }));
   }
   if (diff.viewportChanged) {
-    parts.push(t ? t("shell.versions.diff.viewportChanged") : "viewport alterado");
+    parts.push(translateEditor(t, "shell.versions.diff.viewportChanged"));
   }
 
-  return t
-    ? t("shell.versions.diff.summary", { parts: parts.join("; ") })
-    : `Resumo: ${parts.join("; ")}.`;
+  return translateEditor(t, "shell.versions.diff.summary", {
+    parts: parts.join("; "),
+  });
 }
 
 function buildPrismaSchemaImportFeedbackMessage(
@@ -549,18 +548,14 @@ function buildPrismaSchemaImportFeedbackMessage(
   t?: EditorTranslationFn,
 ) {
   if (!summary) {
-    return t
-      ? t("shell.prisma.feedbackSuccess")
-      : "Schema Prisma importado com sucesso para o snapshot de trabalho.";
+    return translateEditor(t, "shell.prisma.feedbackSuccess");
   }
 
-  return t
-    ? t("shell.prisma.feedbackSuccessWithCounts", {
-        modelsCount: summary.modelsCount,
-        relationsCount: summary.relationsCount,
-        scalarFieldsCount: summary.scalarFieldsCount,
-      })
-    : `Schema Prisma importado com sucesso (${summary.modelsCount} modelo(s), ${summary.relationsCount} relacao(oes), ${summary.scalarFieldsCount} campo(s) escalar(es)).`;
+  return translateEditor(t, "shell.prisma.feedbackSuccessWithCounts", {
+    modelsCount: summary.modelsCount,
+    relationsCount: summary.relationsCount,
+    scalarFieldsCount: summary.scalarFieldsCount,
+  });
 }
 
 function resolveDiagramTypeForQuickActions(
@@ -764,18 +759,20 @@ function resolveQuickAddRoleOptions(
     return [
       {
         role: "hierarchy-root",
-        label: t ? t("shell.quickAdd.roles.hierarchyRoot.label") : "No raiz",
-        description: t
-          ? t("shell.quickAdd.roles.hierarchyRoot.description")
-          : "Ponto principal da hierarquia.",
+        label: translateEditor(t, "shell.quickAdd.roles.hierarchyRoot.label"),
+        description: translateEditor(
+          t,
+          "shell.quickAdd.roles.hierarchyRoot.description",
+        ),
         baseKind: "page",
       },
       {
         role: "hierarchy-node",
-        label: t ? t("shell.quickAdd.roles.hierarchyNode.label") : "No hierarquico",
-        description: t
-          ? t("shell.quickAdd.roles.hierarchyNode.description")
-          : "Nivel da estrutura em arvore.",
+        label: translateEditor(t, "shell.quickAdd.roles.hierarchyNode.label"),
+        description: translateEditor(
+          t,
+          "shell.quickAdd.roles.hierarchyNode.description",
+        ),
         baseKind: "page",
       },
     ];
@@ -785,18 +782,20 @@ function resolveQuickAddRoleOptions(
     return [
       {
         role: "sitemap-home",
-        label: t ? t("shell.quickAdd.roles.sitemapHome.label") : "Home",
-        description: t
-          ? t("shell.quickAdd.roles.sitemapHome.description")
-          : "Pagina inicial de navegacao.",
+        label: translateEditor(t, "shell.quickAdd.roles.sitemapHome.label"),
+        description: translateEditor(
+          t,
+          "shell.quickAdd.roles.sitemapHome.description",
+        ),
         baseKind: "page",
       },
       {
         role: "sitemap-section",
-        label: t ? t("shell.quickAdd.roles.sitemapSection.label") : "Secao",
-        description: t
-          ? t("shell.quickAdd.roles.sitemapSection.description")
-          : "Secao navegavel do sitemap.",
+        label: translateEditor(t, "shell.quickAdd.roles.sitemapSection.label"),
+        description: translateEditor(
+          t,
+          "shell.quickAdd.roles.sitemapSection.description",
+        ),
         baseKind: "page",
       },
     ];
@@ -810,16 +809,44 @@ function resolveQuickAddRoleOptions(
     return [
       {
         role: "timeline-milestone",
-        label: t ? t("shell.quickAdd.roles.timelineMilestone.label") : "Marco",
-        description: t
-          ? t("shell.quickAdd.roles.timelineMilestone.description")
-          : "Evento em uma sequencia temporal.",
+        label: translateEditor(t, "shell.quickAdd.roles.timelineMilestone.label"),
+        description: translateEditor(
+          t,
+          "shell.quickAdd.roles.timelineMilestone.description",
+        ),
         baseKind: "note",
       },
     ];
   }
 
   return [];
+}
+
+function resolveQuickAddCopy(
+  diagramType: ContextualDiagramType,
+  t?: EditorTranslationFn,
+): QuickAddCopy {
+  const variant =
+    diagramType === "flow" ||
+    diagramType === "erd" ||
+    diagramType === "sitemap" ||
+    diagramType === "graph" ||
+    diagramType === "timeline" ||
+    diagramType === "mindmap" ||
+    diagramType === "tree"
+      ? diagramType
+      : "default";
+
+  return {
+    addPrimary: translateEditor(t, `shell.quickAdd.copy.${variant}.addPrimary`),
+    dialogTitle: translateEditor(t, `shell.quickAdd.copy.${variant}.dialogTitle`),
+    dialogHint: translateEditor(t, `shell.quickAdd.copy.${variant}.dialogHint`),
+    addConfirm: translateEditor(t, `shell.quickAdd.copy.${variant}.addConfirm`),
+    quickActionHint: translateEditor(
+      t,
+      `shell.quickAdd.copy.${variant}.quickActionHint`,
+    ),
+  };
 }
 
 function resolveDefaultRoleForKind(input: {
@@ -970,7 +997,7 @@ function resolveErdEdgeClassSuffix(
 
 function getDiagramRoleLabel(role: DiagramRole | undefined, t?: EditorTranslationFn) {
   if (!role) {
-    return t ? t("shell.roles.undefined") : "Sem papel definido";
+    return translateEditor(t, "shell.roles.undefined");
   }
 
   if (
@@ -995,34 +1022,26 @@ function getDiagramRoleLabel(role: DiagramRole | undefined, t?: EditorTranslatio
   }
 
   const map: Partial<Record<DiagramRole, string>> = {
-    "meta-workspace": translateEditor(t, "shell.roles.metaWorkspace", "Workspace"),
-    "meta-project": translateEditor(t, "shell.roles.metaProject", "Projeto"),
-    "tree-root": translateEditor(t, "shell.roles.treeRoot", "Raiz"),
-    "tree-node": translateEditor(t, "shell.roles.treeNode", "No de hierarquia"),
-    "hierarchy-root": translateEditor(t, "shell.roles.hierarchyRoot", "No raiz"),
-    "hierarchy-node": translateEditor(t, "shell.roles.hierarchyNode", "No hierarquico"),
-    "sitemap-home": translateEditor(t, "shell.roles.sitemapHome", "Pagina Home"),
-    "sitemap-section": translateEditor(t, "shell.roles.sitemapSection", "Secao navegavel"),
-    "mindmap-root": translateEditor(t, "shell.roles.mindmapRoot", "Tema central"),
-    "mindmap-branch": translateEditor(t, "shell.roles.mindmapBranch", "Ramificacao"),
-    "mindmap-reference": translateEditor(t, "shell.roles.mindmapReference", "Referencia"),
-    "graph-core": translateEditor(t, "shell.roles.graphCore", "Nucleo da rede"),
-    "graph-topic": translateEditor(t, "shell.roles.graphTopic", "Componente conectado"),
-    "graph-supporting": translateEditor(
-      t,
-      "shell.roles.graphSupporting",
-      "Apoio arquitetural",
-    ),
-    "timeline-milestone": translateEditor(
-      t,
-      "shell.roles.timelineMilestone",
-      "Marco temporal",
-    ),
-    "erd-entity": translateEditor(t, "shell.roles.erdEntity", "Entidade"),
-    "erd-comment": translateEditor(t, "shell.roles.erdComment", "Comentario ERD"),
+    "meta-workspace": translateEditor(t, "shell.roles.metaWorkspace"),
+    "meta-project": translateEditor(t, "shell.roles.metaProject"),
+    "tree-root": translateEditor(t, "shell.roles.treeRoot"),
+    "tree-node": translateEditor(t, "shell.roles.treeNode"),
+    "hierarchy-root": translateEditor(t, "shell.roles.hierarchyRoot"),
+    "hierarchy-node": translateEditor(t, "shell.roles.hierarchyNode"),
+    "sitemap-home": translateEditor(t, "shell.roles.sitemapHome"),
+    "sitemap-section": translateEditor(t, "shell.roles.sitemapSection"),
+    "mindmap-root": translateEditor(t, "shell.roles.mindmapRoot"),
+    "mindmap-branch": translateEditor(t, "shell.roles.mindmapBranch"),
+    "mindmap-reference": translateEditor(t, "shell.roles.mindmapReference"),
+    "graph-core": translateEditor(t, "shell.roles.graphCore"),
+    "graph-topic": translateEditor(t, "shell.roles.graphTopic"),
+    "graph-supporting": translateEditor(t, "shell.roles.graphSupporting"),
+    "timeline-milestone": translateEditor(t, "shell.roles.timelineMilestone"),
+    "erd-entity": translateEditor(t, "shell.roles.erdEntity"),
+    "erd-comment": translateEditor(t, "shell.roles.erdComment"),
   };
 
-  return map[role] ?? (t ? t("shell.roles.undefined") : "Sem papel definido");
+  return map[role] ?? translateEditor(t, "shell.roles.undefined");
 }
 
 function buildNodeStructureTips(input: {
@@ -1063,33 +1082,21 @@ function buildNodeStructureTips(input: {
       );
     }
   } else if (input.diagramType === "tree" || input.diagramType === "sitemap") {
+    tips.push(translateEditor(t, "shell.structureTips.treeSitemapFocus"));
     tips.push(
-      t ? t("shell.structureTips.treeSitemapFocus") : "Foco em pai, filhos, nivel e ordem.",
-    );
-    tips.push(
-      t
-        ? t("shell.structureTips.treeSitemapCurrent", {
-            incomingCount: input.incomingCount,
-            outgoingCount: input.outgoingCount,
-          })
-        : `Estrutura atual: ${input.incomingCount} vinculo(s) acima e ${input.outgoingCount} abaixo.`,
+      translateEditor(t, "shell.structureTips.treeSitemapCurrent", {
+        incomingCount: input.incomingCount,
+        outgoingCount: input.outgoingCount,
+      }),
     );
   } else if (input.diagramType === "erd") {
-    tips.push(t ? t("shell.structureTips.erd") : "Foco em campos, chaves e cardinalidade.");
+    tips.push(translateEditor(t, "shell.structureTips.erd"));
   } else if (input.diagramType === "mindmap") {
-    tips.push(
-      t ? t("shell.structureTips.mindmap") : "Foco em ramificacoes e temas relacionados.",
-    );
+    tips.push(translateEditor(t, "shell.structureTips.mindmap"));
   } else if (input.diagramType === "timeline") {
-    tips.push(
-      t
-        ? t("shell.structureTips.timeline")
-        : "Foco em marcos, sequencia e dependencias temporais.",
-    );
+    tips.push(translateEditor(t, "shell.structureTips.timeline"));
   } else {
-    tips.push(
-      t ? t("shell.structureTips.default") : "Foco em contexto e conexoes principais.",
-    );
+    tips.push(translateEditor(t, "shell.structureTips.default"));
   }
 
   return tips;
@@ -1556,16 +1563,16 @@ function getSemanticSeverityLabel(
   t?: EditorTranslationFn,
 ) {
   if (severity === "error") {
-    return translateEditor(t, "shell.semanticSeverity.error", "Erro");
+    return translateEditor(t, "shell.semanticSeverity.error");
   }
   if (severity === "warning") {
-    return translateEditor(t, "shell.semanticSeverity.warning", "Aviso");
+    return translateEditor(t, "shell.semanticSeverity.warning");
   }
   if (severity === "suggestion") {
-    return translateEditor(t, "shell.semanticSeverity.suggestion", "Sugestao");
+    return translateEditor(t, "shell.semanticSeverity.suggestion");
   }
 
-  return translateEditor(t, "shell.semanticSeverity.info", "Info");
+  return translateEditor(t, "shell.semanticSeverity.info");
 }
 
 function getMindmapRootNodeId(
@@ -3808,6 +3815,10 @@ export function EditorShell({
     () => resolveQuickAddRoleOptions(currentSupportedDiagramType, editorT),
     [currentSupportedDiagramType, editorT],
   );
+  const quickAddCopy = useMemo(
+    () => resolveQuickAddCopy(currentSupportedDiagramType, editorT),
+    [currentSupportedDiagramType, editorT],
+  );
   const edgeKindOptions = EdgeKindSchema.options;
   const nodeLabelById = useMemo(
     () =>
@@ -3985,7 +3996,7 @@ export function EditorShell({
   const inspectorSelectionState = resolveInspectorSelectionState({
     hasSelectedNode: Boolean(selectedNode),
     hasSelectedEdge: Boolean(selectedEdge),
-  });
+  }, editorT);
   const isProcessDiagram = currentSupportedDiagramType === "flow";
   const isGraphDiagram = currentSupportedDiagramType === "graph";
   const processInspectorCopy = isProcessDiagram ? getProcessInspectorCopy(editorT) : null;
@@ -4145,7 +4156,7 @@ export function EditorShell({
     );
     return {
       ...fallbackAction,
-      label: editorPersona.labels.addPrimary,
+      label: quickAddCopy.addPrimary,
       nodeKind: personaDefaultNodeKind,
       edgeKind: editorPersona.quickAdd.defaultEdgeKind,
     };
@@ -4153,8 +4164,8 @@ export function EditorShell({
     contextualActions,
     currentSupportedDiagramType,
     editorT,
-    editorPersona.labels.addPrimary,
     editorPersona.quickAdd.defaultEdgeKind,
+    quickAddCopy.addPrimary,
     personaDefaultNodeKind,
   ]);
   const quickAddDefaultRelationLabel = selectedNode
@@ -4242,7 +4253,7 @@ export function EditorShell({
   }, [currentSupportedDiagramType, editorT, processInspectorCopy, selectedEdge, selectedNode]);
   const diagramDefinitionLabel = layoutMetadata.diagramType
     ? editorT("shell.diagram.current", {
-        label: getDiagramTypeLabel(layoutMetadata.diagramType),
+        diagramType: getDiagramTypeLabel(layoutMetadata.diagramType),
       })
     : editorT("shell.diagram.pending");
   const hasDiagramRendererMismatch =
@@ -5384,7 +5395,7 @@ export function EditorShell({
 
     const nextLabel = inlineRenameDraft.trim();
     if (!nextLabel) {
-      setInlineRenameErrorMessage("Titulo obrigatorio.");
+      setInlineRenameErrorMessage(editorT("shell.errors.requiredTitle"));
       return;
     }
 
@@ -5396,7 +5407,7 @@ export function EditorShell({
       },
     });
     if (!applied) {
-      setInlineRenameErrorMessage("Nao foi possivel renomear o no.");
+      setInlineRenameErrorMessage(editorT("shell.errors.renameNode"));
       return;
     }
 
@@ -5618,7 +5629,7 @@ export function EditorShell({
   function handleSubmitAddDialog() {
     const normalizedTitle = addNodeDraft.title.trim();
     if (!normalizedTitle) {
-      setAddNodeErrorMessage("Titulo obrigatorio.");
+      setAddNodeErrorMessage(editorT("shell.errors.requiredTitle"));
       return;
     }
 
@@ -5636,7 +5647,7 @@ export function EditorShell({
     });
 
     if (!appliedNodeId) {
-      setAddNodeErrorMessage("Nao foi possivel inserir o novo no.");
+      setAddNodeErrorMessage(editorT("shell.errors.insertNode"));
       return;
     }
 
@@ -8050,7 +8061,7 @@ export function EditorShell({
           <div
             className={`canvas-top-bar ${isCanvasFocusMode ? "is-focus-mode" : ""}`}
             role="region"
-            aria-label="Barra superior do canvas"
+            aria-label={editorT("shell.topBar.canvasBarAriaLabel")}
             data-testid="canvas-top-bar"
           >
             <div className="canvas-top-bar-main">
@@ -8074,11 +8085,9 @@ export function EditorShell({
                 disabled={saveState.status === "saving"}
                 data-testid="add-node-button"
               >
-                {editorPersona.labels.addPrimary}
+                {quickAddCopy.addPrimary}
               </button>
-              {editorPersona.labels.quickActionHint ? (
-                <span className="helper">{editorPersona.labels.quickActionHint}</span>
-              ) : null}
+              <span className="helper">{quickAddCopy.quickActionHint}</span>
               <button
                 className="btn"
                 type="button"
@@ -8496,7 +8505,7 @@ export function EditorShell({
               className="add-node-dialog"
               role="dialog"
               aria-modal="true"
-              aria-label={editorPersona.labels.addDialogTitle}
+              aria-label={quickAddCopy.dialogTitle}
               data-testid="add-node-dialog"
               data-quick-add="true"
               onClick={(event) => event.stopPropagation()}
@@ -8506,13 +8515,19 @@ export function EditorShell({
               }}
             >
               <header className="add-node-dialog-header">
-                <h3>{editorPersona.labels.addDialogTitle}</h3>
-                <p className="helper">{editorPersona.labels.addDialogHint}</p>
+                <h3>{quickAddCopy.dialogTitle}</h3>
+                <p className="helper">{quickAddCopy.dialogHint}</p>
                 {selectedNode && quickAddDefaultRelationLabel ? (
                   <p className="helper" data-testid="quick-add-default-connection">
                     {isProcessDiagram
-                      ? `Ligacao inicial: ${selectedNode.data.label} ${quickAddDefaultRelationLabel.toLowerCase()} o novo ponto.`
-                      : `Conexao padrao: ${selectedNode.data.label} -[${quickAddDefaultRelationLabel}]- novo no.`}
+                      ? editorT("shell.quickAdd.defaultProcessConnection", {
+                          nodeLabel: selectedNode.data.label,
+                          relationLabel: quickAddDefaultRelationLabel.toLowerCase(),
+                        })
+                      : editorT("shell.quickAdd.defaultConnection", {
+                          nodeLabel: selectedNode.data.label,
+                          relationLabel: quickAddDefaultRelationLabel,
+                        })}
                   </p>
                 ) : null}
               </header>
@@ -8684,7 +8699,7 @@ export function EditorShell({
                   {editorT("shell.common.cancel")}
                 </button>
                 <button className="btn btn-primary" type="submit" data-testid="add-node-confirm-button">
-                  {editorPersona.labels.addConfirm}
+                  {quickAddCopy.addConfirm}
                 </button>
               </div>
             </form>

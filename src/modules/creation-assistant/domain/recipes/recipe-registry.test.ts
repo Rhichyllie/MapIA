@@ -22,7 +22,7 @@ describe("creation assistant recipe registry", () => {
     ]);
   });
 
-  it("returns runtime as single source for layout/context/persona/actions/seed", () => {
+  it("returns runtime as single source for layout/context/persona/seed", () => {
     const runtime = resolveRecipeRuntime({
       profile: "data-model",
       view: "erd",
@@ -31,8 +31,8 @@ describe("creation assistant recipe registry", () => {
     expect(runtime.layoutCatalog.recommended).toEqual(["relational", "auto"]);
     expect(runtime.contextBlocks).toEqual(["setup", "erd"]);
     expect(runtime.seedPlan.kind).toBe("erd-native");
-    expect(runtime.persona.labels.addPrimary).toBe("Adicionar entidade");
-    expect(runtime.actions.some((action) => action.id === "add-entity")).toBe(true);
+    expect(runtime.persona.quickAdd.defaultNodeKind).toBe("entity");
+    expect(runtime.persona.quickAdd.defaultEdgeKind).toBe("references");
   });
 
   it("returns recipe-specific layout catalog and context blocks", () => {
@@ -93,7 +93,9 @@ describe("creation assistant recipe registry", () => {
     });
 
     expect(strictValidation.ok).toBe(false);
-    expect(strictValidation.blockingIssues.join(" ")).toContain("inicio e fim");
+    expect(strictValidation.blockingIssueCodes).toContain(
+      "process_auto_start_end_requires_examples",
+    );
   });
 
   it("falls back when recipe pair is not registered", () => {

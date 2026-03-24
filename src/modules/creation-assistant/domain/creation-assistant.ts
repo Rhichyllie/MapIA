@@ -1,6 +1,5 @@
 import { z } from "zod";
 import {
-  DEFAULT_AUTOMATION_COPY,
   DEFAULT_AUTOMATION_TOGGLES,
   resolveRecipeContextBlocks,
   resolveRecipeLayoutCatalog,
@@ -10,7 +9,12 @@ import {
   type RecipeContextBlock,
 } from "./recipes";
 import { redactSensitiveText } from "./redact-source-config";
-import { parseGraphQlSchema, parseOpenApiDocument } from "./source-precheck";
+import {
+  parseGraphQlSchema,
+  parseOpenApiDocument,
+  type GraphQlParseErrorCode,
+  type OpenApiParseErrorCode,
+} from "./source-precheck";
 
 export const ProjectProfileSchema = z.enum([
   "blank",
@@ -139,13 +143,174 @@ export const SourceStatusSchema = z
   .union([SourceStatusCodeSchema, LegacySourceStatusSchema])
   .transform((value) => normalizeSourceStatusCode(value) ?? "not_configured");
 
-export const SourcePrecheckResultSchema = z.object({
+const TranslationValueSchema = z.union([z.string().max(500), z.number()]);
+const TranslationValuesSchema = z.record(z.string(), TranslationValueSchema);
+const MessageDescriptorSchema = z.object({
+  code: z.string().min(1).max(160),
+  values: TranslationValuesSchema.optional(),
+});
+
+export type TranslationValues = z.infer<typeof TranslationValuesSchema>;
+export type MessageDescriptor = z.infer<typeof MessageDescriptorSchema>;
+
+export type SourcePreviewSummaryCode =
+  | "prisma_preview_schema_required"
+  | "prisma_preview_models_detected"
+  | "prisma_preview_ready_without_models"
+  | "relational_preview_connection_string_ready"
+  | "relational_preview_connection_string_required"
+  | "relational_preview_fields_ready"
+  | "relational_preview_fields_required"
+  | "openapi_preview_url_ready"
+  | "openapi_preview_url_required"
+  | "openapi_preview_spec_required"
+  | "openapi_preview_recognized"
+  | "graphql_preview_recognized"
+  | "graphql_preview_endpoint_ready"
+  | "graphql_preview_endpoint_or_schema_required"
+  | "csv_preview_text_required"
+  | "csv_preview_columns_detected"
+  | "csv_preview_header_not_recognized"
+  | "json_preview_text_required"
+  | "json_preview_invalid"
+  | "json_preview_recognized"
+  | "spreadsheet_preview_ready"
+  | "spreadsheet_preview_text_required"
+  | "generic_preview_ready"
+  | "generic_preview_text_required"
+  | OpenApiParseErrorCode
+  | GraphQlParseErrorCode;
+
+export type SourcePreviewDetailCode =
+  | "openapi_preview_format"
+  | "openapi_preview_title"
+  | "graphql_preview_source_sdl"
+  | "graphql_preview_source_introspection_json"
+  | "legacy_runtime_text";
+
+export type SourceLifecycleSummaryCode =
+  | "source_lifecycle_precheck_failed"
+  | "source_lifecycle_imported"
+  | "legacy_runtime_text";
+
+export type CreationAssistantValidationIssueCode =
+  | "setup_initial_root_name_required"
+  | "relational_connection_string_invalid"
+  | "relational_host_required"
+  | "relational_database_required"
+  | "relational_port_required"
+  | "relational_username_required"
+  | "prisma_schema_required"
+  | "openapi_url_required"
+  | "openapi_url_invalid"
+  | "openapi_spec_required"
+  | "graphql_endpoint_or_schema_required"
+  | "graphql_endpoint_invalid"
+  | "generic_text_required"
+  | "generic_json_invalid"
+  | "generic_csv_headers_invalid"
+  | "generic_mapping_field_not_found"
+  | "source_config_required_for_import"
+  | "start_source_required_for_source_config"
+  | "source_config_kind_mismatch"
+  | "template_preset_required"
+  | "template_cannot_use_source"
+  | "template_cannot_use_source_config"
+  | "manual_cannot_use_source"
+  | "manual_cannot_use_template_preset"
+  | "manual_cannot_use_source_config"
+  | "import_cannot_use_template_preset"
+  | "start_source_incompatible_with_profile"
+  | "initial_view_incompatible_with_profile"
+  | "layout_incompatible_with_initial_view"
+  | OpenApiParseErrorCode
+  | GraphQlParseErrorCode;
+
+const LegacySourcePrecheckResultSchema = z.object({
   level: z.enum(["ok", "warning", "error"]),
   summary: z.string().min(1).max(500),
   recognizedAs: z.string().min(1).max(120).optional(),
   details: z.array(z.string().min(1).max(500)).max(10).optional(),
   detectedFields: z.number().int().min(0).optional(),
 });
+
+const CanonicalSourcePrecheckResultSchema = z.object({
+  level: z.enum(["ok", "warning", "error"]),
+  summaryCode: z.string().min(1).max(160),
+  summaryValues: TranslationValuesSchema.optional(),
+  recognizedAs: z.string().min(1).max(120).optional(),
+  details: z.array(MessageDescriptorSchema).max(10).optional(),
+  detectedFields: z.number().int().min(0).optional(),
+});
+
+function emptyStringToUndefined(value: unknown) {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function optionalTrimmedString(max: number) {
+  return z.preprocess(emptyStringToUndefined, z.string().max(max).optional());
+}
+
+function optionalUrlString() {
+  return z.preprocess(emptyStringToUndefined, z.string().optional());
+}
+
+function buildMessageDescriptor(
+  code: string,
+  values?: TranslationValues,
+): MessageDescriptor {
+  if (!values || Object.keys(values).length === 0) {
+    return { code };
+  }
+
+  return { code, values };
+}
+
+function toLegacyMessageDescriptor(text: string): MessageDescriptor {
+  return buildMessageDescriptor("legacy_runtime_text", { text });
+}
+
+function addValidationIssue(
+  ctx: z.RefinementCtx,
+  input: {
+    path: Array<string | number>;
+    issueCode: CreationAssistantValidationIssueCode;
+    values?: TranslationValues;
+  },
+) {
+  ctx.addIssue({
+    code: "custom",
+    path: input.path,
+    message: input.issueCode,
+    ...(input.values ? { params: { i18nValues: input.values } } : {}),
+  });
+}
+
+export const SourcePrecheckResultSchema = z
+  .union([CanonicalSourcePrecheckResultSchema, LegacySourcePrecheckResultSchema])
+  .transform((value) => {
+    if ("summaryCode" in value) {
+      return value;
+    }
+
+    return {
+      level: value.level,
+      summaryCode: "legacy_runtime_text" as const,
+      summaryValues: { text: value.summary },
+      ...(value.recognizedAs ? { recognizedAs: value.recognizedAs } : {}),
+      ...(value.details?.length
+        ? { details: value.details.map((detail) => toLegacyMessageDescriptor(detail)) }
+        : {}),
+      ...(value.detectedFields !== undefined
+        ? { detectedFields: value.detectedFields }
+        : {}),
+    };
+  });
 
 function tryParseJson(text: string) {
   try {
@@ -188,10 +353,10 @@ function extractJsonCandidateKeys(input: string) {
 }
 
 const SourceFieldMappingSchema = z.object({
-  idField: z.string().trim().min(1).max(120).optional(),
-  labelField: z.string().trim().min(1).max(120).optional(),
-  parentField: z.string().trim().min(1).max(120).optional(),
-  typeField: z.string().trim().min(1).max(120).optional(),
+  idField: optionalTrimmedString(120),
+  labelField: optionalTrimmedString(120),
+  parentField: optionalTrimmedString(120),
+  typeField: optionalTrimmedString(120),
 });
 
 const AssistantSetupContextSchema = z
@@ -199,14 +364,13 @@ const AssistantSetupContextSchema = z
     createExamples: z.boolean(),
     suggestedBlockCount: z.number().int().min(1).max(12).default(3),
     createInitialRoot: z.boolean().default(false),
-    initialRootName: z.string().trim().min(1).max(120).optional(),
+    initialRootName: optionalTrimmedString(120),
   })
   .superRefine((value, ctx) => {
     if (value.createInitialRoot && !value.initialRootName?.trim()) {
-      ctx.addIssue({
-        code: "custom",
+      addValidationIssue(ctx, {
         path: ["initialRootName"],
-        message: "Informe o nome do no raiz inicial.",
+        issueCode: "setup_initial_root_name_required",
       });
     }
   });
@@ -259,15 +423,15 @@ const RelationalDbSourceConfigSchema = z
   .object({
     kind: z.enum(["postgres", "mysql", "sqlserver"]),
     connectionMode: z.enum(["string", "fields"]),
-    connectionString: z.string().min(1).optional(),
-    host: z.string().min(1).optional(),
+    connectionString: optionalTrimmedString(500),
+    host: optionalTrimmedString(255),
     port: z.number().int().min(1).max(65535).optional(),
-    database: z.string().min(1).optional(),
-    schema: z.string().min(1).optional(),
+    database: optionalTrimmedString(255),
+    schema: optionalTrimmedString(255),
     authMode: z.enum(["userpass", "iam"]).default("userpass"),
     sslMode: z.enum(["disable", "require", "verify-full"]).default("require"),
-    username: z.string().min(1).optional(),
-    password: z.string().min(1).optional(),
+    username: optionalTrimmedString(255),
+    password: optionalTrimmedString(255),
   })
   .superRefine((value, ctx) => {
     if (
@@ -275,39 +439,34 @@ const RelationalDbSourceConfigSchema = z
       value.connectionString?.trim() &&
       !value.connectionString.includes("://")
     ) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Use uma connection string valida (ex: postgresql://...).",
+      addValidationIssue(ctx, {
+        issueCode: "relational_connection_string_invalid",
         path: ["connectionString"],
       });
     }
 
     if (value.connectionMode === "fields") {
       if (!value.host?.trim()) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Informe o host.",
+        addValidationIssue(ctx, {
+          issueCode: "relational_host_required",
           path: ["host"],
         });
       }
       if (!value.database?.trim()) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Informe o banco.",
+        addValidationIssue(ctx, {
+          issueCode: "relational_database_required",
           path: ["database"],
         });
       }
       if (!value.port) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Informe a porta.",
+        addValidationIssue(ctx, {
+          issueCode: "relational_port_required",
           path: ["port"],
         });
       }
       if (value.authMode === "userpass" && !value.username?.trim()) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Informe o usuario.",
+        addValidationIssue(ctx, {
+          issueCode: "relational_username_required",
           path: ["username"],
         });
       }
@@ -318,13 +477,12 @@ const PrismaSchemaSourceConfigSchema = z
   .object({
     kind: z.literal("prisma-schema"),
     inputMode: z.enum(["paste", "upload"]).default("paste"),
-    schemaText: z.string().optional(),
+    schemaText: z.preprocess(emptyStringToUndefined, z.string().max(500000).optional()),
   })
   .superRefine((value, ctx) => {
     if (value.inputMode === "paste" && !value.schemaText?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Cole o conteudo do schema Prisma.",
+      addValidationIssue(ctx, {
+        issueCode: "prisma_schema_required",
         path: ["schemaText"],
       });
     }
@@ -334,37 +492,42 @@ const OpenApiSourceConfigSchema = z
   .object({
     kind: z.literal("openapi"),
     inputMode: z.enum(["url", "upload", "paste"]).default("url"),
-    url: z.string().url().optional(),
-    specText: z.string().optional(),
+    url: optionalUrlString(),
+    specText: z.preprocess(emptyStringToUndefined, z.string().max(500000).optional()),
   })
   .superRefine((value, ctx) => {
     if (value.inputMode === "url" && !value.url?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Informe a URL da especificacao OpenAPI.",
+      addValidationIssue(ctx, {
+        issueCode: "openapi_url_required",
+        path: ["url"],
+      });
+    }
+
+    if (
+      value.inputMode === "url" &&
+      value.url?.trim() &&
+      !z.string().url().safeParse(value.url).success
+    ) {
+      addValidationIssue(ctx, {
+        issueCode: "openapi_url_invalid",
         path: ["url"],
       });
     }
 
     if (value.inputMode === "paste" && !value.specText?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Cole a especificacao OpenAPI.",
+      addValidationIssue(ctx, {
+        issueCode: "openapi_spec_required",
         path: ["specText"],
       });
     }
 
-    if (
-      value.inputMode === "paste" &&
-      value.specText?.trim()
-    ) {
+    if (value.inputMode === "paste" && value.specText?.trim()) {
       const parsed = parseOpenApiDocument(value.specText);
       if (parsed.ok) {
         return;
       }
-      ctx.addIssue({
-        code: "custom",
-        message: `A especificacao OpenAPI e invalida: ${parsed.error}`,
+      addValidationIssue(ctx, {
+        issueCode: parsed.errorCode,
         path: ["specText"],
       });
     }
@@ -373,14 +536,23 @@ const OpenApiSourceConfigSchema = z
 const GraphQlSourceConfigSchema = z
   .object({
     kind: z.literal("graphql"),
-    endpointUrl: z.string().url().optional(),
-    schemaText: z.string().optional(),
+    endpointUrl: optionalUrlString(),
+    schemaText: z.preprocess(emptyStringToUndefined, z.string().max(500000).optional()),
   })
   .superRefine((value, ctx) => {
     if (!value.endpointUrl?.trim() && !value.schemaText?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Informe endpoint ou cole o schema GraphQL.",
+      addValidationIssue(ctx, {
+        issueCode: "graphql_endpoint_or_schema_required",
+        path: ["endpointUrl"],
+      });
+    }
+
+    if (
+      value.endpointUrl?.trim() &&
+      !z.string().url().safeParse(value.endpointUrl).success
+    ) {
+      addValidationIssue(ctx, {
+        issueCode: "graphql_endpoint_invalid",
         path: ["endpointUrl"],
       });
     }
@@ -390,9 +562,8 @@ const GraphQlSourceConfigSchema = z
       if (parsed.ok) {
         return;
       }
-      ctx.addIssue({
-        code: "custom",
-        message: `O schema GraphQL parece invalido: ${parsed.error}`,
+      addValidationIssue(ctx, {
+        issueCode: parsed.errorCode,
         path: ["schemaText"],
       });
     }
@@ -416,7 +587,7 @@ const GenericImportSourceConfigSchema = z
       "yaml-json",
     ]),
     inputMode: z.enum(["upload", "paste"]).default("paste"),
-    text: z.string().optional(),
+    text: z.preprocess(emptyStringToUndefined, z.string().max(500000).optional()),
     delimiter: z.enum([",", ";", "\t"]).optional(),
     hasHeader: z.boolean().optional(),
     previewRows: z.number().int().min(1).max(20).optional(),
@@ -424,17 +595,15 @@ const GenericImportSourceConfigSchema = z
   })
   .superRefine((value, ctx) => {
     if (value.inputMode === "paste" && !value.text?.trim()) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Cole o conteudo da fonte selecionada.",
+      addValidationIssue(ctx, {
+        issueCode: "generic_text_required",
         path: ["text"],
       });
     }
 
     if (value.kind === "json" && value.text?.trim() && !tryParseJson(value.text)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "JSON invalido.",
+      addValidationIssue(ctx, {
+        issueCode: "generic_json_invalid",
         path: ["text"],
       });
     }
@@ -442,9 +611,8 @@ const GenericImportSourceConfigSchema = z
     if (value.kind === "csv" && value.text?.trim()) {
       const headers = parseCsvHeaders(value.text, value.delimiter ?? ",");
       if (headers.length < 2) {
-        ctx.addIssue({
-          code: "custom",
-          message: "CSV invalido: inclua pelo menos duas colunas no cabecalho.",
+        addValidationIssue(ctx, {
+          issueCode: "generic_csv_headers_invalid",
           path: ["text"],
         });
       }
@@ -464,10 +632,10 @@ const GenericImportSourceConfigSchema = z
 
       for (const [mappingKey, mappedField] of mappingEntries) {
         if (candidateFields.length > 0 && !candidateFields.includes(mappedField!)) {
-          ctx.addIssue({
-            code: "custom",
-            message: `Campo mapeado nao encontrado no preview: ${mappedField}.`,
+          addValidationIssue(ctx, {
+            issueCode: "generic_mapping_field_not_found",
             path: ["mapping", mappingKey],
+            values: { field: mappedField! },
           });
         }
       }
@@ -525,10 +693,31 @@ export type AssistantCreationSettings = z.infer<
 export type ViewCompatibilityRank = z.infer<typeof ViewCompatibilityRankSchema>;
 export type SourceFieldMapping = z.infer<typeof SourceFieldMappingSchema>;
 
+export type StartStrategyRecommendationReason =
+  | "existing_project_previous_source"
+  | "data_model_structural_import"
+  | "data_model_configurable_import"
+  | "data_model_preview_hybrid"
+  | "data_model_template"
+  | "system_architecture_import"
+  | "system_architecture_hybrid"
+  | "system_architecture_template"
+  | "information_structure_import"
+  | "information_structure_hybrid"
+  | "information_structure_template"
+  | "process_template"
+  | "mixed_hybrid"
+  | "mixed_manual_preview"
+  | "mixed_manual_blank"
+  | "blank_manual";
+
 export type StartStrategyRecommendation = {
   strategy: StartStrategy;
-  reason: string;
+  reasonCode: StartStrategyRecommendationReason;
 };
+
+export type LayoutNormalizationWarningCode =
+  "legacy_layout_normalized_to_auto";
 
 export type ConnectorCapability =
   | "full_import"
@@ -538,9 +727,10 @@ export type ConnectorCapability =
 
 export type SourceConfigPreview = {
   status: "ready" | "warning";
-  message: string;
+  summaryCode: SourcePreviewSummaryCode;
+  summaryValues?: TranslationValues;
   recognizedAs?: string;
-  details?: string[];
+  details?: MessageDescriptor[];
   fields?: string[];
   sample?: Array<Record<string, string>>;
 };
@@ -870,9 +1060,8 @@ function validateSourceConfigRequirements(value: {
 }, ctx: z.RefinementCtx) {
   const needsSourceConfig = value.startStrategy === "import";
   if (needsSourceConfig && !value.sourceConfig) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Configure a fonte para continuar com importacao.",
+    addValidationIssue(ctx, {
+      issueCode: "source_config_required_for_import",
       path: ["sourceConfig"],
     });
     return;
@@ -883,18 +1072,16 @@ function validateSourceConfigRequirements(value: {
   }
 
   if (!value.startSource) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Defina uma fonte para configurar.",
+    addValidationIssue(ctx, {
+      issueCode: "start_source_required_for_source_config",
       path: ["startSource"],
     });
     return;
   }
 
   if (value.sourceConfig.kind !== value.startSource) {
-    ctx.addIssue({
-      code: "custom",
-      message: "A configuracao da fonte nao corresponde a fonte selecionada.",
+    addValidationIssue(ctx, {
+      issueCode: "source_config_kind_mismatch",
       path: ["sourceConfig", "kind"],
     });
   }
@@ -922,48 +1109,42 @@ export const AssistantDraftSchema = z
   .superRefine((value, ctx) => {
     if (value.startStrategy === "template") {
       if (!value.templatePreset) {
-        ctx.addIssue({
-          code: "custom",
+        addValidationIssue(ctx, {
+          issueCode: "template_preset_required",
           path: ["templatePreset"],
-          message: "Selecione um modelo inicial.",
         });
       }
       if (value.startSource) {
-        ctx.addIssue({
-          code: "custom",
+        addValidationIssue(ctx, {
+          issueCode: "template_cannot_use_source",
           path: ["startSource"],
-          message: "Template nao usa fonte de importacao.",
         });
       }
       if (value.sourceConfig) {
-        ctx.addIssue({
-          code: "custom",
+        addValidationIssue(ctx, {
+          issueCode: "template_cannot_use_source_config",
           path: ["sourceConfig"],
-          message: "Template nao exige configuracao de fonte.",
         });
       }
     }
 
     if (value.startStrategy === "manual") {
       if (value.startSource) {
-        ctx.addIssue({
-          code: "custom",
+        addValidationIssue(ctx, {
+          issueCode: "manual_cannot_use_source",
           path: ["startSource"],
-          message: "Criacao manual nao exige fonte inicial.",
         });
       }
       if (value.templatePreset) {
-        ctx.addIssue({
-          code: "custom",
+        addValidationIssue(ctx, {
+          issueCode: "manual_cannot_use_template_preset",
           path: ["templatePreset"],
-          message: "Criacao manual nao usa template preset.",
         });
       }
       if (value.sourceConfig) {
-        ctx.addIssue({
-          code: "custom",
+        addValidationIssue(ctx, {
+          issueCode: "manual_cannot_use_source_config",
           path: ["sourceConfig"],
-          message: "Criacao manual nao exige configuracao de fonte.",
         });
       }
     }
@@ -972,18 +1153,16 @@ export const AssistantDraftSchema = z
       (value.startStrategy === "import" || value.startStrategy === "hybrid") &&
       !value.startSource
     ) {
-      ctx.addIssue({
-        code: "custom",
+      addValidationIssue(ctx, {
+        issueCode: "start_source_required_for_source_config",
         path: ["startSource"],
-        message: "Selecione uma fonte para a estrategia escolhida.",
       });
     }
 
     if (value.startStrategy === "import" && value.templatePreset) {
-      ctx.addIssue({
-        code: "custom",
+      addValidationIssue(ctx, {
+        issueCode: "import_cannot_use_template_preset",
         path: ["templatePreset"],
-        message: "Importacao pura nao deve usar template preset.",
       });
     }
 
@@ -991,20 +1170,18 @@ export const AssistantDraftSchema = z
       value.startSource &&
       !isStartSourceAllowedForProfile(value.profile, value.startSource)
     ) {
-      ctx.addIssue({
-        code: "custom",
+      addValidationIssue(ctx, {
+        issueCode: "start_source_incompatible_with_profile",
         path: ["startSource"],
-        message: "A fonte selecionada nao e compativel com o perfil.",
       });
     }
 
     validateSourceConfigRequirements(value, ctx);
 
     if (getViewCompatibilityRank(value.profile, value.initialView) === "incompatible") {
-      ctx.addIssue({
-        code: "custom",
+      addValidationIssue(ctx, {
+        issueCode: "initial_view_incompatible_with_profile",
         path: ["initialView"],
-        message: "A visao inicial selecionada e incompativel com o perfil.",
       });
     }
 
@@ -1015,10 +1192,9 @@ export const AssistantDraftSchema = z
         value.profile,
       )
     ) {
-      ctx.addIssue({
-        code: "custom",
+      addValidationIssue(ctx, {
+        issueCode: "layout_incompatible_with_initial_view",
         path: ["layout"],
-        message: "Layout indisponivel para a visao inicial selecionada.",
       });
     }
 
@@ -1084,8 +1260,7 @@ export function resolveRecommendedStartStrategy(input: {
   if (input.fromProjectId && input.hasPreviousSourceConfig) {
     return {
       strategy: "hybrid",
-      reason:
-        "Projeto existente com origem anterior: manter importacao configurada e complementar manualmente.",
+      reasonCode: "existing_project_previous_source",
     };
   }
 
@@ -1094,48 +1269,41 @@ export function resolveRecommendedStartStrategy(input: {
       if (available.has("prisma-schema") || hasFullImportConnector) {
         return {
           strategy: "import",
-          reason:
-            "Modelo de dados fica mais consistente quando nasce de schema/importacao estrutural.",
+          reasonCode: "data_model_structural_import",
         };
       }
       if (hasConfigurableImportConnector) {
         return {
           strategy: "import",
-          reason:
-            "Existe conector configuravel para dados relacionais, recomendado iniciar por importacao configurada.",
+          reasonCode: "data_model_configurable_import",
         };
       }
       if (hasPreviewOnlyConnector) {
         return {
           strategy: "hybrid",
-          reason:
-            "Ha fonte com preview assistido, combine reconhecimento inicial com edicao manual.",
+          reasonCode: "data_model_preview_hybrid",
         };
       }
       return {
         strategy: "template",
-        reason:
-          "Sem conector ativo de dados: use preset ERD e conecte a fonte depois.",
+        reasonCode: "data_model_template",
       };
     case "system-architecture":
       if (hasFullImportConnector || hasConfigurableImportConnector) {
         return {
           strategy: "import",
-          reason:
-            "Arquitetura ganha aceleracao quando nasce de uma fonte tecnica configurada.",
+          reasonCode: "system_architecture_import",
         };
       }
       if (hasPreviewOnlyConnector || available.has("openapi") || available.has("graphql")) {
         return {
           strategy: "hybrid",
-          reason:
-            "Com preview assistido de APIs, comece por reconhecimento preliminar e refine manualmente.",
+          reasonCode: "system_architecture_hybrid",
         };
       }
       return {
         strategy: "template",
-        reason:
-          "Sem especificacao pronta para importacao, o preset inicial reduz retrabalho.",
+        reasonCode: "system_architecture_template",
       };
     case "information-structure":
     case "documents-governance":
@@ -1146,49 +1314,42 @@ export function resolveRecommendedStartStrategy(input: {
       ) {
         return {
           strategy: hasConfigurableImportConnector ? "import" : "hybrid",
-          reason:
-            hasConfigurableImportConnector
-              ? "Estruturas de informacao ficam mais fieis quando partem de fonte configuravel."
-              : "Fonte tabular com preview assistido funciona melhor em modo hibrido.",
+          reasonCode: hasConfigurableImportConnector
+            ? "information_structure_import"
+            : "information_structure_hybrid",
         };
       }
       return {
         strategy: "template",
-        reason:
-          "Sem fonte tabular pronta, o modelo inicial acelera a configuracao.",
+        reasonCode: "information_structure_template",
       };
     case "process":
       return {
         strategy: "template",
-        reason:
-          "Fluxos de processo ficam mais claros com um preset inicial e ajustes guiados.",
+        reasonCode: "process_template",
       };
     case "mixed":
       if (hasFullImportConnector || hasConfigurableImportConnector) {
         return {
           strategy: "hybrid",
-          reason:
-            "Cenario misto pede combinacao de importacao parcial com edicao manual orientada.",
+          reasonCode: "mixed_hybrid",
         };
       }
       if (hasPreviewOnlyConnector) {
         return {
           strategy: "manual",
-          reason:
-            "As fontes disponiveis oferecem apenas preview assistido; comece manualmente e conecte depois.",
+          reasonCode: "mixed_manual_preview",
         };
       }
       return {
         strategy: "manual",
-        reason:
-          "Sem conectores ativos, comece no canvas livre e conecte fontes depois.",
+        reasonCode: "mixed_manual_blank",
       };
     case "blank":
     default:
       return {
         strategy: "manual",
-        reason:
-          "Perfil em branco prioriza exploracao inicial antes de decidir origem externa.",
+        reasonCode: "blank_manual",
       };
   }
 }
@@ -1246,7 +1407,7 @@ export function normalizeLayoutForView(input: {
     return {
       layout: fallback,
       normalized: false,
-      warning: null as string | null,
+      warningCode: null as LayoutNormalizationWarningCode | null,
     };
   }
 
@@ -1260,14 +1421,14 @@ export function normalizeLayoutForView(input: {
     return {
       layout: input.layout,
       normalized: false,
-      warning: null as string | null,
+      warningCode: null as LayoutNormalizationWarningCode | null,
     };
   }
 
   return {
     layout: autoFallback,
     normalized: true,
-    warning: "Layout legado incompativel normalizado para Automatico.",
+    warningCode: "legacy_layout_normalized_to_auto" as const,
   };
 }
 
@@ -1321,7 +1482,7 @@ export function validateAssistantDraftForPhase(input: {
     return [] as string[];
   }
 
-  return validateStrictByRecipeFromRegistry(input.draft).blockingIssues;
+  return validateStrictByRecipeFromRegistry(input.draft).blockingIssueCodes;
 }
 
 export function resolveDiagramTypeForInitialView(initialView: InitialView) {
@@ -1543,16 +1704,17 @@ export function resolveSourceConfigPreview(
     if (!text) {
       return {
         status: "warning",
-        message: "Cole o schema Prisma para verificacao inicial/importacao.",
+        summaryCode: "prisma_preview_schema_required",
       };
     }
     const modelCount = (text.match(/\bmodel\s+[A-Za-z_]/g) ?? []).length;
     return {
       status: "ready",
-      message:
+      summaryCode:
         modelCount > 0
-          ? `Reconhecimento preliminar: ${modelCount} modelos identificados.`
-          : "Schema preenchido; execute verificacao inicial para confirmar entidades.",
+          ? "prisma_preview_models_detected"
+          : "prisma_preview_ready_without_models",
+      ...(modelCount > 0 ? { summaryValues: { count: modelCount } } : {}),
     };
   }
 
@@ -1564,9 +1726,9 @@ export function resolveSourceConfigPreview(
     if (sourceConfig.connectionMode === "string") {
       return {
         status: sourceConfig.connectionString?.trim() ? "ready" : "warning",
-        message: sourceConfig.connectionString?.trim()
-          ? "Connection string informada. Conexao real pode ser feita depois."
-          : "Preencha a connection string para habilitar verificacao inicial local.",
+        summaryCode: sourceConfig.connectionString?.trim()
+          ? "relational_preview_connection_string_ready"
+          : "relational_preview_connection_string_required",
       };
     }
     const ready = Boolean(
@@ -1576,9 +1738,9 @@ export function resolveSourceConfigPreview(
     );
     return {
       status: ready ? "ready" : "warning",
-      message: ready
-        ? "Campos basicos de conexao preenchidos."
-        : "Complete host, porta e banco para continuar.",
+      summaryCode: ready
+        ? "relational_preview_fields_ready"
+        : "relational_preview_fields_required",
     };
   }
 
@@ -1586,9 +1748,9 @@ export function resolveSourceConfigPreview(
     if (sourceConfig.inputMode === "url") {
       return {
         status: sourceConfig.url?.trim() ? "ready" : "warning",
-        message: sourceConfig.url?.trim()
-          ? "URL da especificacao informada."
-          : "Informe uma URL OpenAPI para verificacao inicial.",
+        summaryCode: sourceConfig.url?.trim()
+          ? "openapi_preview_url_ready"
+          : "openapi_preview_url_required",
         recognizedAs: "openapi-url",
       };
     }
@@ -1597,7 +1759,7 @@ export function resolveSourceConfigPreview(
     if (!specText) {
       return {
         status: "warning",
-        message: "Cole a especificacao OpenAPI para preview assistido.",
+        summaryCode: "openapi_preview_spec_required",
       };
     }
 
@@ -1605,18 +1767,26 @@ export function resolveSourceConfigPreview(
     if (!parsed.ok) {
       return {
         status: "warning",
-        message: `Falha no reconhecimento preliminar OpenAPI: ${parsed.error}`,
+        summaryCode: parsed.errorCode,
         recognizedAs: "openapi",
       };
     }
 
     return {
       status: "ready",
-      message: `Reconhecimento preliminar OpenAPI concluido (${parsed.version}, ${parsed.pathCount} rotas).`,
+      summaryCode: "openapi_preview_recognized",
+      summaryValues: {
+        version: parsed.version,
+        pathCount: parsed.pathCount,
+      },
       recognizedAs: "openapi",
       details: [
-        `Formato: ${parsed.format.toUpperCase()}`,
-        ...(parsed.title ? [`Titulo: ${parsed.title}`] : []),
+        buildMessageDescriptor("openapi_preview_format", {
+          format: parsed.format.toUpperCase(),
+        }),
+        ...(parsed.title
+          ? [buildMessageDescriptor("openapi_preview_title", { title: parsed.title })]
+          : []),
       ],
       fields: ["paths"],
     };
@@ -1628,16 +1798,19 @@ export function resolveSourceConfigPreview(
       const parsed = parseGraphQlSchema(schemaText);
       return {
         status: parsed.ok ? "ready" : "warning",
-        message: parsed.ok
-          ? `Reconhecimento preliminar GraphQL concluido (${parsed.typeCount} tipos).`
-          : `Falha no reconhecimento preliminar GraphQL: ${parsed.error}`,
+        summaryCode: parsed.ok
+          ? "graphql_preview_recognized"
+          : parsed.errorCode,
+        ...(parsed.ok ? { summaryValues: { typeCount: parsed.typeCount } } : {}),
         ...(parsed.ok ? { recognizedAs: `graphql-${parsed.source}` } : {}),
         ...(parsed.ok
           ? {
               details: [
-                parsed.source === "sdl"
-                  ? "Fonte: SDL"
-                  : "Fonte: introspection JSON",
+                buildMessageDescriptor(
+                  parsed.source === "sdl"
+                    ? "graphql_preview_source_sdl"
+                    : "graphql_preview_source_introspection_json",
+                ),
               ],
             }
           : {}),
@@ -1646,9 +1819,9 @@ export function resolveSourceConfigPreview(
 
     return {
       status: sourceConfig.endpointUrl?.trim() ? "ready" : "warning",
-      message: sourceConfig.endpointUrl?.trim()
-        ? "Endpoint GraphQL informado."
-        : "Informe endpoint ou schema para verificacao inicial.",
+      summaryCode: sourceConfig.endpointUrl?.trim()
+        ? "graphql_preview_endpoint_ready"
+        : "graphql_preview_endpoint_or_schema_required",
       recognizedAs: "graphql-endpoint",
     };
   }
@@ -1658,7 +1831,7 @@ export function resolveSourceConfigPreview(
     if (!text) {
       return {
         status: "warning",
-        message: "Cole o CSV para preview assistido.",
+        summaryCode: "csv_preview_text_required",
       };
     }
 
@@ -1667,10 +1840,13 @@ export function resolveSourceConfigPreview(
     const preview = buildCsvSample(text, delimiter, previewRows);
     return {
       status: preview.fields.length > 0 ? "ready" : "warning",
-      message:
+      summaryCode:
         preview.fields.length > 0
-          ? `Reconhecimento preliminar: ${preview.fields.length} colunas encontradas.`
-          : "Nao foi possivel reconhecer o cabecalho CSV no preview assistido.",
+          ? "csv_preview_columns_detected"
+          : "csv_preview_header_not_recognized",
+      ...(preview.fields.length > 0
+        ? { summaryValues: { count: preview.fields.length } }
+        : {}),
       fields: preview.fields,
       sample: preview.sample,
     };
@@ -1681,7 +1857,7 @@ export function resolveSourceConfigPreview(
     if (!text) {
       return {
         status: "warning",
-        message: "Cole o JSON para preview assistido.",
+        summaryCode: "json_preview_text_required",
       };
     }
 
@@ -1689,7 +1865,7 @@ export function resolveSourceConfigPreview(
     if (!parsed) {
       return {
         status: "warning",
-        message: "JSON invalido.",
+        summaryCode: "json_preview_invalid",
       };
     }
 
@@ -1705,9 +1881,9 @@ export function resolveSourceConfigPreview(
       sample = candidate ? [candidate] : [];
     }
 
-      return {
-        status: "ready",
-      message: "JSON reconhecido no preview assistido para configuracao inicial.",
+    return {
+      status: "ready",
+      summaryCode: "json_preview_recognized",
       fields,
       sample,
     };
@@ -1716,9 +1892,9 @@ export function resolveSourceConfigPreview(
   if (sourceConfig.kind === "spreadsheet") {
     return {
       status: sourceConfig.text?.trim() ? "ready" : "warning",
-      message: sourceConfig.text?.trim()
-        ? "Dados de planilha recebidos para mapeamento inicial."
-        : "Cole os dados exportados da planilha para preview assistido.",
+      summaryCode: sourceConfig.text?.trim()
+        ? "spreadsheet_preview_ready"
+        : "spreadsheet_preview_text_required",
     };
   }
 
@@ -1729,20 +1905,11 @@ export function resolveSourceConfigPreview(
 
   return {
     status: genericText.trim() ? "ready" : "warning",
-    message: genericText.trim()
-      ? "Fonte configurada para conexao/importacao posterior."
-      : "Adicione o conteudo da fonte ou use conectar depois.",
+    summaryCode: genericText.trim()
+      ? "generic_preview_ready"
+      : "generic_preview_text_required",
   };
 }
-
-const sourceStatusLabels: Record<SourceStatus, string> = {
-  not_configured: "Fonte nao configurada",
-  configured: "Configurada para importacao",
-  precheck_ok: "Pre-verificacao OK",
-  ready_to_attempt_import: "Pronta para tentar importar",
-  imported: "Importada com sucesso",
-  failed: "Falha na configuracao da fonte",
-};
 
 function redactSourceErrorText(errorText?: string | null) {
   if (!errorText?.trim()) {
@@ -1755,7 +1922,8 @@ function redactSourceErrorText(errorText?: string | null) {
 function toPrecheckResult(preview: SourceConfigPreview): SourcePrecheckResult {
   return {
     level: preview.status === "ready" ? "ok" : "warning",
-    summary: preview.message,
+    summaryCode: preview.summaryCode,
+    ...(preview.summaryValues ? { summaryValues: preview.summaryValues } : {}),
     ...(preview.recognizedAs ? { recognizedAs: preview.recognizedAs } : {}),
     ...(preview.details?.length ? { details: preview.details } : {}),
     ...(preview.fields ? { detectedFields: preview.fields.length } : {}),
@@ -1820,8 +1988,7 @@ export function resolveSourceLifecycle(input: {
       sourceStatus: "failed" as const,
       precheckResult: {
         level: "error" as const,
-        summary: "Verificacao inicial falhou.",
-        details: [input.markAsFailed],
+        summaryCode: "source_lifecycle_precheck_failed" as const,
       },
       lastError: redactSourceErrorText(input.markAsFailed),
       lastCheckedAt: checkedAtIso,
@@ -1833,7 +2000,7 @@ export function resolveSourceLifecycle(input: {
       sourceStatus: "imported" as const,
       precheckResult: input.precheckResult ?? {
         level: "ok" as const,
-        summary: "Importacao inicial executada.",
+        summaryCode: "source_lifecycle_imported" as const,
       },
       lastCheckedAt: checkedAtIso,
       lastError: undefined,
@@ -1947,161 +2114,4 @@ export function applyResolvedSourceLifecycleToSettings(
     ...settings,
     ...lifecycle,
   });
-}
-
-export function getSourceStatusLabel(sourceStatus: SourceStatus) {
-  return sourceStatusLabels[sourceStatus];
-}
-
-export function getSourceStatusPresentation(sourceStatus: SourceStatus) {
-  return {
-    statusCode: sourceStatus,
-    statusLabel: getSourceStatusLabel(sourceStatus),
-  };
-}
-
-export function getSourceStatusSummary(input: {
-  sourceStatus?: SourceStatus;
-  precheckResult?: SourcePrecheckResult;
-  sourceSelected?: boolean;
-}) {
-  if (!input.sourceSelected) {
-    return "Fonte nao selecionada.";
-  }
-
-  if (!input.sourceStatus) {
-    return "Fonte selecionada.";
-  }
-
-  const base = getSourceStatusLabel(input.sourceStatus);
-  if (!input.precheckResult) {
-    return base;
-  }
-
-  return `${base} (${input.precheckResult.summary})`;
-}
-
-const projectProfileLabels: Record<ProjectProfile, string> = {
-  blank: "em branco",
-  "information-structure": "estrutura da informacao",
-  process: "processo",
-  "data-model": "modelo de dados",
-  "system-architecture": "arquitetura do sistema",
-  "documents-governance": "documentos e governanca",
-  mixed: "misto",
-};
-
-const startStrategyLabels: Record<StartStrategy, string> = {
-  manual: "Criar manualmente",
-  import: "Importar do sistema",
-  template: "Usar modelo inicial",
-  hybrid: "Combinar importacao e edicao manual",
-};
-
-const startSourceLabels: Record<StartSource, string> = {
-  postgres: "PostgreSQL",
-  mysql: "MySQL",
-  sqlserver: "SQL Server",
-  "prisma-schema": "Prisma schema",
-  "sql-file": "Arquivo SQL",
-  "relational-json": "JSON relacional",
-  openapi: "OpenAPI",
-  graphql: "GraphQL",
-  "code-routes": "Rotas de codigo",
-  "folder-structure": "Estrutura de pastas",
-  events: "Eventos",
-  "yaml-json": "YAML/JSON",
-  csv: "CSV",
-  json: "JSON",
-  spreadsheet: "Planilha",
-  "cms-export": "Exportacao de CMS",
-  "existing-map": "Mapa existente",
-  "document-repository": "Repositorio de documentos",
-  "custom-import": "Importacao personalizada",
-};
-
-const templatePresetLabels: Record<TemplatePreset, string> = {
-  "erd-basic": "ERD basico",
-  "process-basic": "Processo basico",
-  "sitemap-basic": "Sitemap basico",
-  "architecture-basic": "Arquitetura basica",
-  "blank-canvas": "Canvas em branco",
-};
-
-const initialViewLabels: Record<InitialView, string> = {
-  free: "Livre",
-  hierarchy: "Hierarquia",
-  flow: "Fluxo",
-  graph: "Grafo",
-  erd: "ERD",
-  sitemap: "Sitemap",
-  timeline: "Timeline",
-  mindmap: "Mapa mental",
-};
-
-const layoutChoiceLabels: Record<LayoutChoice, string> = {
-  auto: "Automatico",
-  vertical: "Vertical",
-  horizontal: "Horizontal",
-  radial: "Radial",
-  relational: "Relacional",
-  free: "Livre",
-};
-
-const detailLevelLabels: Record<DetailLevel, string> = {
-  essential: "Essencial",
-  intermediate: "Intermediario",
-  detailed: "Detalhado",
-};
-
-export const automationHumanLabels: Record<
-  keyof AutomationToggles,
-  { label: string; help: string }
-> = DEFAULT_AUTOMATION_COPY;
-
-export function getProjectProfileLabel(profile: ProjectProfile) {
-  return projectProfileLabels[profile];
-}
-
-export function getStartStrategyLabel(strategy: StartStrategy) {
-  return startStrategyLabels[strategy];
-}
-
-export function getStartSourceLabel(source: StartSource) {
-  return startSourceLabels[source];
-}
-
-export function getTemplatePresetLabel(templatePreset: TemplatePreset) {
-  return templatePresetLabels[templatePreset];
-}
-
-export function getInitialViewLabel(view: InitialView) {
-  return initialViewLabels[view];
-}
-
-export function getLayoutChoiceLabel(layout: LayoutChoice) {
-  return layoutChoiceLabels[layout];
-}
-
-export function getDetailLevelLabel(detailLevel: DetailLevel) {
-  return detailLevelLabels[detailLevel];
-}
-
-export function buildWhatWillBeCreatedSummary(input: {
-  profile: ProjectProfile;
-  initialView: InitialView;
-  layout: LayoutChoice;
-  automation: AutomationToggles;
-  sourceStatus?: SourceStatus;
-}) {
-  const profileLabel = getProjectProfileLabel(input.profile);
-  const viewLabel = getInitialViewLabel(input.initialView);
-  const layoutLabel = getLayoutChoiceLabel(input.layout).toLowerCase();
-  const semanticValidationEnabled = input.automation.detectInconsistenciesEarly;
-
-  const sourceStatusSummary = input.sourceStatus
-    ? ` Estado da fonte: ${getSourceStatusLabel(input.sourceStatus).toLowerCase()}.`
-    : "";
-
-  return `Sera criado um projeto de ${profileLabel} com visao inicial ${viewLabel}, layout ${layoutLabel} e validacao semantica ${semanticValidationEnabled ? "ativada" : "desativada"}.${sourceStatusSummary}`;
 }

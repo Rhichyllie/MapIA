@@ -83,7 +83,7 @@ describe("resolveProjectCreationContext", () => {
     });
 
     expect(result.effectiveLayout).toBe("auto");
-    expect(result.warning).toBeTruthy();
+    expect(result.warningCode).toBe("legacy_layout_normalized_to_auto");
     expect(result.decisionTrace.legacyTemplateFallback.dependencyReal).toBe(false);
   });
 

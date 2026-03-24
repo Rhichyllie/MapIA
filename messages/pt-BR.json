@@ -33,6 +33,21 @@
     "cardOption": {
       "selected": "Selecionado",
       "select": "Selecionar"
+    },
+    "localeSwitcher": {
+      "label": "Idioma",
+      "ariaLabel": "Selecionar idioma da interface",
+      "currentLocaleTitle": "Idioma atual: {locale}",
+      "options": {
+        "ptBR": {
+          "label": "PT-BR",
+          "description": "Portugues (Brasil)"
+        },
+        "enUS": {
+          "label": "EN-US",
+          "description": "English (US)"
+        }
+      }
     }
   },
   "Auth": {
@@ -226,7 +241,8 @@
     },
     "defaults": {
       "projectName": "Novo projeto",
-      "rootName": "Nucleo"
+      "rootName": "Nucleo",
+      "hierarchyRootName": "No raiz"
     },
     "steps": {
       "project": {
@@ -610,10 +626,111 @@
         "imported": "Importada com sucesso",
         "failed": "Falha na configuracao da fonte"
       },
-      "sourceStatusSummary": {
-        "notSelected": "Fonte nao selecionada.",
-        "selected": "Fonte selecionada.",
-        "withPrecheck": "{status} ({summary})"
+    "sourceStatusSummary": {
+      "notSelected": "Fonte nao selecionada.",
+      "selected": "Fonte selecionada.",
+      "withPrecheck": "{status} ({summary})"
+    },
+    "sourcePreviewSummary": {
+      "prisma_preview_schema_required": "Cole o schema Prisma para verificacao inicial ou importacao.",
+      "prisma_preview_models_detected": "Reconhecimento preliminar: {count} modelos identificados.",
+      "prisma_preview_ready_without_models": "Schema preenchido; execute a verificacao inicial para confirmar entidades.",
+      "relational_preview_connection_string_ready": "Connection string informada. A conexao real pode ser feita depois.",
+      "relational_preview_connection_string_required": "Preencha a connection string para habilitar a verificacao inicial local.",
+      "relational_preview_fields_ready": "Campos basicos de conexao preenchidos.",
+      "relational_preview_fields_required": "Complete host, porta e banco para continuar.",
+      "openapi_preview_url_ready": "URL da especificacao informada.",
+      "openapi_preview_url_required": "Informe uma URL OpenAPI para verificacao inicial.",
+      "openapi_preview_spec_required": "Cole a especificacao OpenAPI para preview assistido.",
+      "openapi_preview_recognized": "Reconhecimento preliminar OpenAPI concluido ({version}, {pathCount} rotas).",
+      "graphql_preview_recognized": "Reconhecimento preliminar GraphQL concluido ({typeCount} tipos).",
+      "graphql_preview_endpoint_ready": "Endpoint GraphQL informado.",
+      "graphql_preview_endpoint_or_schema_required": "Informe endpoint ou schema para verificacao inicial.",
+      "csv_preview_text_required": "Cole o CSV para preview assistido.",
+      "csv_preview_columns_detected": "Reconhecimento preliminar: {count} colunas encontradas.",
+      "csv_preview_header_not_recognized": "Nao foi possivel reconhecer o cabecalho CSV no preview assistido.",
+      "json_preview_text_required": "Cole o JSON para preview assistido.",
+      "json_preview_invalid": "JSON invalido.",
+      "json_preview_recognized": "JSON reconhecido no preview assistido para configuracao inicial.",
+      "spreadsheet_preview_ready": "Dados de planilha recebidos para mapeamento inicial.",
+      "spreadsheet_preview_text_required": "Cole os dados exportados da planilha para preview assistido.",
+      "generic_preview_ready": "Fonte configurada para conexao ou importacao posterior.",
+      "generic_preview_text_required": "Adicione o conteudo da fonte ou use conectar depois."
+    },
+    "sourcePreviewDetails": {
+      "openapi_preview_format": "Formato: {format}",
+      "openapi_preview_title": "Titulo: {title}",
+      "graphql_preview_source_sdl": "Fonte: SDL",
+      "graphql_preview_source_introspection_json": "Fonte: JSON de introspection"
+    },
+    "sourceLifecycleSummary": {
+      "source_lifecycle_precheck_failed": "Verificacao inicial falhou.",
+      "source_lifecycle_imported": "Importacao inicial executada."
+    },
+    "validationIssues": {
+      "setup_initial_root_name_required": "Informe o nome do no raiz inicial.",
+      "relational_connection_string_invalid": "Use uma connection string valida (ex: postgresql://...).",
+      "relational_host_required": "Informe o host.",
+      "relational_database_required": "Informe o banco.",
+      "relational_port_required": "Informe a porta.",
+      "relational_username_required": "Informe o usuario.",
+      "prisma_schema_required": "Cole o conteudo do schema Prisma.",
+      "openapi_url_required": "Informe a URL da especificacao OpenAPI.",
+      "openapi_url_invalid": "Informe uma URL OpenAPI valida.",
+      "openapi_spec_required": "Cole a especificacao OpenAPI.",
+      "graphql_endpoint_or_schema_required": "Informe endpoint ou cole o schema GraphQL.",
+      "graphql_endpoint_invalid": "Informe um endpoint GraphQL valido.",
+      "generic_text_required": "Cole o conteudo da fonte selecionada.",
+      "generic_json_invalid": "JSON invalido.",
+      "generic_csv_headers_invalid": "CSV invalido: inclua pelo menos duas colunas no cabecalho.",
+      "generic_mapping_field_not_found": "Campo mapeado nao encontrado no preview: {field}.",
+      "source_config_required_for_import": "Configure a fonte para continuar com importacao.",
+      "start_source_required_for_source_config": "Defina uma fonte para configurar.",
+      "source_config_kind_mismatch": "A configuracao da fonte nao corresponde a fonte selecionada.",
+      "template_preset_required": "Selecione um modelo inicial.",
+      "template_cannot_use_source": "Template nao usa fonte de importacao.",
+      "template_cannot_use_source_config": "Template nao exige configuracao de fonte.",
+      "manual_cannot_use_source": "Criacao manual nao exige fonte inicial.",
+      "manual_cannot_use_template_preset": "Criacao manual nao usa template preset.",
+      "manual_cannot_use_source_config": "Criacao manual nao exige configuracao de fonte.",
+      "import_cannot_use_template_preset": "Importacao pura nao deve usar template preset.",
+      "start_source_incompatible_with_profile": "A fonte selecionada nao e compativel com o perfil.",
+      "initial_view_incompatible_with_profile": "A visao inicial selecionada e incompativel com o perfil.",
+      "layout_incompatible_with_initial_view": "Layout indisponivel para a visao inicial selecionada.",
+      "openapi_document_empty": "Especificacao OpenAPI vazia.",
+      "openapi_document_parse_failed": "Nao foi possivel interpretar o documento como JSON ou YAML valido.",
+      "openapi_document_missing_spec_marker": "Documento sem campo openapi ou swagger.",
+      "openapi_document_missing_version": "Documento sem versao OpenAPI ou Swagger.",
+      "graphql_schema_empty": "Schema GraphQL vazio.",
+      "graphql_schema_missing_valid_types": "Nao foram encontrados tipos SDL validos."
+    },
+    "startStrategyRecommendationReasons": {
+      "existing_project_previous_source": "Projeto existente com origem anterior: manter importacao configurada e complementar manualmente.",
+        "data_model_structural_import": "Modelo de dados fica mais consistente quando nasce de schema/importacao estrutural.",
+        "data_model_configurable_import": "Existe conector configuravel para dados relacionais, recomendado iniciar por importacao configurada.",
+        "data_model_preview_hybrid": "Ha fonte com preview assistido, combine reconhecimento inicial com edicao manual.",
+        "data_model_template": "Sem conector ativo de dados: use preset ERD e conecte a fonte depois.",
+        "system_architecture_import": "Arquitetura ganha aceleracao quando nasce de uma fonte tecnica configurada.",
+        "system_architecture_hybrid": "Com preview assistido de APIs, comece por reconhecimento preliminar e refine manualmente.",
+        "system_architecture_template": "Sem especificacao pronta para importacao, o preset inicial reduz retrabalho.",
+        "information_structure_import": "Estruturas de informacao ficam mais fieis quando partem de fonte configuravel.",
+        "information_structure_hybrid": "Fonte tabular com preview assistido funciona melhor em modo hibrido.",
+        "information_structure_template": "Sem fonte tabular pronta, o modelo inicial acelera a configuracao.",
+        "process_template": "Fluxos de processo ficam mais claros com um preset inicial e ajustes guiados.",
+        "mixed_hybrid": "Cenario misto pede combinacao de importacao parcial com edicao manual orientada.",
+        "mixed_manual_preview": "As fontes disponiveis oferecem apenas preview assistido; comece manualmente e conecte depois.",
+        "mixed_manual_blank": "Sem conectores ativos, comece no canvas livre e conecte fontes depois.",
+        "blank_manual": "Perfil em branco prioriza exploracao inicial antes de decidir origem externa."
+      },
+      "layoutWarnings": {
+        "legacy_layout_normalized_to_auto": "Layout legado incompativel normalizado para Automatico."
+      },
+      "strictValidationIssues": {
+        "import_source_not_ready": "Importacao exige fonte em estado 'Pronta para tentar importar' ou 'Importada com sucesso'.",
+        "process_auto_start_end_requires_examples": "Com 'Criar inicio e fim automaticamente' ativo, habilite 'Criar exemplos automaticos' para gerar o plano inicial.",
+        "sitemap_auto_home_requires_examples": "Com 'Criar Home automaticamente' ativo, habilite 'Criar exemplos automaticos' para gerar a Home inicial.",
+        "hierarchy_root_requires_examples": "Com 'Criar no raiz' ativo, habilite 'Criar exemplos automaticos' para gerar a raiz inicial.",
+        "system_graph_requires_examples": "Para este escopo, mantenha 'Criar exemplos automaticos' ativo para garantir no nucleo inicial no grafo."
       },
       "viewCompatibility": {
         "primary": "Principal",
@@ -678,6 +795,1057 @@
         "applyRemoveInvalid": "Aplicar e remover invalidas",
         "cancel": "Cancelar"
       }
+    },
+    "autosave": {
+      "noPendingChanges": "Sem alteracoes pendentes.",
+      "pendingChanges": "Alteracoes pendentes.",
+      "pendingChangesQueued": "Alteracoes pendentes na fila de salvamento.",
+      "saving": "Salvando...",
+      "savingChanges": "Salvando alteracoes...",
+      "savingManually": "Salvando manualmente...",
+      "saved": "Salvo."
+    },
+    "inspectorFeedback": {
+      "defaultValidationMessage": "Nao foi possivel validar o formulario.",
+      "reviewFields": "Revise os campos com erro.",
+      "invalidKind": "Tipo invalido.",
+      "jsonObjectRequired": "Dados devem ser um objeto JSON (chave/valor).",
+      "invalidJson": "JSON invalido. Verifique chaves, virgulas e aspas.",
+      "labelRequired": "Rotulo e obrigatorio."
+    },
+    "presentation": {
+      "fallbacks": {
+        "untitled": "Sem titulo",
+        "untitledNode": "No sem titulo",
+        "manualSource": "Fonte manual"
+      },
+      "nodeKinds": {
+        "workspace": {
+          "labelOperational": "Area de trabalho",
+          "description": "Contexto raiz de organizacao do projeto."
+        },
+        "project": {
+          "labelOperational": "Projeto",
+          "description": "Escopo principal em edicao."
+        },
+        "entity": {
+          "labelOperational": "Entidade",
+          "description": "Objeto de negocio, dado ou recurso modelado."
+        },
+        "page": {
+          "labelOperational": "Secao",
+          "description": "Secao de conteudo, capitulo ou agrupador hierarquico."
+        },
+        "flow-step": {
+          "labelOperational": "Etapa",
+          "description": "Passo de processo orientado a fluxo."
+        },
+        "note": {
+          "labelOperational": "Nota",
+          "description": "Anotacao contextual para observacoes e decisoes."
+        }
+      },
+      "edgeKinds": {
+        "contains": {
+          "labelOperational": "Contem",
+          "description": "Relacao de composicao entre pai e filho."
+        },
+        "references": {
+          "labelOperational": "Referencia",
+          "description": "Ligacao de referencia sem dependencia estrutural."
+        },
+        "depends-on": {
+          "labelOperational": "Depende de",
+          "description": "Dependencia entre itens para execucao ou decisao."
+        },
+        "flows-to": {
+          "labelOperational": "Fluxo",
+          "description": "Sequencia de processo entre etapas."
+        },
+        "relates-to": {
+          "labelOperational": "Relaciona",
+          "description": "Associacao semantica generica."
+        }
+      },
+      "contextualActions": {
+        "treeAddChild": "Adicionar filho",
+        "treeAddSibling": "Adicionar irmao",
+        "sitemapAddPage": "Adicionar pagina",
+        "sitemapAddSubpage": "Adicionar subpagina",
+        "mindmapAddBranch": "Adicionar ramificacao",
+        "mindmapAddReference": "Adicionar referencia",
+        "erdAddRelation": "Adicionar relacao",
+        "erdAddField": "Adicionar campo",
+        "graphAddComponent": "Adicionar componente",
+        "graphAddDependency": "Adicionar dependencia",
+        "graphAddSupportingService": "Adicionar servico auxiliar",
+        "timelineAddMilestone": "Adicionar marco",
+        "timelineAddDependency": "Adicionar dependencia temporal",
+        "defaultAddRelated": "Adicionar relacionado"
+      },
+      "contextualActionEdgeLabels": {
+        "timelineNext": "Proximo",
+        "timelineDependency": "Dependencia"
+      }
+    },
+    "process": {
+      "fallbacks": {
+        "untitledItem": "Item sem titulo"
+      },
+      "guidance": {
+        "decisionNeedsPaths": "Uma decisao fica mais didatica quando explicita pelo menos dois caminhos.",
+        "decisionNeedsShortLabels": "Use rotulos curtos para diferenciar cada caminho da decisao.",
+        "noteNeedsAnchor": "Conecte a observacao ao ponto que ela explica para evitar ruido solto no canvas.",
+        "endShouldTerminate": "Revise saidas extras. Encerramentos fortes normalmente terminam o percurso.",
+        "startHasIncoming": "Entradas no inicio costumam sinalizar um ponto anterior que ainda falta no mapa."
+      },
+      "lanes": {
+        "before": "Vem antes",
+        "after": "Segue depois",
+        "branch": "Bifurcacao",
+        "note": "Observacao"
+      },
+      "summaryChips": {
+        "before": "Antes",
+        "after": "Depois",
+        "branch": "Desvios",
+        "note": "Observacoes"
+      },
+      "nodeKinds": {
+        "flow-step": {
+          "labelOperational": "Atividade",
+          "description": "Unidade de trabalho executavel dentro do processo."
+        },
+        "note": {
+          "labelOperational": "Observacao",
+          "description": "Contexto, risco ou excecao que apoia a leitura do fluxo."
+        }
+      },
+      "quickActions": {
+        "flow-add-next-step": {
+          "label": "Continuar fluxo"
+        },
+        "flow-add-branch": {
+          "label": "Criar bifurcacao",
+          "edgeLabel": "Condicao"
+        },
+        "flow-add-note": {
+          "label": "Registrar observacao",
+          "edgeLabel": "Observacao"
+        }
+      },
+      "inspector": {
+        "selectionBadgeLabel": "Trecho em foco",
+        "emptyTitle": "Leitura do fluxo",
+        "emptySummary": "Selecione um ponto do processo para ver papel, continuidade e contexto.",
+        "emptyGuidance": "Prefira abrir inicio, atividade, decisao ou fim para revisar o encadeamento operacional.",
+        "titleLabel": "Nome no fluxo",
+        "kindLabel": "Formato no fluxo",
+        "descriptionLabel": "Leitura operacional",
+        "descriptionPlaceholder": "Descreva o que acontece neste ponto, qual criterio decide a passagem e o que sai daqui.",
+        "tagsLabel": "Marcadores operacionais",
+        "tagsPlaceholder": "Ex.: SLA, excecao, aprovacao, canal, fila",
+        "tagsHelper": "Use marcadores curtos para risco, canal, turno, regra ou criticidade.",
+        "contextTitle": "Leitura operacional",
+        "generalSectionTitle": "Identificacao",
+        "detailsSectionTitle": "Contexto e notas",
+        "relationsSectionTitle": "Antes e depois",
+        "edgeGeneralSectionTitle": "Leitura da transicao",
+        "edgeLabelLabel": "Rotulo da passagem",
+        "edgeKindLabel": "Tipo de passagem",
+        "edgeSourceLabel": "Sai de",
+        "edgeTargetLabel": "Chega em",
+        "nodeSubtitle": "Entenda o papel deste ponto no fluxo antes de editar o texto.",
+        "edgeSubtitle": "Leia a transicao primeiro e ajuste o detalhe so quando necessario.",
+        "relationsEmptyState": "Ainda nao ha transicoes ou observacoes ligadas a este ponto."
+      },
+      "edgeOverview": {
+        "currentLabel": "Rotulo atual: {relationLabel}."
+      },
+      "connectivity": {
+        "none": "Ainda sem conexoes registradas.",
+        "summary": "{incomingCount} entrada(s) e {outgoingCount} saida(s) no fluxo."
+      },
+      "edgeKinds": {
+        "contains": {
+          "labelOperational": "Contem",
+          "description": "Agrupamento estrutural, raro no fluxo operacional.",
+          "outgoingLaneLabel": "Agrupa em",
+          "incomingLaneLabel": "Agrupado por",
+          "supportingLabel": "vinculo estrutural",
+          "edgeBadgeLabel": "Estrutura",
+          "edgeSummary": "{sourceLabel} organiza {targetLabel} no mesmo agrupamento.",
+          "guidance": [
+            "Use apenas quando o fluxo precisar de um agrupamento explicito."
+          ]
+        },
+        "references": {
+          "labelOperational": "Observa",
+          "description": "Conecta anotacoes e contexto sem alterar a sequencia principal.",
+          "outgoingLaneLabel": "Anota",
+          "incomingLaneLabel": "Recebe anotacao de",
+          "supportingLabel": "apoio contextual",
+          "edgeBadgeLabel": "Observacao",
+          "edgeSummary": "{sourceLabel} adiciona contexto operacional a {targetLabel}.",
+          "guidance": [
+            "Use para observacoes, riscos, excecoes ou combinados paralelos ao fluxo.",
+            "Evite usar esta ligacao para mover o trabalho entre etapas."
+          ]
+        },
+        "depends-on": {
+          "labelOperational": "Bifurca para",
+          "description": "Abre um caminho condicional ou uma dependencia que altera a continuidade.",
+          "outgoingLaneLabel": "Bifurca para",
+          "incomingLaneLabel": "Depende de",
+          "supportingLabel": "transicao condicional",
+          "edgeBadgeLabel": "Desvio",
+          "edgeSummary": "{sourceLabel} desvia ou condiciona a passagem para {targetLabel}.",
+          "guidance": [
+            "Use para decisoes, excecoes e desvios de caminho.",
+            "Prefira rotulos curtos que explicitem a condicao da bifurcacao."
+          ]
+        },
+        "flows-to": {
+          "labelOperational": "Continua para",
+          "description": "Passagem principal entre um ponto do fluxo e o proximo.",
+          "outgoingLaneLabel": "Segue para",
+          "incomingLaneLabel": "Vem de",
+          "supportingLabel": "continuidade principal",
+          "edgeBadgeLabel": "Transicao",
+          "edgeSummary": "{sourceLabel} continua para {targetLabel}.",
+          "guidance": [
+            "Use para a sequencia principal da operacao.",
+            "Mantenha o rotulo apenas quando ele realmente acrescentar contexto."
+          ]
+        },
+        "relates-to": {
+          "labelOperational": "Relaciona com",
+          "description": "Faz uma ligacao complementar fora da sequencia principal.",
+          "outgoingLaneLabel": "Relaciona com",
+          "incomingLaneLabel": "Relacionado a",
+          "supportingLabel": "vinculo complementar",
+          "edgeBadgeLabel": "Ligacao",
+          "edgeSummary": "{sourceLabel} se relaciona com {targetLabel}.",
+          "guidance": [
+            "Prefira transicao, bifurcacao ou observacao quando houver semantica mais forte."
+          ]
+        }
+      },
+      "quickAddRoles": {
+        "flow-start": {
+          "label": "Inicio",
+          "description": "Marca onde a operacao comeca."
+        },
+        "flow-step": {
+          "label": "Atividade",
+          "description": "Executa uma acao clara dentro do processo."
+        },
+        "flow-decision": {
+          "label": "Decisao",
+          "description": "Abre caminhos conforme regra, condicao ou resposta."
+        },
+        "flow-note": {
+          "label": "Observacao",
+          "description": "Registra contexto, risco ou excecao sem virar mais uma etapa."
+        },
+        "flow-end": {
+          "label": "Fim",
+          "description": "Indica onde este percurso se encerra."
+        }
+      },
+      "roles": {
+        "flow-start": {
+          "badgeLabel": "Inicio",
+          "kindLabel": "Ponto de partida",
+          "canvasHint": "Dispara o processo e orienta a primeira passagem.",
+          "summary": "Marca onde a operacao comeca e qual ritmo ela imprime ao restante do fluxo.",
+          "positionEmptyLabel": "Sem entradas anteriores, como esperado para a abertura do fluxo.",
+          "positionConnectedLabel": "Ja recebe entradas. Vale revisar se este ponto ainda e o inicio correto.",
+          "guidanceWhenSparse": "Conecte a primeira atividade para deixar a trilha legivel.",
+          "guidanceWhenConnected": "Confirme se as entradas nao deveriam apontar para uma etapa anterior."
+        },
+        "flow-step": {
+          "badgeLabel": "Etapa",
+          "kindLabel": "Atividade",
+          "canvasHint": "Executa um trabalho observavel dentro da operacao.",
+          "summary": "Representa uma atividade executavel, com responsabilidade clara antes de seguir adiante.",
+          "positionEmptyLabel": "Ainda isolada. Falta indicar de onde esta atividade vem e para onde segue.",
+          "positionConnectedLabel": "Ja ocupa um trecho operacional definido dentro do fluxo.",
+          "guidanceWhenSparse": "Conecte o antes e o depois para evitar ilhas operacionais.",
+          "guidanceWhenConnected": "Revise se a proxima passagem esta nomeada pela acao correta."
+        },
+        "flow-decision": {
+          "badgeLabel": "Decisao",
+          "kindLabel": "Ponto de decisao",
+          "canvasHint": "Avalia uma regra e abre caminhos alternativos.",
+          "summary": "Concentra a pergunta, criterio ou regra que faz o processo bifurcar.",
+          "positionEmptyLabel": "Sem caminhos suficientes. Uma decisao precisa pelo menos uma saida clara.",
+          "positionConnectedLabel": "Ja influencia o caminho do fluxo com transicoes condicionais.",
+          "guidanceWhenSparse": "Crie saidas nomeadas para deixar as alternativas explicitas.",
+          "guidanceWhenConnected": "Use rotulos curtos para diferenciar cada desvio da decisao."
+        },
+        "flow-end": {
+          "badgeLabel": "Fim",
+          "kindLabel": "Encerramento",
+          "canvasHint": "Consolida o desfecho operacional deste fluxo.",
+          "summary": "Fecha o percurso e comunica o resultado ou estado final da operacao.",
+          "positionEmptyLabel": "Ainda sem etapa anterior conectada. Falta mostrar como o fluxo chega aqui.",
+          "positionConnectedLabel": "Recebe o resultado das etapas anteriores sem continuar adiante.",
+          "guidanceWhenSparse": "Conecte a etapa que entrega este encerramento.",
+          "guidanceWhenConnected": "Evite novas saidas para manter o encerramento terminal e claro."
+        },
+        "flow-note": {
+          "badgeLabel": "Observacao",
+          "kindLabel": "Anotacao operacional",
+          "canvasHint": "Registra risco, excecao ou contexto sem mover o fluxo.",
+          "summary": "Documenta combinados, alertas ou contexto de apoio sem virar mais uma etapa.",
+          "positionEmptyLabel": "Ainda solta no canvas. Anexe a observacao ao trecho que ela explica.",
+          "positionConnectedLabel": "Apoia a leitura do fluxo sem competir com a sequencia principal.",
+          "guidanceWhenSparse": "Conecte a observacao ao ponto do fluxo que ela esclarece.",
+          "guidanceWhenConnected": "Use observacoes para excecoes, SLA, risco ou regras complementares."
+        }
+      }
+    },
+    "processInspector": {
+      "node": {
+        "openPrevious": "Abrir etapa anterior",
+        "openBranch": "Abrir desvio",
+        "openNote": "Abrir observacao",
+        "openNext": "Abrir proxima etapa",
+        "flowReadingTitle": "Leitura do fluxo",
+        "positionLabel": "Posicao",
+        "connectivityLabel": "Conectividade",
+        "generalHelper": "Ajuste o nome e o papel do trecho em foco.",
+        "outOfProfile": " (fora do perfil)",
+        "detailsHelper": "Use contexto operacional e marcadores apenas quando acrescentarem leitura.",
+        "relationsHelper": "{incomingCount} entrada(s), {outgoingCount} saida(s) e {previewCount} relacao(oes) em destaque.",
+        "openTransition": "Abrir transicao"
+      },
+      "edge": {
+        "transitionReadingTitle": "Leitura da transicao",
+        "readingLabel": "Leitura",
+        "removeTransition": "Remover transicao"
+      }
+    },
+    "renderers": {
+      "tree": {
+        "rootBadge": "Raiz",
+        "hierarchyBadge": "Hierarquia",
+        "expand": "Expandir",
+        "collapse": "Colapsar"
+      },
+      "erd": {
+        "comment": "Comentario",
+        "table": {
+          "field": "Campo",
+          "type": "Tipo",
+          "flags": "Flags"
+        },
+        "emptyFields": "Nenhum campo definido."
+      },
+      "sitemap": {
+        "home": "Home",
+        "section": "Secao"
+      },
+      "timeline": {
+        "milestone": "Marco"
+      },
+      "mindmap": {
+        "root": "Tema central",
+        "reference": "Referencia",
+        "branch": "Ramificacao"
+      }
+    },
+    "versionDiff": {
+      "edgeKindCount": "{prefix}{count} relacao(oes) {label}",
+      "nodeRenamed": "{nodeKind} '{previousLabel}' renomeada para '{nextLabel}'.",
+      "nodeKindChanged": "{nodeLabel} mudou tipo: {previousKind} -> {nextKind}.",
+      "nodePayloadUpdated": "Payload de '{nodeLabel}' foi atualizado.",
+      "nodeAdded": "+ {nodeKind} '{nodeLabel}' adicionada.",
+      "nodeRemoved": "- {nodeKind} '{nodeLabel}' removida.",
+      "edgesAddedSuffix": "{edgeEntry} criadas.",
+      "edgesRemovedSuffix": "{edgeEntry} removidas.",
+      "edgesChanged": "{count} relacao(oes) tiveram atributos alterados.",
+      "viewportChanged": "Viewport do canvas foi alterado.",
+      "noChanges": "Nenhuma alteracao detectada."
+    },
+    "graph": {
+      "quickAddRoles": {
+        "graph-core": {
+          "label": "Nucleo",
+          "description": "Componente central da rede."
+        },
+        "graph-topic": {
+          "label": "Componente",
+          "description": "Peca arquitetural conectada ao nucleo ou a outros componentes."
+        },
+        "graph-supporting": {
+          "label": "Servico auxiliar",
+          "description": "Apoio, adaptador, borda ou contexto transversal da estrutura."
+        }
+      },
+      "nodeKinds": {
+        "workspace": {
+          "labelOperational": "Componente",
+          "description": "Elemento utilizado na leitura arquitetural da rede."
+        },
+        "project": {
+          "labelOperational": "Componente",
+          "description": "Elemento utilizado na leitura arquitetural da rede."
+        },
+        "entity": {
+          "labelOperational": "Componente",
+          "description": "Servico, modulo ou capacidade principal dentro da rede."
+        },
+        "page": {
+          "labelOperational": "Servico auxiliar",
+          "description": "Apoio transversal, adaptador, fronteira ou infraestrutura lateral."
+        },
+        "note": {
+          "labelOperational": "Contexto",
+          "description": "Anotacao auxiliar de apoio para contexto, restricao ou observacao de arquitetura."
+        },
+        "flow-step": {
+          "labelOperational": "Servico",
+          "description": "Elemento operacional usado como capacidade ativa na rede."
+        }
+      },
+      "roles": {
+        "graph-core": {
+          "roleBadgeLabel": "Nucleo da rede",
+          "selectionBadgeLabel": "Nucleo em foco",
+          "footprintLabel": "Coordena a malha principal",
+          "summaryFallback": "Ponto central da arquitetura. Use para organizar dependencias, integracoes e fronteiras da rede."
+        },
+        "graph-topic": {
+          "roleBadgeLabel": "Componente conectado",
+          "selectionBadgeLabel": "Componente em foco",
+          "footprintLabel": "Participa da rede ativa",
+          "summaryFallback": "Componente que participa das integracoes e dependencias da estrutura."
+        },
+        "graph-supporting": {
+          "roleBadgeLabel": "Apoio arquitetural",
+          "selectionBadgeLabel": "Apoio em foco",
+          "footprintLabel": "Sustenta e contextualiza a rede",
+          "summaryFallback": "Capacidade transversal, servico auxiliar ou contexto de apoio para a rede."
+        }
+      },
+      "structureTips": {
+        "connectivity": "Leitura da rede: {incomingCount} entrada(s) e {outgoingCount} saida(s).",
+        "core": "Use este item para orientar a rede principal e evitar dependencias difusas.",
+        "topic": "Revise integracoes laterais e dependencias diretas deste componente.",
+        "supporting": "Use este item para apoio, contexto, adaptacao ou fronteira do sistema."
+      },
+      "connectivityLabel": "Recebe {incomingCount} conexao(oes) e envia {outgoingCount}."
+    },
+    "shell": {
+      "canvasAriaLabel": "Canvas do editor",
+      "rendererLabels": {
+        "tree": "Hierarquia",
+        "flow": "Fluxo",
+        "sitemap": "Sitemap",
+        "erd": "ERD",
+        "graph": "Grafo",
+        "timeline": "Timeline",
+        "mindmap": "Mapa mental"
+      },
+      "topBar": {
+        "quickFind": "Buscar (Ctrl+K)",
+        "fitView": "Ajustar",
+        "organize": "Organizar",
+        "showValidation": "Verificar",
+        "hideValidation": "Ocultar verificacao",
+        "erdValidationLevel": "Validacao ERD",
+        "exportPreview": "Gerar/Exportar (preview)",
+        "exportPreviewGenerating": "Gerando preview...",
+        "enterFocus": "Entrar em foco",
+        "exitFocus": "Sair do foco",
+        "canvasBarAriaLabel": "Barra superior do canvas"
+      },
+      "buttons": {
+        "removeSelected": "Remover selecionado",
+        "save": "Salvar",
+        "reapplyLayout": "Reaplicar layout"
+      },
+      "common": {
+        "cancel": "Cancelar",
+        "save": "Salvar"
+      },
+      "selection": {
+        "openTransition": "Editar transicao",
+        "openInspector": "Editar no inspetor",
+        "edit": "Editar",
+        "center": "Centralizar",
+        "addField": "Adicionar campo",
+        "expandSubtree": "Expandir subarvore",
+        "collapseSubtree": "Colapsar subarvore",
+        "edgeFocused": "Conexao em foco",
+        "none": "Nenhum item selecionado",
+        "transitionInFocus": "Transicao em foco",
+        "semanticAttention": "Semantica: atencao",
+        "semanticWarning": "Semantica: aviso",
+        "semanticSuggestion": "Semantica: sugestao",
+        "semanticInfo": "Semantica: info",
+        "semanticOk": "Semantica: OK",
+        "technicalKind": " (kind: {kind})",
+        "nodeFocused": "Item em foco"
+      },
+      "inlineRename": {
+        "label": "Renomear no"
+      },
+      "addNode": {
+        "roleLabelFlow": "Papel no fluxo",
+        "roleLabelDefault": "Papel do no",
+        "titleLabelGraph": "Nome do item",
+        "titleLabelFlow": "Nome visivel no fluxo",
+        "titleLabelDefault": "Titulo",
+        "titlePlaceholder": "Ex.: {title}",
+        "descriptionLabelFlow": "Leitura operacional (opcional)",
+        "descriptionLabelDefault": "Descricao (opcional)",
+        "tagsLabelFlow": "Marcadores operacionais (opcional)",
+        "tagsLabelDefault": "Tags (opcional)",
+        "tagsPlaceholder": "Ex.: onboarding, aprovacao"
+      },
+      "quickAdd": {
+        "copy": {
+          "default": {
+            "addPrimary": "Adicionar item",
+            "dialogTitle": "QuickAdd",
+            "dialogHint": "Adicione itens e conecte rapidamente.",
+            "addConfirm": "Adicionar item",
+            "quickActionHint": "Sugestao: comece pelo item principal e conecte a proxima relacao."
+          },
+          "flow": {
+            "addPrimary": "Adicionar atividade",
+            "dialogTitle": "QuickAdd de processo",
+            "dialogHint": "Adicione atividades, decisoes, encerramentos e observacoes do fluxo operacional.",
+            "addConfirm": "Inserir no fluxo",
+            "quickActionHint": "Sugestao: continue o fluxo ou abra uma bifurcacao quando houver regra."
+          },
+          "erd": {
+            "addPrimary": "Adicionar entidade",
+            "dialogTitle": "QuickAdd de entidades",
+            "dialogHint": "Crie entidades com campos, PK/FK e cardinalidade.",
+            "addConfirm": "Adicionar entidade",
+            "quickActionHint": "Acao recomendada: definir cardinalidade."
+          },
+          "sitemap": {
+            "addPrimary": "Adicionar pagina",
+            "dialogTitle": "QuickAdd de paginas",
+            "dialogHint": "Crie paginas e secoes com navegacao coerente.",
+            "addConfirm": "Adicionar pagina",
+            "quickActionHint": "Sugestao: adicione a proxima pagina e mantenha o caminho de navegacao claro."
+          },
+          "tree": {
+            "addPrimary": "Adicionar secao",
+            "dialogTitle": "QuickAdd de hierarquia",
+            "dialogHint": "Estruture secoes com hierarquia consistente.",
+            "addConfirm": "Adicionar secao",
+            "quickActionHint": "Sugestao: defina o nivel pai antes de expandir a estrutura."
+          },
+          "graph": {
+            "addPrimary": "Adicionar componente",
+            "dialogTitle": "QuickAdd de arquitetura",
+            "dialogHint": "Mapeie componentes, interfaces e dependencias.",
+            "addConfirm": "Adicionar componente",
+            "quickActionHint": "Acao recomendada: conectar uma dependencia ou relacao de apoio."
+          },
+          "timeline": {
+            "addPrimary": "Adicionar marco",
+            "dialogTitle": "QuickAdd de timeline",
+            "dialogHint": "Adicione marcos e dependencias temporais.",
+            "addConfirm": "Adicionar marco",
+            "quickActionHint": "Sugestao: adicione o proximo marco ou registre uma dependencia."
+          },
+          "mindmap": {
+            "addPrimary": "Adicionar ramificacao",
+            "dialogTitle": "QuickAdd de mapa mental",
+            "dialogHint": "Adicione ramificacoes e referencias relacionadas ao tema central.",
+            "addConfirm": "Adicionar ramificacao",
+            "quickActionHint": "Sugestao: abra uma ramificacao ou registre uma referencia de apoio."
+          }
+        },
+        "roles": {
+          "hierarchyRoot": {
+            "label": "No raiz",
+            "description": "Marca o ponto principal da estrutura."
+          },
+          "hierarchyNode": {
+            "label": "No hierarquico",
+            "description": "Organiza conteudo em niveis relacionados."
+          },
+          "sitemapHome": {
+            "label": "Home",
+            "description": "Pagina inicial da navegacao."
+          },
+          "sitemapSection": {
+            "label": "Secao",
+            "description": "Secao navegavel ligada a uma area do mapa."
+          },
+          "timelineMilestone": {
+            "label": "Marco",
+            "description": "Evento ou entrega que marca a linha do tempo."
+          }
+        },
+        "defaultProcessConnection": "Ligacao inicial: {nodeLabel} {relationLabel} o novo ponto.",
+        "defaultConnection": "Conexao padrao: {nodeLabel} -[{relationLabel}]- novo no."
+      },
+      "quickRelate": {
+        "title": "Relacionar entidades"
+      },
+      "connection": {
+        "invalidRules": "Conexao invalida para as regras do diagrama."
+      },
+      "repair": {
+        "summaryFallback": "A troca de tipo exige reparo para manter consistencia.",
+        "updateRelation": "Atualizar relacao {edgeId} para {nextKind}.",
+        "removeInvalidRelation": "Remover relacao invalida {edgeId}.",
+        "adjustNodeKind": "Ajustar o no para {nextKind}."
+      },
+      "semanticOverride": {
+        "ariaLabel": "Override tecnico",
+        "complianceHint": "O override tecnico registra justificativa para auditoria e compliance.",
+        "reasonLabel": "Justificativa",
+        "reasonRequiredSuffix": " obrigatoria (minimo {min} caracteres)",
+        "reasonOptionalSuffix": " (opcional)",
+        "placeholder": "Descreva o motivo tecnico do override.",
+        "apply": "Aplicar override"
+      },
+      "inspector": {
+        "ariaLabel": "Inspetor",
+        "confirmDiscardDraft": "Existem alteracoes nao aplicadas neste inspetor. Deseja descartalas?",
+        "currentRole": "Papel atual:",
+        "dominantReading": "Leitura dominante",
+        "draftBadge": "Rascunho nao aplicado",
+        "hide": "Ocultar inspetor",
+        "modeAria": "Modo do inspetor",
+        "modeOperational": "Operacional",
+        "modeTechnical": "Tecnico",
+        "neighborhood": "Vizinhanca",
+        "neighborhoodSummary": "{incomingCount} entrada(s) e {outgoingCount} saida(s)",
+        "outOfProfileSuffix": " (fora do perfil)",
+        "show": "Exibir inspetor",
+        "subtitle": {
+          "noneSelected": "Selecione um no ou relacao para inspecionar.",
+          "graphEdge": "Leia a conexao da rede e ajuste o contexto tecnico.",
+          "flowEdge": "Revise a transicao antes de alterar sua leitura.",
+          "defaultEdge": "Ajuste os detalhes da conexao selecionada.",
+          "graphNode": "Entenda o papel do componente na rede antes de editar.",
+          "flowNode": "Revise o trecho do processo e depois refine os detalhes.",
+          "sitemap": "Revise a navegacao e a hierarquia deste item.",
+          "tree": "Revise o papel estrutural deste no.",
+          "erd": "Ajuste entidade, campos e relacoes com foco em consistencia.",
+          "timeline": "Revise o marco e a ligacao temporal deste item.",
+          "mindmap": "Ajuste o tema, contexto e conexoes relacionadas.",
+          "defaultNode": "Revise o contexto e os detalhes do no selecionado."
+        }
+      },
+      "audit": {
+        "ariaLabel": "Verificacao semantica",
+        "title": "Verificacao semantica",
+        "summary": "{total} item(ns), {errors} erro(s)",
+        "applyAllSafeFixes": "Corrigir tudo seguro",
+        "goToIssue": "Ir para",
+        "empty": "Nenhuma inconsistencia semantica detectada.",
+        "collapsedHint": "Abra para navegar pelas validacoes e focar os itens."
+      },
+      "graph": {
+        "readingTitle": "Leitura da rede",
+        "networkPosition": "Posicao na rede",
+        "edgeReadingTitle": "Leitura da conexao"
+      },
+      "layoutPolicy": {
+        "allowed": "Layout liberado",
+        "blocked": "Layout bloqueado",
+        "blockedDescription": "Este mapa foi congelado pelo Assistente. Reabra o fluxo de criacao para alterar a politica.",
+        "blockedTooltip": "O Assistente marcou este snapshot para nao reaplicar layout automaticamente."
+      },
+      "diagram": {
+        "current": "Diagrama atual: {diagramType}",
+        "pending": "Tipo de diagrama pendente"
+      },
+      "roles": {
+        "metaWorkspace": "Workspace",
+        "metaProject": "Projeto",
+        "treeRoot": "Raiz",
+        "treeNode": "No de hierarquia",
+        "hierarchyRoot": "No raiz",
+        "hierarchyNode": "No hierarquico",
+        "sitemapHome": "Pagina Home",
+        "sitemapSection": "Secao navegavel",
+        "mindmapRoot": "Tema central",
+        "mindmapBranch": "Ramificacao",
+        "mindmapReference": "Referencia",
+        "graphCore": "Nucleo da rede",
+        "graphTopic": "Componente conectado",
+        "graphSupporting": "Apoio arquitetural",
+        "timelineMilestone": "Marco temporal",
+        "erdEntity": "Entidade",
+        "erdComment": "Comentario ERD",
+        "undefined": "Sem papel definido"
+      },
+      "structureTips": {
+        "treeSitemapFocus": "Foco em pai, filhos, nivel e ordem.",
+        "treeSitemapCurrent": "Estrutura atual: {incomingCount} vinculo(s) acima e {outgoingCount} abaixo.",
+        "erd": "Foco em campos, chaves e cardinalidade.",
+        "mindmap": "Foco em ramificacoes e temas relacionados.",
+        "timeline": "Foco em marcos, dependencias e sequencia temporal.",
+        "default": "Foco em contexto e conexoes principais."
+      },
+      "semanticSeverity": {
+        "error": "Erro",
+        "warning": "Aviso",
+        "suggestion": "Sugestao",
+        "info": "Info"
+      },
+      "saveStatus": {
+        "error": "Falha ao salvar."
+      },
+      "relations": {
+        "incoming": "Entrada",
+        "outgoing": "Saida",
+        "graphIncoming": "Recebe de",
+        "graphOutgoing": "Envia para",
+        "graphSummary": "{incomingCount} conexao(oes) de entrada e {outgoingCount} de saida na rede.",
+        "flowSummary": "{incomingCount} passagem(ns) anteriores e {outgoingCount} seguintes.",
+        "openComponent": "Abrir componente",
+        "openRelatedNode": "Abrir relacionado",
+        "editConnection": "Editar conexao",
+        "emptyGraph": "Nenhuma conexao encontrada para este componente.",
+        "empty": "Nenhuma relacao encontrada para este item."
+      },
+      "nodeFields": {
+        "title": "Titulo",
+        "graphTitle": "Nome do componente",
+        "kind": "Tipo",
+        "graphKind": "Papel na rede",
+        "description": "Descricao",
+        "graphDescription": "Leitura arquitetural",
+        "descriptionPlaceholder": "Descreva este item em linguagem operacional.",
+        "graphDescriptionPlaceholder": "Descreva a responsabilidade tecnica, fronteira ou dependencia principal.",
+        "tags": "Tags",
+        "graphTags": "Marcadores arquiteturais",
+        "tagsPlaceholder": "Ex.: responsavel, prioridade, canal",
+        "graphTagsPlaceholder": "Ex.: core, adaptador, risco, integracao",
+        "tagsHelper": "Use tags curtas para contexto, grupo ou criticidade.",
+        "graphTagsHelper": "Use tags curtas para fronteira, dependencia, dominio ou risco.",
+        "contextTitle": "Contexto",
+        "graphContextTitle": "Leitura arquitetural"
+      },
+      "edgeFields": {
+        "label": "Rotulo",
+        "graphLabel": "Verbo da conexao",
+        "kind": "Tipo de ligacao",
+        "graphKind": "Semantica da conexao",
+        "source": "Origem",
+        "graphSource": "Componente de origem",
+        "target": "Destino",
+        "graphTarget": "Componente de destino"
+      },
+      "sections": {
+        "general": "Geral",
+        "details": "Detalhes",
+        "relations": "Relacoes",
+        "graphGeneral": "Leitura principal",
+        "graphDetails": "Contexto da rede",
+        "graphRelations": "Conectividade",
+        "graphEdgeGeneral": "Leitura da conexao"
+      },
+      "technical": {
+        "generalSection": "Geral",
+        "detailsSection": "Detalhes",
+        "advancedSection": "Avancado",
+        "node": {
+          "label": "Rotulo",
+          "rawKind": "Kind (raw)",
+          "dataJson": "Dados (JSON)"
+        },
+        "edge": {
+          "label": "Rotulo",
+          "rawKind": "Kind (raw)",
+          "dataJson": "Dados (JSON)"
+        },
+        "formatJson": "Formatar JSON",
+        "copyJson": "Copiar JSON",
+        "copyId": "Copiar ID",
+        "friendlyLabel": "Label amigavel: {label}",
+        "position": "Posicao",
+        "link": "Ligacao"
+      },
+      "metadata": {
+        "description": "Snapshot de trabalho do editor com salvamento incremental, layout e versoes.",
+        "visualMode": "Modo visual: {mode}",
+        "changeInAssistant": "Alterar no Assistente",
+        "layoutPolicy": "Politica de layout: {policy}",
+        "toggleOpen": "Ocultar metadados",
+        "toggleClosed": "Exibir metadados ({count} nos)",
+        "workingSnapshot": "Snapshot de trabalho",
+        "counts": "{pendingCount} pendencia(s), {nodeCount} no(s), {edgeCount} aresta(s)",
+        "lastSavedAt": "Ultimo salvamento: {time}",
+        "rendererMismatch": "O renderer visual nao corresponde ao tipo de diagrama persistido."
+      },
+      "prisma": {
+        "ariaLabel": "Importacao de Prisma",
+        "title": "Importar schema Prisma",
+        "description": "Use esta area para gerar entidades e relacoes a partir de um schema Prisma.",
+        "import": "Importar schema",
+        "importing": "Importando schema...",
+        "overwriteWarning": "A importacao adiciona e ajusta o snapshot atual. Revise antes de salvar uma nova versao.",
+        "toggleOpen": "Ocultar importacao Prisma",
+        "toggleClosed": "Exibir importacao Prisma",
+        "confirmImport": "Importar o schema Prisma e aplicar as mudancas no snapshot atual?",
+        "confirmImportDiscard": "Existem alteracoes pendentes. Importar o schema Prisma e substituir o contexto atual?",
+        "saved": "Schema Prisma importado no snapshot de trabalho.",
+        "synced": "Snapshot sincronizado apos a importacao do Prisma.",
+        "feedbackSuccess": "Schema Prisma importado com sucesso para o snapshot de trabalho.",
+        "feedbackSuccessWithCounts": "Schema Prisma importado com sucesso ({modelsCount} modelo(s), {relationsCount} relacao(oes), {scalarFieldsCount} campo(s) escalar(es)).",
+        "errors": {
+          "emptySchema": "Cole um schema Prisma antes de importar.",
+          "import": "Nao foi possivel importar o schema Prisma."
+        }
+      },
+      "versions": {
+        "ariaLabel": "Versoes do snapshot",
+        "title": "Versoes",
+        "description": "Compare, nomeie e restaure snapshots salvos do projeto.",
+        "toggleOpen": "Ocultar versoes",
+        "toggleClosed": "Exibir versoes ({count})",
+        "refresh": "Atualizar lista",
+        "refreshing": "Atualizando...",
+        "refreshSuccess": "{count} versao(oes) carregadas.",
+        "newVersionNameAria": "Nome da nova versao",
+        "newVersionNamePlaceholder": "Ex.: baseline antes da revisao",
+        "create": "Criar versao",
+        "creating": "Criando versao...",
+        "summaryTitle": "Resumo executivo",
+        "empty": "Nenhuma versao registrada ainda.",
+        "originLabel": "Origem: {origin}",
+        "localNameHint": "Nomes locais ajudam a identificar rapidamente uma versao no seu navegador.",
+        "localNameLabel": "Nome local",
+        "localNamePlaceholder": "Ex.: versao aprovada pelo time",
+        "localNameDescription": "Esse nome fica apenas no seu navegador para consulta rapida.",
+        "saveName": "Salvar nome",
+        "localNameSaved": "Nome local salvo.",
+        "localNameRemoved": "Nome local removido.",
+        "unnamed": "Sem nome",
+        "compare": "Comparar",
+        "comparing": "Comparando...",
+        "restore": "Restaurar",
+        "restoring": "Restaurando...",
+        "confirmRestore": "Restaurar a versao selecionada no snapshot de trabalho?",
+        "confirmRestoreDiscard": "Existem alteracoes pendentes. Restaurar esta versao e descartar o que nao foi salvo?",
+        "restoreSaved": "Versao restaurada no snapshot de trabalho.",
+        "restoreSynced": "Snapshot sincronizado com a versao restaurada.",
+        "changedBreakdown": "{renamed} renomeado(s), {kindChanged} tipo(s) alterado(s), {payloadChanged} payload(s) alterado(s).",
+        "topChangesTitle": "Principais mudancas",
+        "cards": {
+          "nodesAdded": "Nos adicionados",
+          "nodesRemoved": "Nos removidos",
+          "nodesChanged": "Nos alterados",
+          "edgesChanged": "Arestas alteradas"
+        },
+        "origin": {
+          "manual": "Manual"
+        },
+        "diff": {
+          "noChanges": "Sem alteracoes entre a versao selecionada e o snapshot de trabalho.",
+          "nodesAdded": "{count} no(s) adicionados",
+          "nodesRemoved": "{count} no(s) removidos",
+          "nodesChanged": "{count} no(s) alterados",
+          "edgesAdded": "{count} aresta(s) adicionadas",
+          "edgesRemoved": "{count} aresta(s) removidas",
+          "edgesChanged": "{count} aresta(s) alteradas",
+          "viewportChanged": "viewport alterado",
+          "summary": "Resumo: {parts}."
+        },
+        "errors": {
+          "saveBeforeCreate": "Salve ou conclua o salvamento pendente antes de criar uma versao.",
+          "create": "Nao foi possivel criar a versao.",
+          "refresh": "Nao foi possivel atualizar a lista de versoes.",
+          "compare": "Nao foi possivel comparar a versao selecionada.",
+          "restore": "Nao foi possivel restaurar a versao selecionada.",
+          "load": "Nao foi possivel carregar as versoes do projeto."
+        },
+        "createSuccess": "Versao criada com sucesso.",
+        "restoreCompleted": "Snapshot de trabalho restaurado com sucesso."
+      },
+      "erd": {
+        "badges": {
+          "noPk": "Sem PK",
+          "fkPending": "FK pendente",
+          "nnSuggestsAssociative": "N:N sugere associativa"
+        },
+        "exportPreviewSuccess": "Preview de exportacao ERD gerado com sucesso.",
+        "exportBlockedStrict": "A exportacao ERD foi bloqueada pelo modo estrito da politica.",
+        "exportBlockedStrictWithSafeFixes": "A exportacao ERD foi bloqueada. Aplique as correcoes seguras antes de exportar.",
+        "entity": {
+          "badge": "Entidade (ERD)",
+          "nameLabel": "Nome da entidade",
+          "tableNameLabel": "Nome da tabela (opcional)",
+          "tableNamePlaceholder": "Ex.: users",
+          "descriptionLabel": "Descricao (opcional)",
+          "grid": {
+            "name": "Nome",
+            "type": "Tipo",
+            "flags": "Flags",
+            "actions": "Acoes"
+          },
+          "addField": "+ Campo",
+          "keyboardHint": "Enter cria novo campo. Atalhos por linha: P (PK), F (FK), U (UQ), N (NOT_NULL)."
+        },
+        "relation": {
+          "badge": "Relacao (ERD)",
+          "sections": {
+            "general": "Geral",
+            "cardinality": "Cardinalidade",
+            "roles": "Papeis",
+            "materialization": "Materializacao",
+            "referentialIntegrity": "Integridade referencial",
+            "diagnostics": "Diagnosticos"
+          },
+          "nameLabel": "Nome da relacao",
+          "optionalPlaceholder": "Opcional",
+          "descriptionLabel": "Descricao",
+          "source": "Origem",
+          "target": "Destino",
+          "swapDirection": "Trocar direcao",
+          "minSource": "Min origem",
+          "maxSource": "Max origem",
+          "minTarget": "Min destino",
+          "maxTarget": "Max destino",
+          "optionalSource": "Origem opcional",
+          "optionalTarget": "Destino opcional",
+          "roleFallback": "relaciona",
+          "currentState": "Estado atual:",
+          "dependentSide": "Lado dependente",
+          "fkField": "Campo FK",
+          "createNewField": "Criar novo campo",
+          "uniqueOnFk": "Aplicar UNIQUE no FK",
+          "materializeFk": "Materializar como FK",
+          "applyUnique": "Aplicar UNIQUE (1:1)",
+          "convertAssociative": "Converter em associativa",
+          "markConceptual": "Marcar como conceitual",
+          "defaultOption": "(padrao)",
+          "diagnosticsEmpty": "Sem diagnosticos para esta relacao.",
+          "remove": "Remover relacao",
+          "materialization": {
+            "fk": "FK materializada",
+            "associative": "Tabela associativa",
+            "conceptual": "Conceitual"
+          }
+        }
+      },
+      "errors": {
+        "applyChange": "Nao foi possivel aplicar a alteracao.",
+        "saveChanges": "Nao foi possivel salvar as alteracoes pendentes.",
+        "saveSnapshot": "Nao foi possivel salvar o snapshot de trabalho.",
+        "connectionNodesNotFound": "Os nos envolvidos na conexao nao foram encontrados no canvas.",
+        "createTransitionOnServer": "Nao foi possivel criar a transicao no servidor.",
+        "createRelationOnServer": "Nao foi possivel criar a relacao no servidor.",
+        "invalidConnectionForDiagram": "A conexao selecionada nao e permitida para este tipo de diagrama.",
+        "serverSemanticAudit": "Nao foi possivel executar a verificacao semantica no servidor.",
+        "copySelection": "Nao foi possivel copiar a selecao.",
+        "pasteSelection": "Nao foi possivel colar a selecao.",
+        "cutSelection": "Nao foi possivel recortar a selecao.",
+        "duplicateSelection": "Nao foi possivel duplicar a selecao.",
+        "selectErdEntityToEdit": "Selecione uma entidade ERD para editar os campos e propriedades.",
+        "selectErdEntityToAddField": "Selecione uma entidade ERD antes de adicionar um campo.",
+        "applySuggestedFix": "Nao foi possivel aplicar a correcao sugerida.",
+        "applySafeFixes": "Nao foi possivel aplicar as correcoes seguras.",
+        "updateErdValidation": "Nao foi possivel atualizar o nivel de validacao ERD.",
+        "erdExportOnly": "A exportacao preview esta disponivel apenas para diagramas ERD.",
+        "erdExportPreview": "Nao foi possivel gerar o preview de exportacao ERD.",
+        "quickRelationEntityNotFound": "Nao foi possivel localizar as entidades selecionadas para a relacao rapida.",
+        "createQuickRelation": "Nao foi possivel criar a relacao rapida.",
+        "finishPendingSaveBeforeRelation": "Conclua o salvamento pendente antes de criar ou alterar relacoes.",
+        "semanticOverrideReasonRequired": "Informe uma justificativa com ao menos {min} caracteres para aplicar o override.",
+        "applySemanticOverride": "Nao foi possivel aplicar o override tecnico.",
+        "clipboardUnavailable": "A API de clipboard nao esta disponivel neste navegador/contexto.",
+        "pasteBlockedByPolicy": "A colagem foi bloqueada pelas regras semanticas ou de politica do diagrama.",
+        "validatePasteWithBackend": "Nao foi possivel validar a colagem com o backend.",
+        "duplicateCurrentSelection": "Nao foi possivel duplicar o item selecionado.",
+        "invalidClipboardFragment": "O conteudo do clipboard nao contem um fragmento valido do MapIA.",
+        "layoutBlockedByAssistant": "O Assistente bloqueou a reaplicacao de layout deste snapshot.",
+        "organizeRequiresSupportedType": "A organizacao automatica requer um tipo de diagrama com layout suportado.",
+        "reapplyLayoutRequiresSupportedType": "Nao foi possivel reaplicar o layout porque o tipo do diagrama nao e suportado.",
+        "invalidJsonFormat": "JSON invalido. Corrija a estrutura antes de continuar.",
+        "copyNodeId": "Nao foi possivel copiar o ID do no.",
+        "copyEdgeId": "Nao foi possivel copiar o ID da aresta.",
+        "copyJson": "Nao foi possivel copiar o JSON.",
+        "finishPendingSaveBeforeApply": "Conclua o salvamento pendente antes de aplicar estas alteracoes.",
+        "requiredTitle": "Titulo obrigatorio.",
+        "renameNode": "Nao foi possivel renomear o no.",
+        "insertNode": "Nao foi possivel inserir o novo no.",
+        "applyCommand": "Nao foi possivel aplicar o comando no backend.",
+        "applyCommands": "Nao foi possivel aplicar os comandos no backend.",
+        "loadSnapshot": "Nao foi possivel carregar o snapshot de trabalho.",
+        "loadSemanticPolicy": "Nao foi possivel carregar a politica semantica.",
+        "updateSemanticPolicy": "Nao foi possivel atualizar a politica semantica.",
+        "validateSemanticDraft": "Nao foi possivel validar o draft no servidor.",
+        "updateRelationOnServer": "Nao foi possivel atualizar a relacao no servidor.",
+        "updateNodeOnServer": "Nao foi possivel atualizar o no no servidor."
+      },
+      "messages": {
+        "transitionRemoved": "Transicao removida.",
+        "relationRemoved": "Relacao removida.",
+        "transitionAutoAdjusted": "Transicao ajustada automaticamente para {nextKind}.",
+        "relationAutoAdjusted": "Relacao ajustada automaticamente para {nextKind}.",
+        "auditCompleted": "Verificacao concluida com {count} item(ns).",
+        "titleUpdated": "Titulo atualizado.",
+        "fieldAdded": "Campo {fieldName} adicionado em {entityName}.",
+        "connectionCancelled": "Criacao de conexao cancelada.",
+        "fixApplied": "{applied} de {total} ajuste(s) aplicado(s).",
+        "noSafeFixes": "Nao ha correcoes seguras disponiveis.",
+        "safeFixesApplied": "{applied} de {total} correcao(oes) segura(s) aplicada(s).",
+        "erdValidationLevelUpdated": "Nivel de validacao ERD atualizado para {level}.",
+        "relationDirectionSwapped": "Direcao da relacao invertida.",
+        "relationMaterializedExistingField": "Relacao materializada usando um campo existente.",
+        "quickRelationCreatedSuggestAssociative": "Relacao N:N criada. Considere materializar com tabela associativa.",
+        "quickRelationConvertedAssociative": "Relacao N:N criada e convertida para tabela associativa.",
+        "quickRelationSuggestMaterialize": "Relacao criada. Considere materializar FK em {dependentLabel} referenciando {referencedLabel}.",
+        "quickRelationMaterializedAutomatically": "Relacao criada e materializada automaticamente.",
+        "kindChangeCancelled": "Troca de tipo cancelada.",
+        "nodeUpdatedAutosaveQueued": "Atualizacao aplicada. O salvamento automatico foi enfileirado.",
+        "kindAppliedWithRepair": "Tipo atualizado com {count} reparo(s) aplicado(s).",
+        "kindAppliedWithRemoval": "Tipo atualizado com {count} remocao(oes) aplicada(s).",
+        "selectionCopied": "Selecao copiada.",
+        "selectionCut": "Selecao recortada.",
+        "duplicateCompleted": "Duplicacao concluida: {nodes} no(s), {edges} aresta(s), {skippedEdges} aresta(s) ignorada(s).",
+        "pasteCompleted": "Colagem concluida: {nodes} no(s), {edges} aresta(s), {skippedEdges} aresta(s) ignorada(s).",
+        "diagramAlreadyOrganized": "O diagrama ja estava organizado para o layout atual.",
+        "organizeApplied": "Organizacao aplicada em {count} no(s).",
+        "layoutAlreadyConsistent": "O layout atual ja esta consistente com as regras configuradas.",
+        "layoutReapplied": "Layout reaplicado em {count} no(s).",
+        "layoutReappliedGeneric": "Layout reaplicado no snapshot atual.",
+        "jsonFormatted": "JSON formatado.",
+        "idCopied": "ID copiado.",
+        "jsonCopied": "JSON copiado.",
+        "nodeUpdatedSynced": "No atualizado e sincronizado.",
+        "nodeUpdatedWithOverride": "No atualizado com override tecnico registrado.",
+        "edgeUpdatedSynced": "Conexao atualizada e sincronizada.",
+        "edgeUpdatedWithOverride": "Conexao atualizada com override tecnico registrado."
+      },
+      "sync": {
+        "syncing": "Sincronizando...",
+        "initialIgnored": "Snapshot remoto detectado, mas a sincronizacao inicial foi ignorada por haver mudancas locais pendentes.",
+        "snapshotSynced": "Snapshot sincronizado com o backend.",
+        "errors": {
+          "snapshot": "Nao foi possivel sincronizar o snapshot do editor."
+        }
+      },
+      "emptyState": {
+        "title": "Nenhum item selecionado no canvas.",
+        "summary": "Selecione um no ou aresta para revisar titulos, relacoes e detalhes.",
+        "guidance": "Para iniciar ajustes: selecione um elemento no diagrama ou adicione um novo no na barra superior.",
+        "nodes": "Nos",
+        "edges": "Arestas",
+        "viewport": "Viewport"
+      },
+      "edgeActions": {
+        "remove": "Remover"
+      },
+      "applyChanges": "Aplicar alteracoes",
+      "revert": "Reverter"
     }
   }
 }

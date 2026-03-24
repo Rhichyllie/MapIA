@@ -6,6 +6,7 @@ import {
 } from "@/src/server/app/api-response";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { withServerTelemetrySpan } from "@/src/server/observability/server-telemetry";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -25,26 +26,41 @@ export async function GET(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
+    return await withServerTelemetrySpan(
+      "semantic.policy.route.read",
+      {
+        attributes: {
+          "semantic.route": "GET /api/projects/[projectId]/semantic/policy",
+        },
+      },
+      async (span) => {
+        const auth = await getApiSessionIdentity();
 
-    if (!auth) {
-      return unauthorizedResponse();
-    }
+        if (!auth) {
+          span.setAttribute("semantic.authenticated", false);
+          return unauthorizedResponse();
+        }
 
-    const params = ParamsSchema.parse(await context.params);
-    const { projects, semantics } = createServerUseCases();
+        span.setAttribute("semantic.authenticated", true);
+        const params = ParamsSchema.parse(await context.params);
+        const { projects, semantics } = createServerUseCases();
 
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
-    });
+        span.setAttribute("semantic.project_id", params.projectId);
 
-    const policy = await semantics.getOrCreatePolicy.execute({
-      projectId: params.projectId,
-      actorIdentity: auth.identity,
-    });
+        await projects.getOwnedProject.execute({
+          ownerIdentity: auth.identity,
+          projectId: params.projectId,
+        });
 
-    return apiSuccessResponse({ policy });
+        const policy = await semantics.getOrCreatePolicy.execute({
+          projectId: params.projectId,
+          actorIdentity: auth.identity,
+        });
+
+        span.setAttribute("semantic.policy.strict_enabled", policy.strictEnabled);
+        return apiSuccessResponse({ policy });
+      },
+    );
   } catch (error) {
     return apiErrorResponse(error);
   }

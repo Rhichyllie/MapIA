@@ -7,6 +7,7 @@ import {
   getOrCreateServerOpenTelemetryRuntime,
   shutdownServerOpenTelemetryRuntime,
 } from "./otel-runtime";
+import { __resetTelemetryOperationalLoggerForTests } from "./telemetry-operational-logger";
 
 type FakeSdk = {
   start: ReturnType<typeof vi.fn>;
@@ -95,6 +96,7 @@ function createRuntimeDeps(overrides?: {
 
 describe("createOpenTelemetryRuntime", () => {
   it("fica desabilitado quando OTEL_RUNTIME_ENABLED=false e start eh idempotente", () => {
+    __resetTelemetryOperationalLoggerForTests();
     const warnings: Array<{ code: string }> = [];
     const { deps } = createRuntimeDeps();
     const runtime = createOpenTelemetryRuntime({
@@ -130,7 +132,32 @@ describe("createOpenTelemetryRuntime", () => {
     expect(runtime.debugSnapshot().startCallCount).toBe(2);
   });
 
+  it("emite log estruturado telemetry_bootstrap_disabled com motivo da decisao", () => {
+    __resetTelemetryOperationalLoggerForTests();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { deps } = createRuntimeDeps();
+    const runtime = createOpenTelemetryRuntime({
+      env: {
+        OTEL_RUNTIME_ENABLED: "true",
+      },
+      dependencies: deps as never,
+      onWarning: vi.fn(),
+    });
+
+    runtime.start();
+
+    const combinedOutput = warnSpy.mock.calls
+      .flat()
+      .map((value) => String(value))
+      .join(" ");
+
+    expect(combinedOutput).toContain("telemetry_bootstrap_disabled");
+    expect(combinedOutput).toContain("missing_traces_endpoint");
+    expect(combinedOutput).toContain("fallback-noop");
+  });
+
   it("inicializa runtime com exporter/reader reais via deps e shutdown eh idempotente", async () => {
+    __resetTelemetryOperationalLoggerForTests();
     const { deps, sdk } = createRuntimeDeps();
     const runtime = createOpenTelemetryRuntime({
       env: {
@@ -176,6 +203,31 @@ describe("createOpenTelemetryRuntime", () => {
       sdkCreated: false,
       shutdownInFlight: false,
     });
+  });
+
+  it("emite log estruturado telemetry_bootstrap_enabled quando o runtime sobe", () => {
+    __resetTelemetryOperationalLoggerForTests();
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const { deps } = createRuntimeDeps();
+    const runtime = createOpenTelemetryRuntime({
+      env: {
+        OTEL_RUNTIME_ENABLED: "true",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318",
+      },
+      dependencies: deps as never,
+      onWarning: vi.fn(),
+    });
+
+    runtime.start();
+
+    const combinedOutput = infoSpy.mock.calls
+      .flat()
+      .map((value) => String(value))
+      .join(" ");
+
+    expect(combinedOutput).toContain("telemetry_bootstrap_enabled");
+    expect(combinedOutput).toContain("started");
+    expect(combinedOutput).toContain("active");
   });
 
   it("permite desabilitar instrumentacao HTTP por env sem quebrar bootstrap", () => {

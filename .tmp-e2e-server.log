@@ -1,0 +1,169 @@
+
+> mapia@0.1.0 dev:e2e C:\Projetos\MapIA
+> pnpm db:check:wait && pnpm prisma generate && next dev --webpack
+
+
+> mapia@0.1.0 db:check:wait C:\Projetos\MapIA
+> tsx scripts/db-check.ts --wait=30000
+
+Prisma db:check OK -> 127.0.0.1:56432/mapia (SELECT 1 = 1; attempts=1; elapsed=79ms)
+Loaded Prisma config from prisma.config.ts.
+
+Prisma config detected, skipping environment variable loading.
+Prisma schema loaded from prisma\schema.prisma
+
+✔ Generated Prisma Client (v6.19.2) to .\node_modules\.pnpm\@prisma+client@6.19.2_prisma@6.19.2_typescript@5.9.3__typescript@5.9.3\node_modules\@prisma\client in 290ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Interested in query caching in just a few lines of code? Try Accelerate today! https://pris.ly/tip-3-accelerate
+
+▲ Next.js 16.1.6 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.136:3000
+- Environments: .env
+
+✓ Starting...
+○ Compiling /instrumentation ...
+⨯ ./node_modules/.pnpm/@grpc+grpc-js@1.14.3/node_modules/@grpc/grpc-js/build/src/call.js:22:1
+Module not found: Can't resolve 'stream'
+  20 | exports.callErrorFromStatus = callErrorFromStatus;
+  21 | const events_1 = require("events");
+> 22 | const stream_1 = require("stream");
+     | ^
+  23 | const constants_1 = require("./constants");
+  24 | /**
+  25 |  * Construct a ServiceError from a StatusObject. This function exists primarily
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./node_modules/.pnpm/@grpc+grpc-js@1.14.3/node_modules/@grpc/grpc-js/build/src/client.js
+./node_modules/.pnpm/@grpc+grpc-js@1.14.3/node_modules/@grpc/grpc-js/build/src/index.js
+./node_modules/.pnpm/@opentelemetry+otlp-grpc-exporter-base@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/otlp-grpc-exporter-base/build/src/grpc-exporter-transport.js
+./node_modules/.pnpm/@opentelemetry+otlp-grpc-exporter-base@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/otlp-grpc-exporter-base/build/src/otlp-grpc-export-delegate.js
+./node_modules/.pnpm/@opentelemetry+otlp-grpc-exporter-base@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/otlp-grpc-exporter-base/build/src/index.js
+./node_modules/.pnpm/@opentelemetry+exporter-logs-otlp-grpc@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/exporter-logs-otlp-grpc/build/src/OTLPLogExporter.js
+./node_modules/.pnpm/@opentelemetry+exporter-logs-otlp-grpc@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/exporter-logs-otlp-grpc/build/src/index.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./instrumentation.node.ts
+./instrumentation.ts
+[telemetry] telemetry_bootstrap_enabled {"mode":"active","reason":"started","state":"started","enabled":true,"enabledSourceKey":"OTEL_RUNTIME_ENABLED","enabledExplicit":true,"serviceName":"mapia","serviceVersion":"0.1.0","deploymentEnvironment":"development","instrumentation":{"httpEnabled":true,"prismaEnabled":true,"prismaSlowQueryThresholdMs":250},"traces":{"endpointConfigured":true,"timeoutMillis":10000,"headersCount":0,"sampler":{"kind":"always_on"},"batch":{"scheduleDelayMillis":5000,"exportTimeoutMillis":30000,"maxQueueSize":2048,"maxExportBatchSize":512}},"metrics":{"enabled":false,"endpointConfigured":true,"timeoutMillis":10000,"exportIntervalMillis":60000,"exportTimeoutMillis":30000,"headersCount":0,"viewsEnabled":true}}
+✓ Ready in 13.8s
+⚠ ./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/http.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./instrumentation.node.ts
+⚠ ./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/http.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./instrumentation.node.ts
+⚠ ./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./instrumentation.node.ts
+
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/start.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./src/server/observability/server-telemetry.ts
+./src/server/auth/session.ts
+./app/[locale]/login/page.tsx
+⚠ ./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/sdk.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./instrumentation.node.ts
+
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/start.js
+./node_modules/.pnpm/@opentelemetry+sdk-node@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/sdk-node/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./src/server/observability/server-telemetry.ts
+./src/server/auth/session.ts
+./app/[locale]/login/page.tsx
+ GET /login 500 in 18.0s (proxy.ts: 413ms)
+⚠ ./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/http.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./instrumentation.node.ts
+
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+Critical dependency: require function is used in a way in which dependencies cannot be statically extracted
+
+Import trace for requested module:
+./node_modules/.pnpm/require-in-the-middle@8.0.1/node_modules/require-in-the-middle/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/instrumentation.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/node/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/platform/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation/build/esm/index.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/http.js
+./node_modules/.pnpm/@opentelemetry+instrumentation-http@0.212.0_@opentelemetry+api@1.9.0/node_modules/@opentelemetry/instrumentation-http/build/src/index.js
+./src/server/observability/otel-runtime.ts
+./src/server/observability/server-telemetry.ts
+./src/server/auth/session.ts
+./app/[locale]/login/page.tsx
+[?25h

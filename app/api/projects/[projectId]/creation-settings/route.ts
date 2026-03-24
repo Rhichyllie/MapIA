@@ -3,7 +3,6 @@ import { AppError } from "@/src/lib/app-error";
 import {
   AssistantCreationSettingsSchema,
   AssistantDraftSchema,
-  getSourceStatusPresentation,
   normalizeSourceStatusCode,
   redactAssistantCreationSettings,
   redactAssistantDraft,
@@ -19,7 +18,7 @@ import {
   recordCreationSettingsAliasPut,
   recordCreationSourceStatusChanged,
   runCreationTelemetryFanout,
-} from "@/src/server/observability";
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
@@ -40,7 +39,7 @@ function buildSourceStatusMeta(status?: string) {
     return null;
   }
 
-  return getSourceStatusPresentation(normalized);
+  return { statusCode: normalized };
 }
 
 export async function GET(

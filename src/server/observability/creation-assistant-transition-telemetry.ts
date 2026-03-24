@@ -28,6 +28,7 @@ import {
   createCreationTelemetryTableReadinessProbe,
   type CreationTransitionTelemetryStore,
 } from "./creation-transition-store";
+import { logTelemetryOperationalEvent } from "./telemetry-operational-logger";
 
 type RequestTelemetryContext = {
   requestId?: string;
@@ -47,9 +48,27 @@ type EmitContext = RequestTelemetryContext & {
 type RuntimeTelemetryConfig = {
   enabled: boolean;
   sinkTimeoutMs: number;
+  sinkFallbackCooldownMs: number;
   gateEvaluationIntervalMs: number;
   logThrottleMs: number;
 };
+
+type CreationTelemetrySinkFallbackReason =
+  | "timeout"
+  | "error"
+  | "sink_unavailable"
+  | "missing_table";
+
+type CreationTelemetrySinkState =
+  | {
+      mode: "ready";
+    }
+  | {
+      mode: "fallback-noop";
+      reason: CreationTelemetrySinkFallbackReason;
+      activatedAtMs: number;
+      untilMs: number;
+    };
 type CreationTelemetryEmitStatus =
   | "stored"
   | "deduped"
@@ -230,14 +249,19 @@ function eventDayKey(dateIso: string) {
 const disabledTelemetryStore = new NoopCreationTransitionTelemetryStore(
   "disabled",
 );
+const fallbackTelemetryStore = new NoopCreationTransitionTelemetryStore(
+  "sink_unavailable",
+);
 let telemetryStore: CreationTransitionTelemetryStore =
   createDefaultCreationTransitionTelemetryStore();
 let telemetryRuntimeConfig: Partial<RuntimeTelemetryConfig> = {};
+let telemetrySinkState: CreationTelemetrySinkState = { mode: "ready" };
 let gateEvaluationInFlight: Promise<void> | null = null;
 let lastGateEvaluationAtMs = 0;
 let gateEvaluationSignalVersion = 0;
 let inFlightGateEvaluationSignalVersion = 0;
 let pendingGateEvaluationSignalVersion = 0;
+const backgroundTelemetryOperations = new Set<Promise<unknown>>();
 const logThrottleBySignature = new Map<string, number>();
 
 function getTelemetryRuntimeConfig(): RuntimeTelemetryConfig {
@@ -248,6 +272,9 @@ function getTelemetryRuntimeConfig(): RuntimeTelemetryConfig {
       env.CREATION_TRANSITION_TELEMETRY_ENABLED,
     sinkTimeoutMs:
       telemetryRuntimeConfig.sinkTimeoutMs ?? env.TELEMETRY_SINK_TIMEOUT_MS,
+    sinkFallbackCooldownMs:
+      telemetryRuntimeConfig.sinkFallbackCooldownMs ??
+      env.TELEMETRY_SINK_FALLBACK_COOLDOWN_MS,
     gateEvaluationIntervalMs:
       telemetryRuntimeConfig.gateEvaluationIntervalMs ??
       env.TELEMETRY_GATE_EVALUATION_INTERVAL_MS,
@@ -257,21 +284,111 @@ function getTelemetryRuntimeConfig(): RuntimeTelemetryConfig {
   };
 }
 
+function getResilientCreationTransitionTelemetryStore() {
+  return telemetryStore instanceof ResilientCreationTransitionTelemetryStore
+    ? telemetryStore
+    : undefined;
+}
+
+function getActiveTelemetrySinkFallbackState(nowMs = Date.now()) {
+  if (telemetrySinkState.mode !== "fallback-noop") {
+    return null;
+  }
+
+  if (nowMs >= telemetrySinkState.untilMs) {
+    telemetrySinkState = { mode: "ready" };
+    return null;
+  }
+
+  return telemetrySinkState;
+}
+
+function activateTelemetrySinkFallback(input: {
+  reason: CreationTelemetrySinkFallbackReason;
+  eventName?: string;
+  durationMs?: number;
+  errorMessage?: string;
+}) {
+  const runtimeConfig = getTelemetryRuntimeConfig();
+  const nowMs = Date.now();
+  const untilMs = nowMs + runtimeConfig.sinkFallbackCooldownMs;
+
+  telemetrySinkState = {
+    mode: "fallback-noop",
+    reason: input.reason,
+    activatedAtMs: nowMs,
+    untilMs,
+  };
+
+  logTelemetryOperationalEvent({
+    event: "telemetry_sink_fallback_active",
+    level: "warn",
+    dedupeKey: `creation-telemetry-fallback:${input.reason}`,
+    throttleMs: Math.max(
+      runtimeConfig.logThrottleMs,
+      runtimeConfig.sinkFallbackCooldownMs,
+    ),
+    payload: {
+      mode: "fallback-noop",
+      reason: input.reason,
+      cooldownMs: runtimeConfig.sinkFallbackCooldownMs,
+      activeUntil: new Date(untilMs).toISOString(),
+      ...(input.eventName ? { eventName: input.eventName } : {}),
+      ...(typeof input.durationMs === "number"
+        ? { durationMs: Number(input.durationMs.toFixed(2)) }
+        : {}),
+      ...(input.errorMessage ? { errorMessage: input.errorMessage } : {}),
+    },
+  });
+}
+
+function logTelemetrySinkReady(input?: {
+  eventName?: string;
+  restoredFromFallback?: boolean;
+}) {
+  const runtimeConfig = getTelemetryRuntimeConfig();
+  const degradedState =
+    getResilientCreationTransitionTelemetryStore()?.getDegradedState() ?? null;
+
+  telemetrySinkState = { mode: "ready" };
+  logTelemetryOperationalEvent({
+    event: "telemetry_sink_ready",
+    level: "info",
+    dedupeKey: `creation-telemetry-ready:${input?.restoredFromFallback ? "restored" : "steady"}`,
+    throttleMs: runtimeConfig.logThrottleMs,
+    payload: {
+      mode: "active",
+      fallbackActive: false,
+      degradedByStoreProbe: degradedState !== null,
+      ...(input?.eventName ? { eventName: input.eventName } : {}),
+      ...(input?.restoredFromFallback
+        ? { restoredFromFallback: input.restoredFromFallback }
+        : {}),
+    },
+  });
+}
+
 function createDefaultCreationTransitionTelemetryStore(): CreationTransitionTelemetryStore {
   return new ResilientCreationTransitionTelemetryStore({
     primary: new PrismaCreationTransitionTelemetryStore(
       prisma.creationTelemetryEvent,
       prisma,
     ),
-    fallback: new NoopCreationTransitionTelemetryStore("sink_unavailable"),
+    fallback: fallbackTelemetryStore,
     probePrimaryReadiness: createCreationTelemetryTableReadinessProbe(prisma),
     onDegraded: (state) => {
-      logCreationTransitionTelemetryIssue({
+      activateTelemetrySinkFallback({
+        reason: "missing_table",
+        errorMessage: state.tableName,
+      });
+      logTelemetryOperationalEvent({
+        event: "telemetry_export_skipped",
         level: "warn",
-        signature: `store-degraded:${state.reason}:${state.tableName}`,
+        dedupeKey: `creation-telemetry-store-degraded:${state.reason}:${state.tableName}`,
+        throttleMs: getTelemetryRuntimeConfig().logThrottleMs,
         payload: {
-          subsystem: "creation-transition-telemetry",
-          error: "telemetry-sink-unavailable",
+          mode: "fallback-noop",
+          eventName: "creation_transition_store_probe",
           reason: state.reason,
           fallbackMode: state.fallbackMode,
           tableName: state.tableName,
@@ -282,9 +399,14 @@ function createDefaultCreationTransitionTelemetryStore(): CreationTransitionTele
 }
 
 function getCreationTransitionTelemetryStore(): CreationTransitionTelemetryStore {
-  return getTelemetryRuntimeConfig().enabled
-    ? telemetryStore
-    : disabledTelemetryStore;
+  const runtimeConfig = getTelemetryRuntimeConfig();
+  if (!runtimeConfig.enabled) {
+    return disabledTelemetryStore;
+  }
+
+  return getActiveTelemetrySinkFallbackState()
+    ? fallbackTelemetryStore
+    : telemetryStore;
 }
 
 function pruneLogThrottleMap(nowMs: number, throttleMs: number) {
@@ -386,17 +508,81 @@ async function runWithTimeout<T>(input: {
   });
 }
 
+function trackBackgroundTelemetryOperation(operation: Promise<unknown>) {
+  backgroundTelemetryOperations.add(operation);
+  void operation.finally(() => {
+    backgroundTelemetryOperations.delete(operation);
+  });
+}
+
+export function scheduleCreationTelemetryOperation(
+  operation: () => Promise<unknown>,
+) {
+  queueMicrotask(() => {
+    const task = Promise.resolve()
+      .then(operation)
+      .catch((error) => {
+        const errorMessage =
+          error instanceof Error ? error.message : "erro-telemetria-background";
+        logCreationTransitionTelemetryIssue({
+          level: "error",
+          signature: `background-operation:${errorMessage}`,
+          payload: {
+            subsystem: "creation-transition-telemetry",
+            error: errorMessage,
+          },
+        });
+      });
+
+    trackBackgroundTelemetryOperation(task);
+  });
+}
+
 async function emitEvent<TEventName extends CreationTransitionEventName>(input: {
   eventName: TEventName;
   payload: CreationTransitionPayloadByEventName[TEventName];
   context?: EmitContext;
 }): Promise<CreationTelemetryEmitStatus> {
   const runtimeConfig = getTelemetryRuntimeConfig();
+  const env = getServerEnv();
   if (!runtimeConfig.enabled) {
+    logTelemetryOperationalEvent({
+      event: "telemetry_export_skipped",
+      level: "info",
+      dedupeKey: `creation-telemetry-disabled:${input.eventName}`,
+      throttleMs: runtimeConfig.logThrottleMs,
+      payload: {
+        mode: "disabled",
+        eventName: input.eventName,
+        reason: "telemetry_disabled",
+      },
+    });
     return "disabled";
   }
 
-  const env = getServerEnv();
+  const activeFallback = getActiveTelemetrySinkFallbackState();
+  if (activeFallback) {
+    recordTelemetryEmitDropped({
+      eventName: input.eventName,
+      environment: env.NODE_ENV,
+      releaseVersion: env.APP_RELEASE_VERSION,
+      reason: "sink_unavailable",
+    });
+    logTelemetryOperationalEvent({
+      event: "telemetry_export_skipped",
+      level: "warn",
+      dedupeKey: `creation-telemetry-fallback-skip:${activeFallback.reason}:${input.eventName}`,
+      throttleMs: runtimeConfig.logThrottleMs,
+      payload: {
+        mode: "fallback-noop",
+        eventName: input.eventName,
+        reason: activeFallback.reason,
+        activeUntil: new Date(activeFallback.untilMs).toISOString(),
+      },
+    });
+    return "skipped";
+  }
+
   const requestId = input.context?.requestId?.trim() || randomUUID();
   const correlationId = input.context?.correlationId?.trim() || requestId;
   const contract = CREATION_TRANSITION_EVENT_CONTRACT[input.eventName];
@@ -453,6 +639,23 @@ async function emitEvent<TEventName extends CreationTransitionEventName>(input: 
         releaseVersion: env.APP_RELEASE_VERSION,
         reason: "timeout",
       });
+      logTelemetryOperationalEvent({
+        event: "telemetry_sink_timeout",
+        level: "warn",
+        dedupeKey: `creation-telemetry-timeout:${input.eventName}`,
+        throttleMs: runtimeConfig.logThrottleMs,
+        payload: {
+          mode: "active",
+          eventName: input.eventName,
+          timeoutMs: runtimeConfig.sinkTimeoutMs,
+          durationMs: Number(outcome.durationMs.toFixed(2)),
+        },
+      });
+      activateTelemetrySinkFallback({
+        reason: "timeout",
+        eventName: input.eventName,
+        durationMs: outcome.durationMs,
+      });
       logCreationTransitionTelemetryIssue({
         level: "error",
         signature: `timeout:${input.eventName}`,
@@ -474,6 +677,12 @@ async function emitEvent<TEventName extends CreationTransitionEventName>(input: 
         outcome.error instanceof Error
           ? outcome.error.message
           : "erro-desconhecido";
+      activateTelemetrySinkFallback({
+        reason: "error",
+        eventName: input.eventName,
+        durationMs: outcome.durationMs,
+        errorMessage,
+      });
       logCreationTransitionTelemetryIssue({
         level: "error",
         signature: `error:${input.eventName}:${errorMessage}`,
@@ -503,6 +712,23 @@ async function emitEvent<TEventName extends CreationTransitionEventName>(input: 
         releaseVersion: env.APP_RELEASE_VERSION,
         reason: result.reason,
       });
+      if (result.reason === "sink_unavailable") {
+        activateTelemetrySinkFallback({
+          reason: "sink_unavailable",
+          eventName: input.eventName,
+        });
+      }
+      logTelemetryOperationalEvent({
+        event: "telemetry_export_skipped",
+        level: result.reason === "disabled" ? "info" : "warn",
+        dedupeKey: `creation-telemetry-skipped:${result.reason}:${input.eventName}`,
+        throttleMs: runtimeConfig.logThrottleMs,
+        payload: {
+          mode: result.reason === "disabled" ? "disabled" : "fallback-noop",
+          eventName: input.eventName,
+          reason: result.reason,
+        },
+      });
       return result.reason === "disabled" ? "disabled" : "skipped";
     }
 
@@ -510,6 +736,19 @@ async function emitEvent<TEventName extends CreationTransitionEventName>(input: 
       eventName: input.eventName,
       environment: env.NODE_ENV,
       releaseVersion: env.APP_RELEASE_VERSION,
+    });
+    logTelemetrySinkReady({
+      eventName: input.eventName,
+    });
+    logTelemetryOperationalEvent({
+      event: "telemetry_export_success",
+      level: "info",
+      dedupeKey: `creation-telemetry-success:${input.eventName}`,
+      throttleMs: runtimeConfig.logThrottleMs,
+      payload: {
+        mode: "active",
+        eventName: input.eventName,
+      },
     });
     if (GATE_EVALUATION_TRIGGER_EVENTS.has(input.eventName)) {
       triggerCreationTransitionGateEvaluation(nextGateEvaluationSignalVersion());
@@ -523,6 +762,11 @@ async function emitEvent<TEventName extends CreationTransitionEventName>(input: 
     });
     const errorMessage =
       error instanceof Error ? error.message : "erro-desconhecido";
+    activateTelemetrySinkFallback({
+      reason: "error",
+      eventName: input.eventName,
+      errorMessage,
+    });
     logCreationTransitionTelemetryIssue({
       level: "error",
       signature: `error:${input.eventName}:${errorMessage}`,
@@ -539,7 +783,9 @@ export async function runCreationTelemetryFanout(
   operations: Array<() => Promise<unknown>>,
 ) {
   if (operations.length === 0) return;
-  await Promise.allSettled(operations.map((operation) => operation()));
+  operations.forEach((operation) => {
+    scheduleCreationTelemetryOperation(operation);
+  });
 }
 
 export function buildCreationTelemetryContextFromRequest(
@@ -1140,9 +1386,13 @@ export function __setCreationTransitionTelemetryRuntimeConfigForTests(
 export async function __flushCreationTransitionTelemetryForTests() {
   while (true) {
     await Promise.resolve();
+    const backgroundOperations = Array.from(backgroundTelemetryOperations);
     const inFlight = gateEvaluationInFlight;
-    if (!inFlight) {
+    if (backgroundOperations.length === 0 && !inFlight) {
       return;
+    }
+    if (backgroundOperations.length > 0) {
+      await Promise.allSettled(backgroundOperations);
     }
     await inFlight;
   }
@@ -1151,11 +1401,13 @@ export async function __flushCreationTransitionTelemetryForTests() {
 export function __resetCreationTransitionTelemetryForTests() {
   telemetryStore = createDefaultCreationTransitionTelemetryStore();
   telemetryRuntimeConfig = {};
+  telemetrySinkState = { mode: "ready" };
   gateEvaluationInFlight = null;
   lastGateEvaluationAtMs = 0;
   gateEvaluationSignalVersion = 0;
   inFlightGateEvaluationSignalVersion = 0;
   pendingGateEvaluationSignalVersion = 0;
+  backgroundTelemetryOperations.clear();
   logThrottleBySignature.clear();
 }
 

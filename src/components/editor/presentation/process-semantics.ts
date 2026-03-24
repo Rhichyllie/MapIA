@@ -118,222 +118,84 @@ type ProcessEdgeMeta = {
   guidance: string[];
 };
 
-const PROCESS_ROLE_META: Record<ProcessNodeRole, ProcessRoleMeta> = {
-  "flow-start": {
-    badgeLabel: "Inicio",
-    kindLabel: "Ponto de partida",
-    canvasHint: "Dispara o processo e orienta a primeira passagem.",
-    summary: "Marca onde a operacao comeca e qual ritmo ela imprime ao restante do fluxo.",
-    positionEmptyLabel: "Sem entradas anteriores, como esperado para a abertura do fluxo.",
-    positionConnectedLabel:
-      "Ja recebe entradas. Vale revisar se este ponto ainda e o inicio correto.",
-    guidanceWhenSparse: "Conecte a primeira atividade para deixar a trilha legivel.",
-    guidanceWhenConnected: "Confirme se as entradas nao deveriam apontar para uma etapa anterior.",
-  },
-  "flow-step": {
-    badgeLabel: "Etapa",
-    kindLabel: "Atividade",
-    canvasHint: "Executa um trabalho observavel dentro da operacao.",
-    summary: "Representa uma atividade executavel, com responsabilidade clara antes de seguir adiante.",
-    positionEmptyLabel: "Ainda isolada. Falta indicar de onde esta atividade vem e para onde segue.",
-    positionConnectedLabel: "Ja ocupa um trecho operacional definido dentro do fluxo.",
-    guidanceWhenSparse: "Conecte o antes e o depois para evitar ilhas operacionais.",
-    guidanceWhenConnected: "Revise se a proxima passagem esta nomeada pela acao correta.",
-  },
-  "flow-decision": {
-    badgeLabel: "Decisao",
-    kindLabel: "Ponto de decisao",
-    canvasHint: "Avalia uma regra e abre caminhos alternativos.",
-    summary: "Concentra a pergunta, criterio ou regra que faz o processo bifurcar.",
-    positionEmptyLabel: "Sem caminhos suficientes. Uma decisao precisa pelo menos uma saida clara.",
-    positionConnectedLabel: "Ja influencia o caminho do fluxo com transicoes condicionais.",
-    guidanceWhenSparse: "Crie saídas nomeadas para deixar as alternativas explicitas.",
-    guidanceWhenConnected: "Use rotulos curtos para diferenciar cada desvio da decisao.",
-  },
-  "flow-end": {
-    badgeLabel: "Fim",
-    kindLabel: "Encerramento",
-    canvasHint: "Consolida o desfecho operacional deste fluxo.",
-    summary: "Fecha o percurso e comunica o resultado ou estado final da operacao.",
-    positionEmptyLabel: "Ainda sem etapa anterior conectada. Falta mostrar como o fluxo chega aqui.",
-    positionConnectedLabel: "Recebe o resultado das etapas anteriores sem continuar adiante.",
-    guidanceWhenSparse: "Conecte a etapa que entrega este encerramento.",
-    guidanceWhenConnected: "Evite novas saidas para manter o encerramento terminal e claro.",
-  },
-  "flow-note": {
-    badgeLabel: "Observacao",
-    kindLabel: "Anotacao operacional",
-    canvasHint: "Registra risco, excecao ou contexto sem mover o fluxo.",
-    summary: "Documenta combinados, alertas ou contexto de apoio sem virar mais uma etapa.",
-    positionEmptyLabel: "Ainda solta no canvas. Anexe a observacao ao trecho que ela explica.",
-    positionConnectedLabel: "Apoia a leitura do fluxo sem competir com a sequencia principal.",
-    guidanceWhenSparse: "Conecte a observacao ao ponto do fluxo que ela esclarece.",
-    guidanceWhenConnected: "Use observacoes para excecoes, SLA, risco ou regras complementares.",
-  },
+const PROCESS_EDGE_GUIDANCE_INDEXES: Record<EdgeKind, number[]> = {
+  contains: [0],
+  references: [0, 1],
+  "depends-on": [0, 1],
+  "flows-to": [0, 1],
+  "relates-to": [0],
 };
 
-const PROCESS_EDGE_META: Record<EdgeKind, ProcessEdgeMeta> = {
-  contains: {
-    labelOperational: "Contem",
-    description: "Agrupamento estrutural, raro no fluxo operacional.",
-    outgoingLaneLabel: "Agrupa em",
-    incomingLaneLabel: "Agrupado por",
-    supportingLabel: "vinculo estrutural",
-    edgeBadgeLabel: "Estrutura",
-    edgeSummaryTemplate: (sourceLabel, targetLabel) =>
-      `${sourceLabel} organiza ${targetLabel} no mesmo agrupamento.`,
-    guidance: ["Use apenas quando o fluxo precisar de um agrupamento explicito."],
-  },
-  references: {
-    labelOperational: "Observa",
-    description: "Conecta anotacoes e contexto sem alterar a sequencia principal.",
-    outgoingLaneLabel: "Anota",
-    incomingLaneLabel: "Recebe anotacao de",
-    supportingLabel: "apoio contextual",
-    edgeBadgeLabel: "Observacao",
-    edgeSummaryTemplate: (sourceLabel, targetLabel) =>
-      `${sourceLabel} adiciona contexto operacional a ${targetLabel}.`,
-    guidance: [
-      "Use para observacoes, riscos, excecoes ou combinados paralelos ao fluxo.",
-      "Evite usar esta ligacao para mover o trabalho entre etapas.",
-    ],
-  },
-  "depends-on": {
-    labelOperational: "Bifurca para",
-    description: "Abre um caminho condicional ou uma dependencia que altera a continuidade.",
-    outgoingLaneLabel: "Bifurca para",
-    incomingLaneLabel: "Depende de",
-    supportingLabel: "transicao condicional",
-    edgeBadgeLabel: "Desvio",
-    edgeSummaryTemplate: (sourceLabel, targetLabel) =>
-      `${sourceLabel} desvia ou condiciona a passagem para ${targetLabel}.`,
-    guidance: [
-      "Use para decisoes, excecoes e desvios de caminho.",
-      "Prefira rotulos curtos que explicitem a condicao da bifurcacao.",
-    ],
-  },
-  "flows-to": {
-    labelOperational: "Continua para",
-    description: "Passagem principal entre um ponto do fluxo e o proximo.",
-    outgoingLaneLabel: "Segue para",
-    incomingLaneLabel: "Vem de",
-    supportingLabel: "continuidade principal",
-    edgeBadgeLabel: "Transicao",
-    edgeSummaryTemplate: (sourceLabel, targetLabel) =>
-      `${sourceLabel} continua para ${targetLabel}.`,
-    guidance: [
-      "Use para a sequencia principal da operacao.",
-      "Mantenha o rotulo apenas quando ele realmente acrescentar contexto.",
-    ],
-  },
-  "relates-to": {
-    labelOperational: "Relaciona com",
-    description: "Faz uma ligacao complementar fora da sequencia principal.",
-    outgoingLaneLabel: "Relaciona com",
-    incomingLaneLabel: "Relacionado a",
-    supportingLabel: "vinculo complementar",
-    edgeBadgeLabel: "Ligacao",
-    edgeSummaryTemplate: (sourceLabel, targetLabel) =>
-      `${sourceLabel} se relaciona com ${targetLabel}.`,
-    guidance: ["Prefira transicao, bifurcacao ou observacao quando houver semantica mais forte."],
-  },
-};
-
-const PROCESS_QUICK_ACTIONS: ProcessQuickActionDefinition[] = [
+const PROCESS_QUICK_ACTIONS: Array<
+  Omit<ProcessQuickActionDefinition, "label" | "edgeLabel">
+> = [
   {
     id: "flow-add-next-step",
-    label: "Continuar fluxo",
     nodeKind: "flow-step",
     edgeKind: "flows-to",
   },
   {
     id: "flow-add-branch",
-    label: "Criar bifurcacao",
     nodeKind: "flow-step",
     edgeKind: "depends-on",
-    edgeLabel: "Condicao",
   },
   {
     id: "flow-add-note",
-    label: "Registrar observacao",
     nodeKind: "note",
     edgeKind: "references",
-    edgeLabel: "Observacao",
   },
 ];
 
-const PROCESS_QUICK_ADD_ROLE_OPTIONS: ProcessQuickAddRoleOption[] = [
+const PROCESS_QUICK_ACTION_EDGE_LABEL_IDS: Partial<
+  Record<ProcessQuickActionId, string>
+> = {
+  "flow-add-branch": "process.quickActions.flow-add-branch.edgeLabel",
+  "flow-add-note": "process.quickActions.flow-add-note.edgeLabel",
+};
+
+const PROCESS_QUICK_ADD_ROLE_OPTIONS: Array<
+  Pick<ProcessQuickAddRoleOption, "role" | "baseKind">
+> = [
   {
     role: "flow-start",
-    label: "Inicio",
-    description: "Marca onde a operacao comeca.",
     baseKind: "flow-step",
   },
   {
     role: "flow-step",
-    label: "Atividade",
-    description: "Executa uma acao clara dentro do processo.",
     baseKind: "flow-step",
   },
   {
     role: "flow-decision",
-    label: "Decisao",
-    description: "Abre caminhos conforme regra, condicao ou resposta.",
     baseKind: "flow-step",
   },
   {
     role: "flow-note",
-    label: "Observacao",
-    description: "Registra contexto, risco ou excecao sem virar mais uma etapa.",
     baseKind: "note",
   },
   {
     role: "flow-end",
-    label: "Fim",
-    description: "Indica onde este percurso se encerra.",
     baseKind: "flow-step",
   },
 ];
-
-const PROCESS_INSPECTOR_COPY: ProcessInspectorCopy = {
-  selectionBadgeLabel: "Trecho em foco",
-  emptyTitle: "Leitura do fluxo",
-  emptySummary: "Selecione um ponto do processo para ver papel, continuidade e contexto.",
-  emptyGuidance:
-    "Prefira abrir inicio, atividade, decisao ou fim para revisar o encadeamento operacional.",
-  titleLabel: "Nome no fluxo",
-  kindLabel: "Formato no fluxo",
-  descriptionLabel: "Leitura operacional",
-  descriptionPlaceholder:
-    "Descreva o que acontece neste ponto, qual criterio decide a passagem e o que sai daqui.",
-  tagsLabel: "Marcadores operacionais",
-  tagsPlaceholder: "Ex.: SLA, excecao, aprovacao, canal, fila",
-  tagsHelper: "Use marcadores curtos para risco, canal, turno, regra ou criticidade.",
-  contextTitle: "Leitura operacional",
-  generalSectionTitle: "Identificacao",
-  detailsSectionTitle: "Contexto e notas",
-  relationsSectionTitle: "Antes e depois",
-  edgeGeneralSectionTitle: "Leitura da transicao",
-  edgeLabelLabel: "Rotulo da passagem",
-  edgeKindLabel: "Tipo de passagem",
-  edgeSourceLabel: "Sai de",
-  edgeTargetLabel: "Chega em",
-  nodeSubtitle: "Entenda o papel deste ponto no fluxo antes de editar o texto.",
-  edgeSubtitle: "Leia a transicao primeiro e ajuste o detalhe so quando necessario.",
-  relationsEmptyState: "Ainda nao ha transicoes ou observacoes ligadas a este ponto.",
-};
 
 function formatRelationLabel(label: string | undefined) {
   const normalized = label?.trim();
   return normalized ? normalized : undefined;
 }
 
-function formatProcessConnectivityLabel(incomingCount: number, outgoingCount: number) {
+function formatProcessConnectivityLabel(
+  incomingCount: number,
+  outgoingCount: number,
+  t?: EditorTranslationFn,
+) {
   if (incomingCount === 0 && outgoingCount === 0) {
-    return "Ainda sem conexoes registradas.";
+    return translateEditor(t, "process.connectivity.none");
   }
 
-  return `${incomingCount} entrada(s) e ${outgoingCount} saida(s) no fluxo.`;
+  return translateEditor(t, "process.connectivity.summary", {
+    incomingCount,
+    outgoingCount,
+  });
 }
 
 export function resolveProcessNodeRole(input: {
@@ -349,65 +211,39 @@ export function resolveProcessNodeRole(input: {
 }
 
 export function getProcessRoleMeta(role: ProcessNodeRole, t?: EditorTranslationFn) {
-  const meta = PROCESS_ROLE_META[role];
-
   return {
-    ...meta,
-    badgeLabel: translateEditor(t, `process.roles.${role}.badgeLabel`, meta.badgeLabel),
-    kindLabel: translateEditor(t, `process.roles.${role}.kindLabel`, meta.kindLabel),
-    canvasHint: translateEditor(t, `process.roles.${role}.canvasHint`, meta.canvasHint),
-    summary: translateEditor(t, `process.roles.${role}.summary`, meta.summary),
-    positionEmptyLabel: translateEditor(
-      t,
-      `process.roles.${role}.positionEmptyLabel`,
-      meta.positionEmptyLabel,
-    ),
+    badgeLabel: translateEditor(t, `process.roles.${role}.badgeLabel`),
+    kindLabel: translateEditor(t, `process.roles.${role}.kindLabel`),
+    canvasHint: translateEditor(t, `process.roles.${role}.canvasHint`),
+    summary: translateEditor(t, `process.roles.${role}.summary`),
+    positionEmptyLabel: translateEditor(t, `process.roles.${role}.positionEmptyLabel`),
     positionConnectedLabel: translateEditor(
       t,
       `process.roles.${role}.positionConnectedLabel`,
-      meta.positionConnectedLabel,
     ),
     guidanceWhenSparse: translateEditor(
       t,
       `process.roles.${role}.guidanceWhenSparse`,
-      meta.guidanceWhenSparse,
     ),
     guidanceWhenConnected: translateEditor(
       t,
       `process.roles.${role}.guidanceWhenConnected`,
-      meta.guidanceWhenConnected,
     ),
-  };
+  } satisfies ProcessRoleMeta;
 }
 
 export function getProcessNodeKindCopy(kind: NodeKind, t?: EditorTranslationFn) {
   if (kind === "flow-step") {
     return {
-      labelOperational: translateEditor(
-        t,
-        "process.nodeKinds.flow-step.labelOperational",
-        "Atividade",
-      ),
-      description: translateEditor(
-        t,
-        "process.nodeKinds.flow-step.description",
-        "Unidade de trabalho executavel dentro do processo.",
-      ),
+      labelOperational: translateEditor(t, "process.nodeKinds.flow-step.labelOperational"),
+      description: translateEditor(t, "process.nodeKinds.flow-step.description"),
     };
   }
 
   if (kind === "note") {
     return {
-      labelOperational: translateEditor(
-        t,
-        "process.nodeKinds.note.labelOperational",
-        "Observacao",
-      ),
-      description: translateEditor(
-        t,
-        "process.nodeKinds.note.description",
-        "Contexto, risco ou excecao que apoia a leitura do fluxo.",
-      ),
+      labelOperational: translateEditor(t, "process.nodeKinds.note.labelOperational"),
+      description: translateEditor(t, "process.nodeKinds.note.description"),
     };
   }
 
@@ -415,71 +251,34 @@ export function getProcessNodeKindCopy(kind: NodeKind, t?: EditorTranslationFn) 
 }
 
 export function getProcessEdgeCopy(kind: EdgeKind, t?: EditorTranslationFn) {
-  const meta = PROCESS_EDGE_META[kind];
-
   return {
-    ...meta,
-    labelOperational: translateEditor(
-      t,
-      `process.edgeKinds.${kind}.labelOperational`,
-      meta.labelOperational,
-    ),
-    description: translateEditor(
-      t,
-      `process.edgeKinds.${kind}.description`,
-      meta.description,
-    ),
-    outgoingLaneLabel: translateEditor(
-      t,
-      `process.edgeKinds.${kind}.outgoingLaneLabel`,
-      meta.outgoingLaneLabel,
-    ),
-    incomingLaneLabel: translateEditor(
-      t,
-      `process.edgeKinds.${kind}.incomingLaneLabel`,
-      meta.incomingLaneLabel,
-    ),
-    supportingLabel: translateEditor(
-      t,
-      `process.edgeKinds.${kind}.supportingLabel`,
-      meta.supportingLabel,
-    ),
-    edgeBadgeLabel: translateEditor(
-      t,
-      `process.edgeKinds.${kind}.edgeBadgeLabel`,
-      meta.edgeBadgeLabel,
-    ),
+    labelOperational: translateEditor(t, `process.edgeKinds.${kind}.labelOperational`),
+    description: translateEditor(t, `process.edgeKinds.${kind}.description`),
+    outgoingLaneLabel: translateEditor(t, `process.edgeKinds.${kind}.outgoingLaneLabel`),
+    incomingLaneLabel: translateEditor(t, `process.edgeKinds.${kind}.incomingLaneLabel`),
+    supportingLabel: translateEditor(t, `process.edgeKinds.${kind}.supportingLabel`),
+    edgeBadgeLabel: translateEditor(t, `process.edgeKinds.${kind}.edgeBadgeLabel`),
     edgeSummaryTemplate: (sourceLabel: string, targetLabel: string) =>
       translateEditor(
         t,
         `process.edgeKinds.${kind}.edgeSummary`,
-        meta.edgeSummaryTemplate(sourceLabel, targetLabel),
         { sourceLabel, targetLabel },
       ),
-    guidance: meta.guidance.map((entry, index) =>
-      translateEditor(
-        t,
-        `process.edgeKinds.${kind}.guidance.${index}`,
-        entry,
-      ),
+    guidance: PROCESS_EDGE_GUIDANCE_INDEXES[kind].map((index) =>
+      translateEditor(t, `process.edgeKinds.${kind}.guidance.${index}`),
     ),
-  };
+  } satisfies ProcessEdgeMeta;
 }
 
 export function getProcessQuickActions(t?: EditorTranslationFn) {
   return PROCESS_QUICK_ACTIONS.map((action) => ({
     ...action,
-    label: translateEditor(
-      t,
-      `process.quickActions.${action.id}.label`,
-      action.label,
-    ),
-    ...(action.edgeLabel
+    label: translateEditor(t, `process.quickActions.${action.id}.label`),
+    ...(PROCESS_QUICK_ACTION_EDGE_LABEL_IDS[action.id]
       ? {
           edgeLabel: translateEditor(
             t,
-            `process.quickActions.${action.id}.edgeLabel`,
-            action.edgeLabel,
+            PROCESS_QUICK_ACTION_EDGE_LABEL_IDS[action.id]!,
           ),
         }
       : {}),
@@ -489,137 +288,43 @@ export function getProcessQuickActions(t?: EditorTranslationFn) {
 export function getProcessQuickAddRoleOptions(t?: EditorTranslationFn) {
   return PROCESS_QUICK_ADD_ROLE_OPTIONS.map((option) => ({
     ...option,
-    label: translateEditor(
-      t,
-      `process.quickAddRoles.${option.role}.label`,
-      option.label,
-    ),
-    description: translateEditor(
-      t,
-      `process.quickAddRoles.${option.role}.description`,
-      option.description,
-    ),
+    label: translateEditor(t, `process.quickAddRoles.${option.role}.label`),
+    description: translateEditor(t, `process.quickAddRoles.${option.role}.description`),
   }));
 }
 
 export function getProcessInspectorCopy(t?: EditorTranslationFn) {
   return {
-    selectionBadgeLabel: translateEditor(
-      t,
-      "process.inspector.selectionBadgeLabel",
-      PROCESS_INSPECTOR_COPY.selectionBadgeLabel,
-    ),
-    emptyTitle: translateEditor(
-      t,
-      "process.inspector.emptyTitle",
-      PROCESS_INSPECTOR_COPY.emptyTitle,
-    ),
-    emptySummary: translateEditor(
-      t,
-      "process.inspector.emptySummary",
-      PROCESS_INSPECTOR_COPY.emptySummary,
-    ),
-    emptyGuidance: translateEditor(
-      t,
-      "process.inspector.emptyGuidance",
-      PROCESS_INSPECTOR_COPY.emptyGuidance,
-    ),
-    titleLabel: translateEditor(
-      t,
-      "process.inspector.titleLabel",
-      PROCESS_INSPECTOR_COPY.titleLabel,
-    ),
-    kindLabel: translateEditor(
-      t,
-      "process.inspector.kindLabel",
-      PROCESS_INSPECTOR_COPY.kindLabel,
-    ),
-    descriptionLabel: translateEditor(
-      t,
-      "process.inspector.descriptionLabel",
-      PROCESS_INSPECTOR_COPY.descriptionLabel,
-    ),
+    selectionBadgeLabel: translateEditor(t, "process.inspector.selectionBadgeLabel"),
+    emptyTitle: translateEditor(t, "process.inspector.emptyTitle"),
+    emptySummary: translateEditor(t, "process.inspector.emptySummary"),
+    emptyGuidance: translateEditor(t, "process.inspector.emptyGuidance"),
+    titleLabel: translateEditor(t, "process.inspector.titleLabel"),
+    kindLabel: translateEditor(t, "process.inspector.kindLabel"),
+    descriptionLabel: translateEditor(t, "process.inspector.descriptionLabel"),
     descriptionPlaceholder: translateEditor(
       t,
       "process.inspector.descriptionPlaceholder",
-      PROCESS_INSPECTOR_COPY.descriptionPlaceholder,
     ),
-    tagsLabel: translateEditor(
-      t,
-      "process.inspector.tagsLabel",
-      PROCESS_INSPECTOR_COPY.tagsLabel,
-    ),
-    tagsPlaceholder: translateEditor(
-      t,
-      "process.inspector.tagsPlaceholder",
-      PROCESS_INSPECTOR_COPY.tagsPlaceholder,
-    ),
-    tagsHelper: translateEditor(
-      t,
-      "process.inspector.tagsHelper",
-      PROCESS_INSPECTOR_COPY.tagsHelper,
-    ),
-    contextTitle: translateEditor(
-      t,
-      "process.inspector.contextTitle",
-      PROCESS_INSPECTOR_COPY.contextTitle,
-    ),
-    generalSectionTitle: translateEditor(
-      t,
-      "process.inspector.generalSectionTitle",
-      PROCESS_INSPECTOR_COPY.generalSectionTitle,
-    ),
-    detailsSectionTitle: translateEditor(
-      t,
-      "process.inspector.detailsSectionTitle",
-      PROCESS_INSPECTOR_COPY.detailsSectionTitle,
-    ),
-    relationsSectionTitle: translateEditor(
-      t,
-      "process.inspector.relationsSectionTitle",
-      PROCESS_INSPECTOR_COPY.relationsSectionTitle,
-    ),
+    tagsLabel: translateEditor(t, "process.inspector.tagsLabel"),
+    tagsPlaceholder: translateEditor(t, "process.inspector.tagsPlaceholder"),
+    tagsHelper: translateEditor(t, "process.inspector.tagsHelper"),
+    contextTitle: translateEditor(t, "process.inspector.contextTitle"),
+    generalSectionTitle: translateEditor(t, "process.inspector.generalSectionTitle"),
+    detailsSectionTitle: translateEditor(t, "process.inspector.detailsSectionTitle"),
+    relationsSectionTitle: translateEditor(t, "process.inspector.relationsSectionTitle"),
     edgeGeneralSectionTitle: translateEditor(
       t,
       "process.inspector.edgeGeneralSectionTitle",
-      PROCESS_INSPECTOR_COPY.edgeGeneralSectionTitle,
     ),
-    edgeLabelLabel: translateEditor(
-      t,
-      "process.inspector.edgeLabelLabel",
-      PROCESS_INSPECTOR_COPY.edgeLabelLabel,
-    ),
-    edgeKindLabel: translateEditor(
-      t,
-      "process.inspector.edgeKindLabel",
-      PROCESS_INSPECTOR_COPY.edgeKindLabel,
-    ),
-    edgeSourceLabel: translateEditor(
-      t,
-      "process.inspector.edgeSourceLabel",
-      PROCESS_INSPECTOR_COPY.edgeSourceLabel,
-    ),
-    edgeTargetLabel: translateEditor(
-      t,
-      "process.inspector.edgeTargetLabel",
-      PROCESS_INSPECTOR_COPY.edgeTargetLabel,
-    ),
-    nodeSubtitle: translateEditor(
-      t,
-      "process.inspector.nodeSubtitle",
-      PROCESS_INSPECTOR_COPY.nodeSubtitle,
-    ),
-    edgeSubtitle: translateEditor(
-      t,
-      "process.inspector.edgeSubtitle",
-      PROCESS_INSPECTOR_COPY.edgeSubtitle,
-    ),
-    relationsEmptyState: translateEditor(
-      t,
-      "process.inspector.relationsEmptyState",
-      PROCESS_INSPECTOR_COPY.relationsEmptyState,
-    ),
-  };
+    edgeLabelLabel: translateEditor(t, "process.inspector.edgeLabelLabel"),
+    edgeKindLabel: translateEditor(t, "process.inspector.edgeKindLabel"),
+    edgeSourceLabel: translateEditor(t, "process.inspector.edgeSourceLabel"),
+    edgeTargetLabel: translateEditor(t, "process.inspector.edgeTargetLabel"),
+    nodeSubtitle: translateEditor(t, "process.inspector.nodeSubtitle"),
+    edgeSubtitle: translateEditor(t, "process.inspector.edgeSubtitle"),
+    relationsEmptyState: translateEditor(t, "process.inspector.relationsEmptyState"),
+  } satisfies ProcessInspectorCopy;
 }
 
 export function buildProcessNodeOverview(input: {
@@ -647,7 +352,6 @@ export function buildProcessNodeOverview(input: {
       translateEditor(
         t,
         "process.guidance.decisionNeedsPaths",
-        "Uma decisao fica mais didatica quando explicita pelo menos dois caminhos.",
       ),
     );
   }
@@ -657,7 +361,6 @@ export function buildProcessNodeOverview(input: {
       translateEditor(
         t,
         "process.guidance.noteNeedsAnchor",
-        "Conecte a observacao ao ponto que ela explica para evitar ruído solto no canvas.",
       ),
     );
   }
@@ -667,7 +370,6 @@ export function buildProcessNodeOverview(input: {
       translateEditor(
         t,
         "process.guidance.endShouldTerminate",
-        "Revise saídas extras. Encerramentos fortes normalmente terminam o percurso.",
       ),
     );
   }
@@ -677,7 +379,6 @@ export function buildProcessNodeOverview(input: {
       translateEditor(
         t,
         "process.guidance.startHasIncoming",
-        "Entradas no inicio costumam sinalizar um ponto anterior que ainda falta no mapa.",
       ),
     );
   }
@@ -693,6 +394,7 @@ export function buildProcessNodeOverview(input: {
     connectivityLabel: formatProcessConnectivityLabel(
       input.incomingCount,
       input.outgoingCount,
+      t,
     ),
     guidance,
   } satisfies ProcessNodeOverview;
@@ -713,7 +415,6 @@ export function buildProcessEdgeOverview(input: {
       translateEditor(
         t,
         "process.edgeOverview.currentLabel",
-        `Rotulo atual: ${relationLabel}.`,
         { relationLabel },
       ),
     );
@@ -766,7 +467,7 @@ export function buildProcessRelationsViewModel(input: {
         direction === "incoming" ? edge.source : edge.target;
       const otherLabel =
         input.nodeLabelById.get(otherNodeId) ??
-        translateEditor(t, "process.fallbacks.untitledItem", "Item sem titulo");
+        translateEditor(t, "process.fallbacks.untitledItem");
       const sourceLabel = input.nodeLabelById.get(edge.source) ?? edge.source;
       const targetLabel = input.nodeLabelById.get(edge.target) ?? edge.target;
       const otherRole =
@@ -807,12 +508,12 @@ export function buildProcessRelationsViewModel(input: {
         lane,
         laneLabel:
           lane === "before"
-            ? translateEditor(t, "process.lanes.before", "Vem antes")
+            ? translateEditor(t, "process.lanes.before")
             : lane === "after"
-              ? translateEditor(t, "process.lanes.after", "Segue depois")
+              ? translateEditor(t, "process.lanes.after")
               : lane === "branch"
-                ? translateEditor(t, "process.lanes.branch", "Bifurcacao")
-                : translateEditor(t, "process.lanes.note", "Observacao"),
+                ? translateEditor(t, "process.lanes.branch")
+                : translateEditor(t, "process.lanes.note"),
         transitionLabel:
           direction === "incoming"
             ? edgeMeta.incomingLaneLabel
@@ -825,22 +526,22 @@ export function buildProcessRelationsViewModel(input: {
   const summaryChips = [
     {
       id: "before" as const,
-      label: translateEditor(t, "process.summaryChips.before", "Antes"),
+      label: translateEditor(t, "process.summaryChips.before"),
       count: counters.before,
     },
     {
       id: "after" as const,
-      label: translateEditor(t, "process.summaryChips.after", "Depois"),
+      label: translateEditor(t, "process.summaryChips.after"),
       count: counters.after,
     },
     {
       id: "branch" as const,
-      label: translateEditor(t, "process.summaryChips.branch", "Desvios"),
+      label: translateEditor(t, "process.summaryChips.branch"),
       count: counters.branch,
     },
     {
       id: "note" as const,
-      label: translateEditor(t, "process.summaryChips.note", "Observacoes"),
+      label: translateEditor(t, "process.summaryChips.note"),
       count: counters.note,
     },
   ].filter((chip) => chip.count > 0);

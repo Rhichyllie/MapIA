@@ -50,6 +50,9 @@ paths:
   it("rejects invalid OpenAPI content", () => {
     const parsed = parseOpenApiDocument("not-valid: [");
     expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.errorCode).toBe("openapi_document_parse_failed");
+    }
   });
 
   it("parses GraphQL SDL and introspection JSON", () => {
@@ -67,6 +70,14 @@ paths:
     if (introspection.ok) {
       expect(introspection.source).toBe("introspection-json");
       expect(introspection.typeCount).toBe(2);
+    }
+  });
+
+  it("returns canonical GraphQL parse codes for invalid input", () => {
+    const parsed = parseGraphQlSchema("query");
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.errorCode).toBe("graphql_schema_missing_valid_types");
     }
   });
 });

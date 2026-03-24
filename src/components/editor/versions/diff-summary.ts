@@ -1,5 +1,9 @@
 import type { Edge, GraphSnapshot, Node } from "@/src/domain";
-import { translateEditor, type EditorTranslationFn } from "../editor-i18n";
+import {
+  getEditorBaseMessage,
+  translateEditor,
+  type EditorTranslationFn,
+} from "../editor-i18n";
 import type { EditorSnapshotVersionDiff } from "../editor-query-service";
 import { getEdgeKindLabel, getNodeKindLabel } from "../presentation/kinds";
 
@@ -59,7 +63,7 @@ function indexById<T extends { id: string }>(items: T[]) {
 function quoteLabel(rawLabel: string | undefined) {
   const normalized = rawLabel?.trim();
   if (!normalized) {
-    return "Sem titulo";
+    return getEditorBaseMessage("presentation.fallbacks.untitled");
   }
 
   return normalized;
@@ -95,12 +99,11 @@ function summarizeEdgeKindCounts(
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .map(([kind, count]) => {
       const label = getEdgeKindLabel(kind as Edge["kind"], "operational", t);
-      return translateEditor(
-        t,
-        "versionDiff.edgeKindCount",
-        `${prefix}${count} relacao(oes) ${label}`,
-        { prefix, count, label },
-      );
+      return translateEditor(t, "versionDiff.edgeKindCount", {
+        prefix,
+        count,
+        label,
+      });
     });
 }
 
@@ -147,16 +150,11 @@ export function buildVersionDiffSummary(
       changedBreakdown.renamed += 1;
       pushTopChange(
         topChanges,
-        translateEditor(
-          input.t,
-          "versionDiff.nodeRenamed",
-          `${describeNodeKind(nextNode.kind, input.t)} '${quoteLabel(previousNode.label)}' renomeada para '${quoteLabel(nextNode.label)}'.`,
-          {
-            nodeKind: describeNodeKind(nextNode.kind, input.t),
-            previousLabel: quoteLabel(previousNode.label),
-            nextLabel: quoteLabel(nextNode.label),
-          },
-        ),
+        translateEditor(input.t, "versionDiff.nodeRenamed", {
+          nodeKind: describeNodeKind(nextNode.kind, input.t),
+          previousLabel: quoteLabel(previousNode.label),
+          nextLabel: quoteLabel(nextNode.label),
+        }),
         topLimit,
       );
     }
@@ -165,16 +163,11 @@ export function buildVersionDiffSummary(
       changedBreakdown.kindChanged += 1;
       pushTopChange(
         topChanges,
-        translateEditor(
-          input.t,
-          "versionDiff.nodeKindChanged",
-          `${quoteLabel(nextNode.label)} mudou tipo: ${describeNodeKind(previousNode.kind, input.t)} -> ${describeNodeKind(nextNode.kind, input.t)}.`,
-          {
-            nodeLabel: quoteLabel(nextNode.label),
-            previousKind: describeNodeKind(previousNode.kind, input.t),
-            nextKind: describeNodeKind(nextNode.kind, input.t),
-          },
-        ),
+        translateEditor(input.t, "versionDiff.nodeKindChanged", {
+          nodeLabel: quoteLabel(nextNode.label),
+          previousKind: describeNodeKind(previousNode.kind, input.t),
+          nextKind: describeNodeKind(nextNode.kind, input.t),
+        }),
         topLimit,
       );
     }
@@ -183,12 +176,9 @@ export function buildVersionDiffSummary(
       changedBreakdown.payloadChanged += 1;
       pushTopChange(
         topChanges,
-        translateEditor(
-          input.t,
-          "versionDiff.nodePayloadUpdated",
-          `Payload de '${quoteLabel(nextNode.label)}' foi atualizado.`,
-          { nodeLabel: quoteLabel(nextNode.label) },
-        ),
+        translateEditor(input.t, "versionDiff.nodePayloadUpdated", {
+          nodeLabel: quoteLabel(nextNode.label),
+        }),
         topLimit,
       );
     }
@@ -202,15 +192,10 @@ export function buildVersionDiffSummary(
 
     pushTopChange(
       topChanges,
-      translateEditor(
-        input.t,
-        "versionDiff.nodeAdded",
-        `+ ${describeNodeKind(node.kind, input.t)} '${quoteLabel(node.label)}' adicionada.`,
-        {
-          nodeKind: describeNodeKind(node.kind, input.t),
-          nodeLabel: quoteLabel(node.label),
-        },
-      ),
+      translateEditor(input.t, "versionDiff.nodeAdded", {
+        nodeKind: describeNodeKind(node.kind, input.t),
+        nodeLabel: quoteLabel(node.label),
+      }),
       topLimit,
     );
   }
@@ -223,15 +208,10 @@ export function buildVersionDiffSummary(
 
     pushTopChange(
       topChanges,
-      translateEditor(
-        input.t,
-        "versionDiff.nodeRemoved",
-        `- ${describeNodeKind(node.kind, input.t)} '${quoteLabel(node.label)}' removida.`,
-        {
-          nodeKind: describeNodeKind(node.kind, input.t),
-          nodeLabel: quoteLabel(node.label),
-        },
-      ),
+      translateEditor(input.t, "versionDiff.nodeRemoved", {
+        nodeKind: describeNodeKind(node.kind, input.t),
+        nodeLabel: quoteLabel(node.label),
+      }),
       topLimit,
     );
   }
@@ -244,7 +224,7 @@ export function buildVersionDiffSummary(
   )) {
     pushTopChange(
       topChanges,
-      translateEditor(input.t, "versionDiff.edgesAddedSuffix", `${edgeEntry} criadas.`, {
+      translateEditor(input.t, "versionDiff.edgesAddedSuffix", {
         edgeEntry,
       }),
       topLimit,
@@ -259,12 +239,7 @@ export function buildVersionDiffSummary(
   )) {
     pushTopChange(
       topChanges,
-      translateEditor(
-        input.t,
-        "versionDiff.edgesRemovedSuffix",
-        `${edgeEntry} removidas.`,
-        { edgeEntry },
-      ),
+      translateEditor(input.t, "versionDiff.edgesRemovedSuffix", { edgeEntry }),
       topLimit,
     );
   }
@@ -272,12 +247,9 @@ export function buildVersionDiffSummary(
   if (input.diff.edgesChanged.length > 0) {
     pushTopChange(
       topChanges,
-      translateEditor(
-        input.t,
-        "versionDiff.edgesChanged",
-        `${input.diff.edgesChanged.length} relacao(oes) tiveram atributos alterados.`,
-        { count: input.diff.edgesChanged.length },
-      ),
+      translateEditor(input.t, "versionDiff.edgesChanged", {
+        count: input.diff.edgesChanged.length,
+      }),
       topLimit,
     );
   }
@@ -285,23 +257,13 @@ export function buildVersionDiffSummary(
   if (input.diff.viewportChanged) {
     pushTopChange(
       topChanges,
-      translateEditor(
-        input.t,
-        "versionDiff.viewportChanged",
-        "Viewport do canvas foi alterado.",
-      ),
+      translateEditor(input.t, "versionDiff.viewportChanged"),
       topLimit,
     );
   }
 
   if (topChanges.length === 0) {
-    topChanges.push(
-      translateEditor(
-        input.t,
-        "versionDiff.noChanges",
-        "Nenhuma alteracao detectada.",
-      ),
-    );
+    topChanges.push(translateEditor(input.t, "versionDiff.noChanges"));
   }
 
   return {

@@ -1,6 +1,5 @@
 import {
   type AssistantDraft,
-  type SourceConfigPreview,
 } from "@/src/modules/creation-assistant/domain";
 import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 import { isGenericSourceConfig } from "../shared";
@@ -8,7 +7,9 @@ import { isGenericSourceConfig } from "../shared";
 type GenericSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
-  sourcePreview: SourceConfigPreview | null;
+  sourcePreview: NonNullable<
+    ReturnType<CreationAssistantLabels["getSourcePreviewCopy"]>
+  > | null;
   labels: CreationAssistantLabels;
 };
 
@@ -103,7 +104,12 @@ export function GenericSourceForm({
               ? labels.sourceForms.generic.readyPreview
               : labels.sourceForms.generic.partialPreview}
           </p>
-          <p>{sourcePreview.message}</p>
+          <p>{sourcePreview.summary}</p>
+          {sourcePreview.details.map((detail) => (
+            <p key={detail} className="helper">
+              {detail}
+            </p>
+          ))}
           {sourcePreview.fields && sourcePreview.fields.length > 0 ? (
             <div className="dashboard-form">
               <div className="field">

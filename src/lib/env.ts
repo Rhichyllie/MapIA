@@ -21,6 +21,11 @@ const serverEnvSchema = z.object({
   CREATION_TRANSITION_TELEMETRY_ENABLED: strictBooleanEnv
     .default(true),
   TELEMETRY_SINK_TIMEOUT_MS: z.coerce.number().int().positive().default(150),
+  TELEMETRY_SINK_FALLBACK_COOLDOWN_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(30000),
   TELEMETRY_GATE_EVALUATION_INTERVAL_MS: z.coerce
     .number()
     .int()

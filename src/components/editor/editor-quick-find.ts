@@ -1,4 +1,4 @@
-import type { EditorTranslationFn } from "./editor-i18n";
+import { translateEditor, type EditorTranslationFn } from "./editor-i18n";
 import type { RFNode } from "./editor-graph-mappers";
 import type { PresentationMode } from "./presentation/kinds";
 import { getNodeKindLabel, getOperationalDisplayLabel } from "./presentation/kinds";
@@ -45,7 +45,7 @@ export function filterNodeQuickFindOptions(
             label: node.data.label,
             payload: node.data.payload,
           }, t)
-        : node.data.label?.trim() || (t ? t("presentation.fallbacks.untitledNode") : "No sem titulo"),
+        : node.data.label?.trim() || translateEditor(t, "presentation.fallbacks.untitledNode"),
     kindLabel: getNodeKindLabel(node.data.kind, mode, t),
     kindRaw: node.data.kind,
   }));

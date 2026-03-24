@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   AssistantDraftSchema,
-  getSourceStatusPresentation,
   normalizeSourceStatusCode,
   redactAssistantDraft,
 } from "@/src/modules/creation-assistant/domain";
@@ -15,7 +14,7 @@ import {
   recordCreationDraftSaved,
   recordCreationSourceStatusChanged,
   runCreationTelemetryFanout,
-} from "@/src/server/observability";
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
@@ -35,7 +34,7 @@ function buildSourceStatusMeta(status?: string) {
     return null;
   }
 
-  return getSourceStatusPresentation(normalized);
+  return { statusCode: normalized };
 }
 
 export async function GET(

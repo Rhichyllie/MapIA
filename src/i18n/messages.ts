@@ -1,7 +1,5 @@
 import ptBRMessages from "@/messages/pt-BR.json";
 import enUSMessages from "@/messages/en-US.json";
-import ptBREditorMessages from "@/messages/editor/pt-BR";
-import enUSEditorMessages from "@/messages/editor/en-US";
 import { routing, type AppLocale } from "./routing";
 
 type MessageDictionary = Record<string, unknown>;
@@ -49,21 +47,8 @@ export function mergeMessagesWithFallback<T extends MessageDictionary>(
   return Object.fromEntries(entries) as T;
 }
 
-const ptBRCatalog = {
-  ...ptBRMessages,
-  Editor: {
-    ...ptBRMessages.Editor,
-    ...ptBREditorMessages,
-  },
-} as const;
-
-const enUSCatalog = {
-  ...enUSMessages,
-  Editor: {
-    ...enUSMessages.Editor,
-    ...enUSEditorMessages,
-  },
-} as const;
+const ptBRCatalog = ptBRMessages;
+const enUSCatalog = enUSMessages;
 
 export type AppMessages = DeepStringifyMessages<typeof ptBRCatalog>;
 

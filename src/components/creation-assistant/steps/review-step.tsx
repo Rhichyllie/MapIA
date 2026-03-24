@@ -1,5 +1,6 @@
 import {
   type AssistantDraft,
+  type LayoutNormalizationWarningCode,
   type StartStrategyRecommendation,
 } from "@/src/modules/creation-assistant/domain";
 import type { CreationAssistantLabels } from "../creation-assistant-i18n";
@@ -9,7 +10,7 @@ type ReviewStepProps = {
   sourceStatusSummary: string;
   sourceStatusCode: AssistantDraft["sourceStatus"];
   recommendedStartStrategy: StartStrategyRecommendation;
-  legacyLayoutWarning: string | null;
+  legacyLayoutWarningCode: LayoutNormalizationWarningCode | null;
   enabledAutomationLabels: string[];
   labels: CreationAssistantLabels;
 };
@@ -20,7 +21,7 @@ export function ReviewStep({
   sourceStatusSummary,
   sourceStatusCode,
   recommendedStartStrategy,
-  legacyLayoutWarning,
+  legacyLayoutWarningCode,
   enabledAutomationLabels,
 }: ReviewStepProps) {
   return (
@@ -84,7 +85,11 @@ export function ReviewStep({
             {labels.getStartStrategy(recommendedStartStrategy.strategy).title}
           </li>
         </ul>
-        {legacyLayoutWarning ? <p className="helper">{legacyLayoutWarning}</p> : null}
+        {legacyLayoutWarningCode ? (
+          <p className="helper">
+            {labels.getLayoutWarningMessage(legacyLayoutWarningCode)}
+          </p>
+        ) : null}
         <p>
           {labels.buildWhatWillBeCreatedSummary({
             profile: draft.profile,

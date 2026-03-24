@@ -31,7 +31,7 @@ describe("resolveInspectorSelectionState", () => {
       hasSelectedEdge: false,
     });
 
-    expect(state.badgeLabel).toBe("Sem selecao");
+    expect(state.badgeLabel).toBe("Nenhum item selecionado");
     expect(state.nodeSelected).toBe(false);
     expect(state.edgeSelected).toBe(false);
   });

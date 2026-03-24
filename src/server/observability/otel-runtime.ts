@@ -37,6 +37,7 @@ import {
   type OpenTelemetryRuntimeConfigWarning,
   type OpenTelemetrySamplerConfig,
 } from "./otel-runtime-config";
+import { logTelemetryOperationalEvent } from "./telemetry-operational-logger";
 
 type OpenTelemetryRuntimeState =
   | "idle"
@@ -192,13 +193,12 @@ const PRISMA_QUERY_DURATION_BUCKETS_MS = [
 ] as const;
 
 function defaultRuntimeWarningLogger(warning: OpenTelemetryRuntimeWarning): void {
+  if (warning.code === "BOOTSTRAP_DISABLED" || warning.code === "BOOTSTRAP_FAILED") {
+    return;
+  }
+
   const details = warning.details ? ` ${JSON.stringify(warning.details)}` : "";
   console.warn(`[otel-runtime] ${warning.code}: ${warning.message}${details}`);
-}
-
-function defaultRuntimeInfoLogger(message: string, details?: Record<string, unknown>): void {
-  const serializedDetails = details ? ` ${JSON.stringify(details)}` : "";
-  console.info(`[otel-runtime] ${message}${serializedDetails}`);
 }
 
 type CreateOpenTelemetryRuntimeInput = {
@@ -345,6 +345,12 @@ class OpenTelemetryNodeRuntime implements OpenTelemetryRuntime {
             : {}),
         },
       });
+      this.logBootstrapState({
+        event: "telemetry_bootstrap_disabled",
+        level: "info",
+        mode: "disabled",
+        reason: this.lastStartReason,
+      });
       return {
         state: this.state,
         enabled: false,
@@ -364,6 +370,12 @@ class OpenTelemetryNodeRuntime implements OpenTelemetryRuntime {
           enabledSourceKey: this.config.enabledSource.key,
           tracesEndpointConfigured: false,
         },
+      });
+      this.logBootstrapState({
+        event: "telemetry_bootstrap_disabled",
+        level: "warn",
+        mode: "fallback-noop",
+        reason: this.lastStartReason,
       });
       return {
         state: this.state,
@@ -425,6 +437,12 @@ class OpenTelemetryNodeRuntime implements OpenTelemetryRuntime {
       this.sdk.start();
       this.state = "started";
       this.lastStartReason = "started";
+      this.logBootstrapState({
+        event: "telemetry_bootstrap_enabled",
+        level: "info",
+        mode: "active",
+        reason: this.lastStartReason,
+      });
       return {
         state: this.state,
         enabled: true,
@@ -440,6 +458,15 @@ class OpenTelemetryNodeRuntime implements OpenTelemetryRuntime {
         message: "OpenTelemetry runtime bootstrap failed; continuing with telemetry disabled.",
         details: {
           ...this.baseWarningDetails(),
+          errorMessage: this.lastErrorMessage,
+        },
+      });
+      this.logBootstrapState({
+        event: "telemetry_bootstrap_disabled",
+        level: "warn",
+        mode: "fallback-noop",
+        reason: this.lastStartReason,
+        extraDetails: {
           errorMessage: this.lastErrorMessage,
         },
       });
@@ -544,6 +571,28 @@ class OpenTelemetryNodeRuntime implements OpenTelemetryRuntime {
     } catch {
       // Runtime warnings must not break application bootstrap or request handling.
     }
+  }
+
+  private logBootstrapState(input: {
+    event: "telemetry_bootstrap_enabled" | "telemetry_bootstrap_disabled";
+    level: "info" | "warn";
+    mode: "active" | "disabled" | "fallback-noop";
+    reason: string;
+    extraDetails?: Record<string, unknown>;
+  }): void {
+    logTelemetryOperationalEvent({
+      event: input.event,
+      level: input.level,
+      dedupeKey: `otel-bootstrap:${input.mode}:${input.reason}`,
+      throttleMs: 60_000,
+      payload: {
+        mode: input.mode,
+        reason: input.reason,
+        state: this.state,
+        ...toOpenTelemetryRuntimeConfigLogSnapshot(this.config),
+        ...(input.extraDetails ?? {}),
+      },
+    });
   }
 
   private baseWarningDetails(): Record<string, string | number | boolean | null> {
@@ -657,12 +706,6 @@ export function ensureServerOpenTelemetryRuntimeStarted(): EnsureServerOpenTelem
 
   const startResult = runtime.start();
   globalState.startResult = startResult;
-  if (startResult.started) {
-    defaultRuntimeInfoLogger("STARTED: OpenTelemetry runtime started.", {
-      ...runtime.debugSnapshot().config,
-      state: runtime.debugSnapshot().state,
-    });
-  }
 
   return {
     runtime,

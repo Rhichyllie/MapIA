@@ -9,13 +9,6 @@ export type EditorPersona = {
   id: string;
   profile: ProjectProfile;
   initialView: InitialView;
-  labels: {
-    addPrimary: string;
-    addDialogTitle: string;
-    addDialogHint: string;
-    addConfirm: string;
-    quickActionHint?: string;
-  };
   quickAdd: {
     defaultNodeKind: NodeKind;
     defaultEdgeKind: EdgeKind;
@@ -26,12 +19,6 @@ const fallbackPersona: EditorPersona = {
   id: "blank:free",
   profile: "blank",
   initialView: "free",
-  labels: {
-    addPrimary: "Adicionar item",
-    addDialogTitle: "QuickAdd",
-    addDialogHint: "Tipo + titulo rapido. Enter cria, Esc cancela.",
-    addConfirm: "Adicionar item",
-  },
   quickAdd: {
     defaultNodeKind: "note",
     defaultEdgeKind: "relates-to",
@@ -77,7 +64,6 @@ export function resolveEditorPersona(
     id: runtime.recipeId,
     profile: resolvedProfile,
     initialView: resolvedView,
-    labels: runtime.persona.labels,
     quickAdd: runtime.persona.quickAdd,
   };
 }

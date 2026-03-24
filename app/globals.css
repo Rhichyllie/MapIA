@@ -195,6 +195,15 @@ select {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-border) 85%, transparent);
 }
 
+.top-bar-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.6rem;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -486,9 +495,78 @@ select {
   gap: 1rem;
 }
 
+.login-card-header {
+  align-items: flex-start;
+}
+
 .stack-sm {
   display: grid;
   gap: 0.72rem;
+}
+
+.locale-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.locale-switcher--panel {
+  flex-wrap: wrap;
+}
+
+.locale-switcher-label {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.locale-switcher-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.18rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-elevation-2);
+}
+
+.locale-switcher-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.3rem;
+  padding: 0.42rem 0.72rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+a.locale-switcher-option:hover {
+  transform: translateY(-1px);
+  background: var(--nav-hover-bg);
+  color: var(--text);
+}
+
+a.locale-switcher-option:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.locale-switcher-option[data-active="true"] {
+  background: color-mix(in srgb, var(--color-primary) 90%, white 10%);
+  color: #ffffff;
+  border-color: color-mix(in srgb, var(--color-primary) 72%, transparent);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
 .field {
@@ -3509,6 +3587,15 @@ select {
 }
 
 @media (max-width: 960px) {
+  .top-bar {
+    align-items: flex-start;
+  }
+
+  .top-bar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .shell-body {
     grid-template-columns: 1fr;
   }
@@ -3609,6 +3696,24 @@ select {
 
   .workspace-drawer {
     width: min(100%, 720px);
+  }
+
+  .login-card-header {
+    align-items: stretch;
+  }
+
+  .locale-switcher {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .locale-switcher-options {
+    width: 100%;
+  }
+
+  .locale-switcher-option {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .erd-fields-grid-header,

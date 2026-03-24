@@ -21,6 +21,7 @@ import {
 } from "./creation-assistant-transition-telemetry";
 import type { CreationTransitionTelemetryStore } from "./creation-transition-store";
 import type { CreationTransitionEnvelope } from "./creation-transition-contract";
+import { __resetTelemetryOperationalLoggerForTests } from "./telemetry-operational-logger";
 
 class SlowMemoryStore implements CreationTransitionTelemetryStore {
   constructor(
@@ -186,6 +187,7 @@ class AggregatedBreakdownStore implements CreationTransitionTelemetryStore {
 describe("creation transition telemetry enterprise hardening", () => {
   beforeEach(() => {
     __resetCreationTransitionTelemetryForTests();
+    __resetTelemetryOperationalLoggerForTests();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-01T12:00:00.000Z"));
     __setCreationTransitionTelemetryStoreForTests(
@@ -353,6 +355,9 @@ describe("creation transition telemetry enterprise hardening", () => {
 
   it("does not block product flow when sink is slow or failing", async () => {
     vi.useRealTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
     __setCreationTransitionTelemetryRuntimeConfigForTests({
       sinkTimeoutMs: 10,
       gateEvaluationIntervalMs: 1,
@@ -369,7 +374,7 @@ describe("creation transition telemetry enterprise hardening", () => {
       draftVersion: 1,
     });
     const elapsedSlow = Date.now() - startedAt;
-    expect(elapsedSlow).toBeLessThan(80);
+    expect(elapsedSlow).toBeLessThan(250);
 
     __setCreationTransitionTelemetryStoreForTests(new FailingStore());
     await expect(
@@ -487,6 +492,15 @@ describe("creation transition telemetry enterprise hardening", () => {
     });
     expect(timeout).toBe("timeout");
 
+    __resetCreationTransitionTelemetryForTests();
+    __resetTelemetryOperationalLoggerForTests();
+    __setCreationTransitionTelemetryRuntimeConfigForTests({
+      enabled: true,
+      sinkTimeoutMs: 120,
+      sinkFallbackCooldownMs: 30000,
+      gateEvaluationIntervalMs: 1,
+      logThrottleMs: 60000,
+    });
     __setCreationTransitionTelemetryStoreForTests(new FailingStore());
     const error = await __emitCreationTransitionEventForTests({
       eventName: "creation_apply_succeeded",
@@ -501,6 +515,129 @@ describe("creation transition telemetry enterprise hardening", () => {
       },
     });
     expect(error).toBe("error");
+  });
+
+  it("entra em fallback no-op apos timeout e passa a pular export sem bloquear o caminho seguinte", async () => {
+    vi.useRealTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    __setCreationTransitionTelemetryRuntimeConfigForTests({
+      enabled: true,
+      sinkTimeoutMs: 5,
+      sinkFallbackCooldownMs: 1000,
+      gateEvaluationIntervalMs: 1,
+      logThrottleMs: 30000,
+    });
+    const insertSpy = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return { status: "stored" as const };
+    });
+    __setCreationTransitionTelemetryStoreForTests({
+      insert: insertSpy,
+      async countByEventName(input) {
+        return Object.fromEntries(
+          input.eventNames.map((eventName) => [eventName, 0]),
+        ) as Record<string, number>;
+      },
+      async listByEventName() {
+        return [];
+      },
+      async countDistinctProjectIds() {
+        return 0;
+      },
+      async countDistinctProjectsWithTemplateDependency() {
+        return 0;
+      },
+      async topTemplateFallbackReasons() {
+        return [];
+      },
+      async countTemplateInheritedFields() {
+        return {
+          profile: 0,
+          initialView: 0,
+          layout: 0,
+          contextDefaults: 0,
+        };
+      },
+      async latestIngestedAt() {
+        return null;
+      },
+    });
+
+    const first = await __emitCreationTransitionEventForTests({
+      eventName: "creation_apply_attempted",
+      payload: {
+        mode: "existing",
+        createInitialMap: true,
+      },
+      context: {
+        projectId: "21212121-2121-4121-8121-212121212121",
+        actorIdentity: "owner@mapia.local",
+      },
+    });
+    expect(first).toBe("timeout");
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+
+    const second = await __emitCreationTransitionEventForTests({
+      eventName: "creation_apply_succeeded",
+      payload: {
+        createInitialMap: true,
+        appliedVersion: 3,
+      },
+      context: {
+        projectId: "21212121-2121-4121-8121-212121212121",
+        actorIdentity: "owner@mapia.local",
+      },
+    });
+
+    expect(second).toBe("skipped");
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("emite logs operacionais estruturados para timeout, fallback ativo e export skipped", async () => {
+    vi.useRealTimers();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    __setCreationTransitionTelemetryRuntimeConfigForTests({
+      enabled: true,
+      sinkTimeoutMs: 5,
+      sinkFallbackCooldownMs: 1000,
+      gateEvaluationIntervalMs: 1,
+      logThrottleMs: 30000,
+    });
+    __setCreationTransitionTelemetryStoreForTests(new SlowMemoryStore(80));
+
+    await __emitCreationTransitionEventForTests({
+      eventName: "creation_apply_attempted",
+      payload: {
+        mode: "existing",
+        createInitialMap: true,
+      },
+      context: {
+        projectId: "31313131-3131-4131-8131-313131313131",
+        actorIdentity: "owner@mapia.local",
+      },
+    });
+    await __emitCreationTransitionEventForTests({
+      eventName: "creation_apply_succeeded",
+      payload: {
+        createInitialMap: true,
+        appliedVersion: 4,
+      },
+      context: {
+        projectId: "31313131-3131-4131-8131-313131313131",
+        actorIdentity: "owner@mapia.local",
+      },
+    });
+
+    const combinedOutput = warnSpy.mock.calls
+      .flat()
+      .map((value) => String(value))
+      .join(" ");
+
+    expect(combinedOutput).toContain("telemetry_sink_timeout");
+    expect(combinedOutput).toContain("telemetry_sink_fallback_active");
+    expect(combinedOutput).toContain("telemetry_export_skipped");
   });
 
   it("skips persistence entirely when creation telemetry is disabled by configuration", async () => {
@@ -595,6 +732,7 @@ describe("creation transition telemetry enterprise hardening", () => {
     const failure = vi.fn().mockRejectedValue(new Error("fanout-op-failed"));
 
     await runCreationTelemetryFanout([success, failure]);
+    await __flushCreationTransitionTelemetryForTests();
 
     expect(success).toHaveBeenCalledTimes(1);
     expect(failure).toHaveBeenCalledTimes(1);

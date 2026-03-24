@@ -4,7 +4,10 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useEditorTranslations } from "../use-editor-translations";
 import { resolveGraphNodeSemantic } from "@/src/modules/diagrams/domain";
 import type { EditorNodeData } from "../editor-graph-mappers";
-import type { EditorTranslationFn } from "../editor-i18n";
+import {
+  translateEditor,
+  type EditorTranslationFn,
+} from "../editor-i18n";
 import {
   resolveFlowHandlePosition,
   resolveFlowNodePresentation,
@@ -134,7 +137,7 @@ function resolveDisplayLabel(nodeData: EditorNodeData, t?: EditorTranslationFn) 
   }
 
   const fallback = nodeData.label?.trim();
-  return fallback || (t ? t("presentation.fallbacks.untitled") : "Sem titulo");
+  return fallback || translateEditor(t, "presentation.fallbacks.untitled");
 }
 
 function resolveTreeRole(nodeData: EditorNodeData) {
@@ -161,14 +164,14 @@ function resolveMindmapLabel(nodeData: EditorNodeData, t?: EditorTranslationFn) 
   const role = resolveMindmapRole(nodeData);
 
   if (role === "mindmap-root") {
-    return t ? t("renderers.mindmap.root") : "Tema central";
+    return translateEditor(t, "renderers.mindmap.root");
   }
 
   if (role === "mindmap-reference") {
-    return t ? t("renderers.mindmap.reference") : "Referencia";
+    return translateEditor(t, "renderers.mindmap.reference");
   }
 
-  return t ? t("renderers.mindmap.branch") : "Ramificacao";
+  return translateEditor(t, "renderers.mindmap.branch");
 }
 
 function resolveErdRole(nodeData: EditorNodeData) {
@@ -343,6 +346,7 @@ export function FlowNodeRenderer({ data }: NodeProps) {
     diagramRole: nodeData.diagramRole,
     kind: nodeData.kind,
     label: displayLabel,
+    t,
   });
 
   return (

@@ -6,12 +6,18 @@ import {
   resolveRecommendedInitialView,
   resolveRecommendedLayout,
   type AssistantCreationSettings,
+  type AssistantContext,
   type AssistantDraft,
+  type CreationAssistantValidationIssueCode,
   type DetailLevel,
+  type InitialView,
+  type LayoutNormalizationWarningCode,
   type ProjectProfile,
+  type RecipeStrictValidationIssueCode,
   type StartSource,
   type StartStrategy,
 } from "@/src/modules/creation-assistant/domain";
+import ptBRMessages from "@/messages/pt-BR.json";
 import {
   resolveCreationContext,
   type ProjectTemplate,
@@ -96,13 +102,89 @@ export type GenericSourceConfig = Extract<
 
 export type InitialDraftState = {
   draft: AssistantDraft;
-  layoutWarning: string | null;
+  layoutWarningCode: LayoutNormalizationWarningCode | null;
 };
 
-const DEFAULT_INITIAL_DRAFT_LABELS = {
-  projectName: "Novo projeto",
-  rootName: "Nucleo",
-} as const;
+export type CreationAssistantDefaultLabels = {
+  projectName: string;
+  rootName: string;
+  hierarchyRootName: string;
+};
+
+export const DEFAULT_INITIAL_DRAFT_LABELS: CreationAssistantDefaultLabels = {
+  projectName: ptBRMessages.Create.defaults.projectName,
+  rootName: ptBRMessages.Create.defaults.rootName,
+  hierarchyRootName: ptBRMessages.Create.defaults.hierarchyRootName,
+};
+
+const LEGACY_DEFAULT_SETUP_ROOT_NAMES = new Set([
+  "No raiz",
+  "Nucleo",
+  "Root node",
+  "Core",
+]);
+
+function resolveDefaultRootNameForView(
+  initialView: InitialView,
+  labels: CreationAssistantDefaultLabels,
+) {
+  return initialView === "hierarchy"
+    ? labels.hierarchyRootName
+    : labels.rootName;
+}
+
+export function localizeAssistantContextDefaults(
+  context: AssistantContext,
+  initialView: InitialView,
+  labels: CreationAssistantDefaultLabels,
+): AssistantContext {
+  if (!context.setup) {
+    return context;
+  }
+
+  const currentRootName = context.setup.initialRootName?.trim();
+  const shouldReplaceRootName =
+    !currentRootName ||
+    LEGACY_DEFAULT_SETUP_ROOT_NAMES.has(currentRootName);
+
+  if (!shouldReplaceRootName) {
+    return context;
+  }
+
+  return {
+    ...context,
+    setup: {
+      ...context.setup,
+      initialRootName: resolveDefaultRootNameForView(initialView, labels),
+    },
+  };
+}
+
+export function buildLocalizedDefaultContextForView(
+  initialView: InitialView,
+  profile: ProjectProfile | undefined,
+  labels: CreationAssistantDefaultLabels,
+) {
+  return localizeAssistantContextDefaults(
+    buildDefaultContextForView(initialView, profile),
+    initialView,
+    labels,
+  );
+}
+
+export function localizeAssistantDraftDefaults(
+  draft: AssistantDraft,
+  labels: CreationAssistantDefaultLabels,
+): AssistantDraft {
+  return {
+    ...draft,
+    context: localizeAssistantContextDefaults(
+      draft.context,
+      draft.initialView,
+      labels,
+    ),
+  };
+}
 
 export function isGenericSourceKind(
   kind: StartSource,
@@ -120,16 +202,69 @@ export function isGenericSourceConfig(
   return isGenericSourceKind(sourceConfig.kind as StartSource);
 }
 
-export function parseError(payload: unknown, fallback: string) {
+export function parseError(
+  payload: unknown,
+  fallback: string,
+  resolveIssueCode?: (
+    code: RecipeStrictValidationIssueCode | CreationAssistantValidationIssueCode,
+    values?: Record<string, string | number>,
+  ) => string,
+) {
   if (!payload || typeof payload !== "object") {
     return fallback;
   }
   const record = payload as Record<string, unknown>;
+
+  if (
+    Array.isArray(record.issues) &&
+    typeof record.issues[0] === "object" &&
+    record.issues[0] !== null
+  ) {
+    const firstIssue = record.issues[0] as {
+      message?: unknown;
+      params?: { i18nValues?: unknown };
+    };
+    if (typeof firstIssue.message === "string") {
+      const values =
+        firstIssue.params?.i18nValues &&
+        typeof firstIssue.params.i18nValues === "object" &&
+        !Array.isArray(firstIssue.params.i18nValues)
+          ? (firstIssue.params.i18nValues as Record<string, string | number>)
+          : undefined;
+      return resolveIssueCode
+        ? resolveIssueCode(
+            firstIssue.message as
+              | RecipeStrictValidationIssueCode
+              | CreationAssistantValidationIssueCode,
+            values,
+          )
+        : firstIssue.message;
+    }
+  }
+
+  if (
+    Array.isArray(record.blockingIssueCodes) &&
+    typeof record.blockingIssueCodes[0] === "string"
+  ) {
+    const code = record.blockingIssueCodes[0] as RecipeStrictValidationIssueCode;
+    return resolveIssueCode ? resolveIssueCode(code) : code;
+  }
   if (
     Array.isArray(record.blockingIssues) &&
     typeof record.blockingIssues[0] === "string"
   ) {
     return record.blockingIssues[0];
+  }
+  if (
+    record.details &&
+    typeof record.details === "object" &&
+    Array.isArray((record.details as { blockingIssueCodes?: unknown[] }).blockingIssueCodes) &&
+    typeof (record.details as { blockingIssueCodes: unknown[] }).blockingIssueCodes[0] ===
+      "string"
+  ) {
+    const code = (record.details as { blockingIssueCodes: string[] })
+      .blockingIssueCodes[0] as RecipeStrictValidationIssueCode;
+    return resolveIssueCode ? resolveIssueCode(code) : code;
   }
   if (
     record.details &&
@@ -147,10 +282,7 @@ export function buildInitialDraft(input: {
   initialSettings?: AssistantCreationSettings | null;
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
-  labels?: {
-    projectName: string;
-    rootName: string;
-  };
+  labels?: CreationAssistantDefaultLabels;
 }): InitialDraftState {
   const labels = input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS;
 
@@ -158,8 +290,8 @@ export function buildInitialDraft(input: {
     const parsedDraft = AssistantDraftSchema.safeParse(input.initialDraftState.draft);
     if (parsedDraft.success) {
       return {
-        draft: parsedDraft.data,
-        layoutWarning: null,
+        draft: localizeAssistantDraftDefaults(parsedDraft.data, labels),
+        layoutWarningCode: null,
       };
     }
   }
@@ -176,7 +308,7 @@ export function buildInitialDraft(input: {
     initialView,
     layout: context.effectiveLayout,
   });
-  const layoutWarning = context.warning ?? normalized.warning;
+  const layoutWarningCode = context.warningCode ?? normalized.warningCode;
   const parsed = AssistantDraftSchema.safeParse({
     projectName: input.initialProject?.name ?? labels.projectName,
     ...(input.initialProject?.objective
@@ -206,13 +338,19 @@ export function buildInitialDraft(input: {
     initialView,
     layout: normalized.layout,
     detailLevel: input.initialSettings?.detailLevel ?? "intermediate",
-    automation: input.initialSettings?.automation ?? buildDefaultAutomationToggles(),
-    context: context.effectiveContextDefaults ?? buildDefaultContextForView(initialView, profile),
+      automation: input.initialSettings?.automation ?? buildDefaultAutomationToggles(),
+    context: context.effectiveContextDefaults
+      ? localizeAssistantContextDefaults(
+          context.effectiveContextDefaults,
+          initialView,
+          labels,
+        )
+      : buildLocalizedDefaultContextForView(initialView, profile, labels),
   });
   if (parsed.success) {
     return {
-      draft: parsed.data,
-      layoutWarning,
+      draft: localizeAssistantDraftDefaults(parsed.data, labels),
+      layoutWarningCode,
     };
   }
 
@@ -225,8 +363,8 @@ export function buildInitialDraft(input: {
       layout: resolveRecommendedLayout("free", "blank"),
       detailLevel: "intermediate",
       automation: buildDefaultAutomationToggles(),
-      context: buildDefaultContextForView("free", "blank"),
+      context: buildLocalizedDefaultContextForView("free", "blank", labels),
     }),
-    layoutWarning,
+    layoutWarningCode,
   };
 }

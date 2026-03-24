@@ -18,7 +18,6 @@ import {
   applyResolvedSourceLifecycleToSettings,
   buildDefaultContextForView,
   buildInitialSeedGraph,
-  buildWhatWillBeCreatedSummary,
   normalizeLayoutForView,
   normalizeSourceStatusCode,
   redactAssistantCreationSettings,
@@ -60,7 +59,6 @@ type CreationAssistantUseCaseDeps = {
 type ApplyCreationResult = {
   projectId: string;
   redirectUrl: string;
-  whatWillBeCreated: string;
   appliedAt?: Date;
   appliedVersion: number;
   appliedSettings: AssistantCreationSettings;
@@ -438,8 +436,8 @@ async function applyCreationToProject(input: {
         code: "CREATION_DRAFT_STRICT_VALIDATION_FAILED",
         status: 422,
         details: {
-          blockingIssues: strictValidation.blockingIssues,
-          warnings: strictValidation.warnings,
+          blockingIssueCodes: strictValidation.blockingIssueCodes,
+          warningCodes: strictValidation.warningCodes,
           profile: draft.profile,
           initialView: draft.initialView,
         },
@@ -501,13 +499,6 @@ async function applyCreationToProject(input: {
   return {
     projectId: project.id,
     redirectUrl: `/editor?projectId=${project.id}`,
-    whatWillBeCreated: buildWhatWillBeCreatedSummary({
-      profile: applied.settings.profile,
-      initialView: applied.settings.initialView,
-      layout: applied.settings.layout,
-      automation: applied.settings.automation,
-      sourceStatus: applied.settings.sourceStatus,
-    }),
     appliedAt: applied.appliedAt,
     appliedVersion: applied.version,
     appliedSettings: applied.settings,
@@ -670,13 +661,6 @@ export class CreateProjectWithAssistantUseCase {
       projectId: project.id,
       initialSnapshot,
       redirectUrl: `/editor?projectId=${project.id}`,
-      whatWillBeCreated: buildWhatWillBeCreatedSummary({
-        profile: applied.settings.profile,
-        initialView: applied.settings.initialView,
-        layout: applied.settings.layout,
-        automation: applied.settings.automation,
-        sourceStatus: applied.settings.sourceStatus,
-      }),
       appliedAt: applied.appliedAt,
       appliedVersion: applied.version,
       appliedSettings: applied.settings,

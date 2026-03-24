@@ -5,7 +5,7 @@ import {
 import {
   shouldMemoizeOpenTelemetryRuntimeStartResult,
   type OpenTelemetryRuntime,
-} from "@/src/server/observability";
+} from "@/src/server/observability/otel-runtime";
 import {
   ImportTelemetryOtelAdapter,
   type ImportTelemetryOtelAdapterConfig,

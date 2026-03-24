@@ -1,12 +1,23 @@
 import { IntlErrorCode, type IntlError } from "next-intl";
 
+const reportedMissingMessages = new Set<string>();
+
 function getMessagePath(namespace: string | undefined, key: string) {
   return [namespace, key].filter(Boolean).join(".");
 }
 
+function shouldRevealMissingMessage() {
+  return process.env.NODE_ENV !== "production";
+}
+
 export function onIntlError(error: IntlError) {
   if (error.code === IntlErrorCode.MISSING_MESSAGE) {
-    console.warn(error);
+    const messagePath = error.message;
+
+    if (messagePath && !reportedMissingMessages.has(messagePath)) {
+      reportedMissingMessages.add(messagePath);
+      console.warn(`[i18n] Missing message: ${messagePath}`);
+    }
     return;
   }
 
@@ -17,5 +28,8 @@ export function getIntlMessageFallback(input: {
   namespace?: string;
   key: string;
 }) {
-  return getMessagePath(input.namespace, input.key);
+  const messagePath = getMessagePath(input.namespace, input.key);
+  return shouldRevealMissingMessage()
+    ? `[missing] ${messagePath}`
+    : messagePath;
 }

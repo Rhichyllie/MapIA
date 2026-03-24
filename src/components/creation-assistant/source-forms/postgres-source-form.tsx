@@ -4,7 +4,9 @@ import type { CreationAssistantLabels } from "../creation-assistant-i18n";
 type PostgresSourceFormProps = {
   draft: AssistantDraft;
   setDraft: React.Dispatch<React.SetStateAction<AssistantDraft>>;
-  sourcePreview: { message: string } | null;
+  sourcePreview: NonNullable<
+    ReturnType<CreationAssistantLabels["getSourcePreviewCopy"]>
+  > | null;
   labels: CreationAssistantLabels;
 };
 
@@ -266,7 +268,16 @@ export function PostgresSourceForm({
         </>
       ) : null}
 
-      {sourcePreview ? <p className="helper">{sourcePreview.message}</p> : null}
+      {sourcePreview ? (
+        <div className="stack-xs">
+          <p className="helper">{sourcePreview.summary}</p>
+          {sourcePreview.details.map((detail) => (
+            <p key={detail} className="helper">
+              {detail}
+            </p>
+          ))}
+        </div>
+      ) : null}
       <p className="helper">{labels.sourceForms.postgres.draftSafetyHint}</p>
       <p className="helper">{labels.sourceForms.postgres.securityHint}</p>
     </div>

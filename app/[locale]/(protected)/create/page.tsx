@@ -15,7 +15,7 @@ import {
 import {
   recordCreationLegacyTemplateFallback,
   recordCreationRecipeRuntimeResolved,
-} from "@/src/server/observability";
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 
 type CreatePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;

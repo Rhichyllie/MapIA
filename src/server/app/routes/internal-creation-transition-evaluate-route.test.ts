@@ -16,7 +16,7 @@ vi.mock("@/src/server/auth/internal-observability-access", () => ({
   resolveInternalObservabilityAccess: routeMocks.resolveInternalObservabilityAccess,
 }));
 
-vi.mock("@/src/server/observability", () => ({
+vi.mock("@/src/server/observability/creation-assistant-transition-telemetry", () => ({
   buildCreationTelemetryContextFromRequest: vi.fn().mockReturnValue({}),
   evaluateCreationTransitionGateWarnings:
     routeMocks.evaluateCreationTransitionGateWarnings,

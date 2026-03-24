@@ -1,13 +1,15 @@
 import { CardOption } from "@/src/components/ui/card-option";
 import {
-  buildDefaultContextForView,
   getRecommendedViewsForProfile,
   getViewCompatibilityRank,
   normalizeLayoutForView,
   type AssistantDraft,
 } from "@/src/modules/creation-assistant/domain";
 import type { CreationAssistantLabels } from "../creation-assistant-i18n";
-import { PROJECT_PROFILES } from "../shared";
+import {
+  buildLocalizedDefaultContextForView,
+  PROJECT_PROFILES,
+} from "../shared";
 
 type ScopeStepProps = {
   draft: AssistantDraft;
@@ -50,7 +52,11 @@ export function ScopeStep({
                 initialView: nextView,
                 layout: normalized.layout,
                 context: {
-                  ...buildDefaultContextForView(nextView, profile),
+                  ...buildLocalizedDefaultContextForView(
+                    nextView,
+                    profile,
+                    labels.defaults,
+                  ),
                   ...current.context,
                 },
               }),

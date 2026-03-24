@@ -4,33 +4,36 @@ import {
   applyResolvedSourceLifecycleToDraft,
   redactAssistantDraft,
   type AssistantDraft,
+  type CreationAssistantValidationIssueCode,
+  type RecipeStrictValidationIssueCode,
 } from "@/src/modules/creation-assistant/domain";
+import ptBRMessages from "@/messages/pt-BR.json";
 import {
   LOCAL_DRAFT_KEY,
   parseError,
   STEP_IDS,
   type CreationAssistantMode,
 } from "../shared";
+import { createCreationAssistantLabels } from "../creation-assistant-i18n";
 
-const DEFAULT_COPY = {
-  localDraftSaved: "Rascunho salvo localmente.",
-  serverDraftSaved: "Rascunho salvo no servidor.",
-  serverDraftConflict:
-    "Havia uma versao mais recente do rascunho no servidor. Carregamos a ultima versao para continuar.",
-  saveDraftFallbackError: "Falha ao salvar rascunho.",
-  currentStepInvalid: "Revise os dados da etapa atual.",
-  moveNextFallbackError: "Falha ao avancar etapa.",
-  prismaSourceRequired:
-    "Cole um schema Prisma valido para verificacao inicial/importacao.",
-  prismaValidationFallbackError: "Falha na verificacao inicial do schema Prisma.",
-  prismaValidationSuccess:
-    "Verificacao inicial concluida e importacao executada no projeto atual.",
-  sourceValidationFallbackError: "Falha na verificacao inicial da fonte.",
-  finishCreationFallbackError: "Falha ao criar mapa inicial.",
-} as const;
+const DEFAULT_COPY = createCreationAssistantLabels(ptBRMessages, "pt-BR").hooks;
 
 type CreationDraftSyncCopy = {
-  [Key in keyof typeof DEFAULT_COPY]: string;
+  localDraftSaved: string;
+  serverDraftSaved: string;
+  serverDraftConflict: string;
+  saveDraftFallbackError: string;
+  currentStepInvalid: string;
+  moveNextFallbackError: string;
+  prismaSourceRequired: string;
+  prismaValidationFallbackError: string;
+  prismaValidationSuccess: string;
+  sourceValidationFallbackError: string;
+  finishCreationFallbackError: string;
+  getValidationIssueMessage: (
+    code: RecipeStrictValidationIssueCode | CreationAssistantValidationIssueCode,
+    values?: Record<string, string | number>,
+  ) => string;
 };
 
 type UseCreationDraftSyncInput = {
@@ -119,7 +122,13 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
         }
         throw new Error(copy.serverDraftConflict);
       }
-      throw new Error(parseError(payload, copy.saveDraftFallbackError));
+      throw new Error(
+        parseError(
+          payload,
+          copy.saveDraftFallbackError,
+          copy.getValidationIssueMessage,
+        ),
+      );
     }
 
     const nextVersion =
@@ -206,7 +215,11 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       const payload = (await response.json()) as unknown;
       if (!response.ok) {
         throw new Error(
-          parseError(payload, copy.prismaValidationFallbackError),
+          parseError(
+            payload,
+            copy.prismaValidationFallbackError,
+            copy.getValidationIssueMessage,
+          ),
         );
       }
 
@@ -259,7 +272,13 @@ export function useCreationDraftSync(input: UseCreationDraftSyncInput) {
       });
       const payload = (await response.json()) as { data?: { redirectUrl?: string } };
       if (!response.ok) {
-        throw new Error(parseError(payload, copy.finishCreationFallbackError));
+        throw new Error(
+          parseError(
+            payload,
+            copy.finishCreationFallbackError,
+            copy.getValidationIssueMessage,
+          ),
+        );
       }
       if (input.mode === "new" && typeof window !== "undefined") {
         window.localStorage.removeItem(LOCAL_DRAFT_KEY);

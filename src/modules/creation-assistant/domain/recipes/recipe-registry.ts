@@ -26,14 +26,6 @@ export type RecipeLayoutCatalog = {
   advanced: LayoutChoice[];
 };
 
-export type AutomationCopyMap = Record<
-  keyof AutomationToggles,
-  {
-    label: string;
-    help: string;
-  }
->;
-
 export type RecipeSeedPlan = {
   kind:
     | "erd-native"
@@ -43,33 +35,31 @@ export type RecipeSeedPlan = {
     | "graph-native"
     | "mindmap-native"
     | "timeline-native";
-  description: string;
 };
 
 export type RecipePersona = {
-  labels: {
-    addPrimary: string;
-    addDialogTitle: string;
-    addDialogHint: string;
-    addConfirm: string;
-    quickActionHint?: string;
-  };
   quickAdd: {
     defaultNodeKind: NodeKind;
     defaultEdgeKind: EdgeKind;
   };
 };
 
-export type RecipeAction = {
-  id: string;
-  label: string;
-  description: string;
-};
+export type RecipeStrictValidationIssueCode =
+  | "import_source_not_ready"
+  | "process_auto_start_end_requires_examples"
+  | "sitemap_auto_home_requires_examples"
+  | "hierarchy_root_requires_examples"
+  | "system_graph_requires_examples";
+
+export type RecipeStrictValidationWarningCode =
+  | "data_model_template_requires_source_validation"
+  | "process_multiple_outputs_without_auto_start_end"
+  | "hybrid_without_source_config_creates_manual_map";
 
 export type RecipeStrictValidationResult = {
   ok: boolean;
-  blockingIssues: string[];
-  warnings: string[];
+  blockingIssueCodes: RecipeStrictValidationIssueCode[];
+  warningCodes: RecipeStrictValidationWarningCode[];
 };
 
 export type CreationRecipe = {
@@ -78,15 +68,10 @@ export type CreationRecipe = {
   view: InitialView;
   recommendedInitialViews: InitialView[];
   defaultLayoutCatalog: RecipeLayoutCatalog;
-  defaultAutomation: {
-    toggles: AutomationToggles;
-    copy: AutomationCopyMap;
-  };
   nativeSeed: RecipeSeedPlan;
   contextBlocks: RecipeContextBlock[];
   validationRules: RecipeValidationRules;
   persona: RecipePersona;
-  actions: RecipeAction[];
 };
 
 export type RecipeRuntime = {
@@ -98,36 +83,11 @@ export type RecipeRuntime = {
   layoutCatalog: RecipeLayoutCatalog;
   strictRules: string[];
   persona: RecipePersona;
-  actions: RecipeAction[];
   contextBlocks: RecipeContextBlock[];
-  defaultAutomation: CreationRecipe["defaultAutomation"];
 };
 
 const STATUS_READY_FOR_ATTEMPT = "ready_to_attempt_import";
 const STATUS_IMPORTED = "imported";
-
-export const DEFAULT_AUTOMATION_COPY: AutomationCopyMap = {
-  inferRelations: {
-    label: "Inferir relacoes automaticamente",
-    help: "Sugere conexoes estruturais com base no contexto inicial.",
-  },
-  createLinkFields: {
-    label: "Criar campos de ligacao quando necessario",
-    help: "Adiciona campos auxiliares para manter conexoes consistentes.",
-  },
-  applySuggestedNames: {
-    label: "Aplicar nomes sugeridos",
-    help: "Padroniza titulos iniciais com nomenclatura recomendada.",
-  },
-  autoOrganizeOnCreate: {
-    label: "Organizar layout ao criar",
-    help: "Aplica disposicao inicial automaticamente ao gerar o mapa.",
-  },
-  detectInconsistenciesEarly: {
-    label: "Detectar inconsistencias desde o inicio",
-    help: "Ativa verificacoes semanticas desde o primeiro mapa.",
-  },
-};
 
 export const DEFAULT_AUTOMATION_TOGGLES: AutomationToggles = {
   inferRelations: true,
@@ -138,13 +98,16 @@ export const DEFAULT_AUTOMATION_TOGGLES: AutomationToggles = {
 };
 
 function buildStrictResult(
-  blockingIssues: string[],
-  warnings: string[] = [],
+  blockingIssueCodes: RecipeStrictValidationIssueCode[],
+  warningCodes: RecipeStrictValidationWarningCode[] = [],
 ): RecipeStrictValidationResult {
+  const uniqueBlockingIssueCodes = [...new Set(blockingIssueCodes)];
+  const uniqueWarningCodes = [...new Set(warningCodes)];
+
   return {
-    ok: blockingIssues.length === 0,
-    blockingIssues,
-    warnings,
+    ok: uniqueBlockingIssueCodes.length === 0,
+    blockingIssueCodes: uniqueBlockingIssueCodes,
+    warningCodes: uniqueWarningCodes,
   };
 }
 
@@ -174,12 +137,6 @@ function buildFallbackPersona(input: {
 }): RecipePersona {
   if (input.view === "erd") {
     return {
-      labels: {
-        addPrimary: "Adicionar entidade",
-        addDialogTitle: "QuickAdd de entidades",
-        addDialogHint: "Crie entidades com campos e relacoes.",
-        addConfirm: "Adicionar entidade",
-      },
       quickAdd: {
         defaultNodeKind: "entity",
         defaultEdgeKind: "references",
@@ -189,12 +146,6 @@ function buildFallbackPersona(input: {
 
   if (input.view === "flow") {
     return {
-      labels: {
-        addPrimary: "Adicionar atividade",
-        addDialogTitle: "QuickAdd do processo",
-        addDialogHint: "Insira atividades, decisoes, encerramentos e observacoes do fluxo.",
-        addConfirm: "Inserir no fluxo",
-      },
       quickAdd: {
         defaultNodeKind: "flow-step",
         defaultEdgeKind: "flows-to",
@@ -204,12 +155,6 @@ function buildFallbackPersona(input: {
 
   if (input.view === "sitemap" || input.view === "hierarchy") {
     return {
-      labels: {
-        addPrimary: "Adicionar pagina",
-        addDialogTitle: "QuickAdd de estrutura",
-        addDialogHint: "Adicione paginas e niveis da estrutura.",
-        addConfirm: "Adicionar pagina",
-      },
       quickAdd: {
         defaultNodeKind: "page",
         defaultEdgeKind: "contains",
@@ -218,12 +163,6 @@ function buildFallbackPersona(input: {
   }
 
   return {
-    labels: {
-      addPrimary: "Adicionar item",
-      addDialogTitle: "QuickAdd",
-      addDialogHint: "Adicione itens e conecte rapidamente.",
-      addConfirm: "Adicionar item",
-    },
     quickAdd: {
       defaultNodeKind: "note",
       defaultEdgeKind: "relates-to",
@@ -231,124 +170,42 @@ function buildFallbackPersona(input: {
   };
 }
 
-function buildFallbackActions(view: InitialView): RecipeAction[] {
-  if (view === "erd") {
-    return [
-      {
-        id: "add-entity",
-        label: "Adicionar entidade",
-        description: "Cria uma nova entidade com campos iniciais.",
-      },
-      {
-        id: "add-relationship",
-        label: "Definir relacao",
-        description: "Cria relacao com cardinalidade inicial.",
-      },
-    ];
-  }
-
-  if (view === "flow") {
-    return [
-      {
-        id: "add-step",
-        label: "Adicionar etapa",
-        description: "Inclui uma etapa no fluxo.",
-      },
-      {
-        id: "add-decision",
-        label: "Adicionar decisao",
-        description: "Insere um ponto de decisao no fluxo.",
-      },
-    ];
-  }
-
-  if (view === "sitemap") {
-    return [
-      {
-        id: "add-page",
-        label: "Adicionar pagina",
-        description: "Cria uma nova pagina no mapa.",
-      },
-      {
-        id: "add-section",
-        label: "Adicionar secao",
-        description: "Cria uma secao principal de navegacao.",
-      },
-    ];
-  }
-
-  if (view === "hierarchy") {
-    return [
-      {
-        id: "add-root-child",
-        label: "Adicionar filho",
-        description: "Adiciona um novo no filho.",
-      },
-      {
-        id: "add-level",
-        label: "Adicionar nivel",
-        description: "Cria um novo nivel hierarquico.",
-      },
-    ];
-  }
-
-  return [
-    {
-      id: "add-item",
-      label: "Adicionar item",
-      description: "Adiciona um novo item ao mapa.",
-    },
-    {
-      id: "add-connection",
-      label: "Adicionar conexao",
-      description: "Conecta dois itens do mapa.",
-    },
-  ];
-}
-
 function buildFallbackSeedPlan(view: InitialView): RecipeSeedPlan {
   if (view === "erd") {
     return {
       kind: "erd-native",
-      description: "Entidades e relacoes nativas.",
     };
   }
   if (view === "flow") {
     return {
       kind: "flow-native",
-      description: "Fluxo nativo com etapas iniciais.",
     };
   }
   if (view === "sitemap") {
     return {
       kind: "sitemap-native",
-      description: "Sitemap nativo com Home e secoes.",
     };
   }
   if (view === "hierarchy") {
     return {
       kind: "hierarchy-native",
-      description: "Hierarquia nativa com raiz inicial.",
     };
   }
 
   if (view === "mindmap") {
     return {
       kind: "mindmap-native",
-      description: "Mapa mental nativo com tema central.",
     };
   }
 
   if (view === "timeline") {
     return {
       kind: "timeline-native",
-      description: "Timeline nativa com marcos iniciais.",
     };
   }
 
   return {
     kind: "graph-native",
-    description: "Grafo nativo com nucleo e conexoes.",
   };
 }
 
@@ -402,8 +259,8 @@ function buildFallbackLayoutCatalog(view: InitialView): RecipeLayoutCatalog {
 }
 
 function validateDataModelErdStrict(draft: AssistantDraft) {
-  const blockingIssues: string[] = [];
-  const warnings: string[] = [];
+  const blockingIssueCodes: RecipeStrictValidationIssueCode[] = [];
+  const warningCodes: RecipeStrictValidationWarningCode[] = [];
 
   if (
     draft.startStrategy === "import" &&
@@ -412,80 +269,66 @@ function validateDataModelErdStrict(draft: AssistantDraft) {
       sourceStatus: draft.sourceStatus,
     })
   ) {
-    blockingIssues.push(
-      "Importacao exige fonte em estado 'Pronta para tentar importar' ou 'Importada com sucesso'.",
-    );
+    blockingIssueCodes.push("import_source_not_ready");
   }
 
   if (draft.startStrategy === "template") {
-    warnings.push(
-      "Template ativo: valide fonte depois caso precise sincronizar o ERD com sistema externo.",
-    );
+    warningCodes.push("data_model_template_requires_source_validation");
   }
 
-  return buildStrictResult(blockingIssues, warnings);
+  return buildStrictResult(blockingIssueCodes, warningCodes);
 }
 
 function validateProcessFlowStrict(draft: AssistantDraft) {
-  const blockingIssues: string[] = [];
-  const warnings: string[] = [];
+  const blockingIssueCodes: RecipeStrictValidationIssueCode[] = [];
+  const warningCodes: RecipeStrictValidationWarningCode[] = [];
   const shouldCreateStartEnd = draft.context.flow?.autoCreateStartEnd ?? true;
   const createExamples = draft.context.setup?.createExamples ?? true;
 
   if (shouldCreateStartEnd && !createExamples) {
-    blockingIssues.push(
-      "Com 'Criar inicio e fim automaticamente' ativo, habilite 'Criar exemplos automaticos' para gerar o plano inicial.",
-    );
+    blockingIssueCodes.push("process_auto_start_end_requires_examples");
   }
 
   if ((draft.context.flow?.allowMultipleOutputs ?? false) && !shouldCreateStartEnd) {
-    warnings.push(
-      "Multiplas saidas ativas sem inicio/fim automatico: revise consistencia do fluxo no editor.",
-    );
+    warningCodes.push("process_multiple_outputs_without_auto_start_end");
   }
 
-  return buildStrictResult(blockingIssues, warnings);
+  return buildStrictResult(blockingIssueCodes, warningCodes);
 }
 
 function validateInfoSitemapStrict(draft: AssistantDraft) {
-  const blockingIssues: string[] = [];
+  const blockingIssueCodes: RecipeStrictValidationIssueCode[] = [];
   const autoCreateHome = draft.context.sitemap?.autoCreateHome ?? true;
   const createExamples = draft.context.setup?.createExamples ?? true;
 
   if (autoCreateHome && !createExamples) {
-    blockingIssues.push(
-      "Com 'Criar Home automaticamente' ativo, habilite 'Criar exemplos automaticos' para gerar a Home inicial.",
-    );
+    blockingIssueCodes.push("sitemap_auto_home_requires_examples");
   }
 
-  return buildStrictResult(blockingIssues);
+  return buildStrictResult(blockingIssueCodes);
 }
 
 function validateInfoHierarchyStrict(draft: AssistantDraft) {
-  const blockingIssues: string[] = [];
+  const blockingIssueCodes: RecipeStrictValidationIssueCode[] = [];
   const createRoot = draft.context.hierarchy?.createRoot ?? true;
   const createExamples = draft.context.setup?.createExamples ?? true;
 
   if (createRoot && !createExamples) {
-    blockingIssues.push(
-      "Com 'Criar no raiz' ativo, habilite 'Criar exemplos automaticos' para gerar a raiz inicial.",
-    );
+    blockingIssueCodes.push("hierarchy_root_requires_examples");
   }
 
-  return buildStrictResult(blockingIssues);
+  return buildStrictResult(blockingIssueCodes);
 }
 
 function validateSystemGraphStrict(draft: AssistantDraft) {
-  const blockingIssues: string[] = [];
+  const blockingIssueCodes: RecipeStrictValidationIssueCode[] = [];
   const createExamples = draft.context.setup?.createExamples ?? true;
 
   if (draft.profile !== "blank" && draft.profile !== "mixed" && !createExamples) {
-    blockingIssues.push(
-      "Para este escopo, mantenha 'Criar exemplos automaticos' ativo para garantir no nucleo inicial no grafo.",
-    );
+    blockingIssueCodes.push("system_graph_requires_examples");
   }
 
-  return buildStrictResult(blockingIssues);
+  return buildStrictResult(blockingIssueCodes);
 }
 
 const recipeList = [
@@ -498,13 +341,8 @@ const recipeList = [
       recommended: ["relational", "auto"],
       advanced: ["free"],
     },
-    defaultAutomation: {
-      toggles: DEFAULT_AUTOMATION_TOGGLES,
-      copy: DEFAULT_AUTOMATION_COPY,
-    },
     nativeSeed: {
       kind: "erd-native",
-      description: "Entidades e relacionamentos nativos de modelo de dados.",
     },
     contextBlocks: ["setup", "erd"],
     validationRules: {
@@ -521,30 +359,11 @@ const recipeList = [
       ],
     },
     persona: {
-      labels: {
-        addPrimary: "Adicionar entidade",
-        addDialogTitle: "QuickAdd de entidades",
-        addDialogHint: "Crie entidades com campos, PK/FK e cardinalidade.",
-        addConfirm: "Adicionar entidade",
-        quickActionHint: "Acao recomendada: Definir cardinalidade",
-      },
       quickAdd: {
         defaultNodeKind: "entity",
         defaultEdgeKind: "references",
       },
     },
-    actions: [
-      {
-        id: "add-entity",
-        label: "Adicionar entidade",
-        description: "Cria uma nova entidade.",
-      },
-      {
-        id: "define-cardinality",
-        label: "Definir cardinalidade",
-        description: "Define cardinalidade entre entidades.",
-      },
-    ],
   },
   {
     id: "process:flow",
@@ -555,13 +374,8 @@ const recipeList = [
       recommended: ["horizontal", "vertical", "auto"],
       advanced: ["free"],
     },
-    defaultAutomation: {
-      toggles: DEFAULT_AUTOMATION_TOGGLES,
-      copy: DEFAULT_AUTOMATION_COPY,
-    },
     nativeSeed: {
       kind: "flow-native",
-      description: "Fluxo nativo com inicio/fim e etapas.",
     },
     contextBlocks: ["setup", "flow"],
     validationRules: {
@@ -576,31 +390,11 @@ const recipeList = [
       ],
     },
     persona: {
-      labels: {
-        addPrimary: "Adicionar atividade",
-        addDialogTitle: "QuickAdd de processo",
-        addDialogHint:
-          "Adicione atividades, decisoes, encerramentos e observacoes do fluxo operacional.",
-        addConfirm: "Inserir no fluxo",
-        quickActionHint: "Sugestao: continue o fluxo ou abra uma bifurcacao quando houver regra.",
-      },
       quickAdd: {
         defaultNodeKind: "flow-step",
         defaultEdgeKind: "flows-to",
       },
     },
-    actions: [
-      {
-        id: "add-step",
-        label: "Adicionar etapa",
-        description: "Inclui uma etapa no fluxo.",
-      },
-      {
-        id: "add-decision",
-        label: "Adicionar decisao",
-        description: "Insere um ponto de decisao.",
-      },
-    ],
   },
   {
     id: "information-structure:sitemap",
@@ -611,13 +405,8 @@ const recipeList = [
       recommended: ["vertical", "horizontal", "auto"],
       advanced: ["free"],
     },
-    defaultAutomation: {
-      toggles: DEFAULT_AUTOMATION_TOGGLES,
-      copy: DEFAULT_AUTOMATION_COPY,
-    },
     nativeSeed: {
       kind: "sitemap-native",
-      description: "Mapa de navegacao com Home e secoes.",
     },
     contextBlocks: ["setup", "sitemap"],
     validationRules: {
@@ -628,29 +417,11 @@ const recipeList = [
       ],
     },
     persona: {
-      labels: {
-        addPrimary: "Adicionar pagina",
-        addDialogTitle: "QuickAdd de paginas",
-        addDialogHint: "Crie paginas e secoes com navegacao coerente.",
-        addConfirm: "Adicionar pagina",
-      },
       quickAdd: {
         defaultNodeKind: "page",
         defaultEdgeKind: "contains",
       },
     },
-    actions: [
-      {
-        id: "add-page",
-        label: "Adicionar pagina",
-        description: "Cria uma pagina no sitemap.",
-      },
-      {
-        id: "add-navigation-path",
-        label: "Adicionar caminho",
-        description: "Cria caminho de navegacao entre paginas.",
-      },
-    ],
   },
   {
     id: "information-structure:hierarchy",
@@ -661,13 +432,8 @@ const recipeList = [
       recommended: ["vertical", "horizontal", "auto"],
       advanced: ["free"],
     },
-    defaultAutomation: {
-      toggles: DEFAULT_AUTOMATION_TOGGLES,
-      copy: DEFAULT_AUTOMATION_COPY,
-    },
     nativeSeed: {
       kind: "hierarchy-native",
-      description: "Hierarquia nativa com raiz e profundidade inicial.",
     },
     contextBlocks: ["setup", "hierarchy"],
     validationRules: {
@@ -676,29 +442,11 @@ const recipeList = [
       strict: ["Com no raiz ativo, deve existir plano real para gerar a raiz."],
     },
     persona: {
-      labels: {
-        addPrimary: "Adicionar secao",
-        addDialogTitle: "QuickAdd de secoes",
-        addDialogHint: "Estruture secoes com hierarquia consistente.",
-        addConfirm: "Adicionar secao",
-      },
       quickAdd: {
         defaultNodeKind: "page",
         defaultEdgeKind: "contains",
       },
     },
-    actions: [
-      {
-        id: "add-section",
-        label: "Adicionar secao",
-        description: "Cria uma nova secao hierarquica.",
-      },
-      {
-        id: "add-child-node",
-        label: "Adicionar filho",
-        description: "Cria um filho para o no selecionado.",
-      },
-    ],
   },
   {
     id: "system-architecture:graph",
@@ -709,13 +457,8 @@ const recipeList = [
       recommended: ["auto", "free"],
       advanced: ["vertical", "horizontal", "radial", "relational"],
     },
-    defaultAutomation: {
-      toggles: DEFAULT_AUTOMATION_TOGGLES,
-      copy: DEFAULT_AUTOMATION_COPY,
-    },
     nativeSeed: {
       kind: "graph-native",
-      description: "Nucleo arquitetural com relacoes iniciais.",
     },
     contextBlocks: ["setup", "graph"],
     validationRules: {
@@ -726,29 +469,11 @@ const recipeList = [
       ],
     },
     persona: {
-      labels: {
-        addPrimary: "Adicionar componente",
-        addDialogTitle: "QuickAdd de arquitetura",
-        addDialogHint: "Mapeie componentes, interfaces e dependencias.",
-        addConfirm: "Adicionar componente",
-      },
       quickAdd: {
         defaultNodeKind: "entity",
         defaultEdgeKind: "depends-on",
       },
     },
-    actions: [
-      {
-        id: "add-component",
-        label: "Adicionar componente",
-        description: "Cria um componente arquitetural.",
-      },
-      {
-        id: "add-dependency",
-        label: "Adicionar dependencia",
-        description: "Conecta componentes por dependencia.",
-      },
-    ],
   },
 ] as const satisfies readonly CreationRecipe[];
 
@@ -792,9 +517,7 @@ export function resolveRecipeRuntime(input: {
       layoutCatalog: recipe.defaultLayoutCatalog,
       strictRules: recipe.validationRules.strict,
       persona: recipe.persona,
-      actions: recipe.actions,
       contextBlocks: recipe.contextBlocks,
-      defaultAutomation: recipe.defaultAutomation,
     };
   }
 
@@ -808,12 +531,7 @@ export function resolveRecipeRuntime(input: {
     layoutCatalog: fallbackLayout,
     strictRules: [],
     persona: buildFallbackPersona(input),
-    actions: buildFallbackActions(input.view),
     contextBlocks: buildFallbackContextBlocks(input.view),
-    defaultAutomation: {
-      toggles: DEFAULT_AUTOMATION_TOGGLES,
-      copy: DEFAULT_AUTOMATION_COPY,
-    },
   };
 }
 
@@ -867,13 +585,6 @@ export function resolveRecipePersona(input: {
   return resolveRecipeRuntime(input).persona;
 }
 
-export function resolveRecipeActions(input: {
-  profile: ProjectProfile;
-  view: InitialView;
-}) {
-  return resolveRecipeRuntime(input).actions;
-}
-
 export function isSourceStatusValidForStrictPhase(input: {
   strategy: StartStrategy;
   sourceStatus?: string;
@@ -894,8 +605,8 @@ export function validateStrictByRecipe(draft: AssistantDraft): RecipeStrictValid
   const validator = strictValidatorByRecipeId[runtime.recipeId as CreationRecipe["id"]];
   const recipeResult = validator ? validator(draft) : buildStrictResult([]);
 
-  const blockingIssues = [...recipeResult.blockingIssues];
-  const warnings = [...recipeResult.warnings];
+  const blockingIssueCodes = [...recipeResult.blockingIssueCodes];
+  const warningCodes = [...recipeResult.warningCodes];
 
   if (
     draft.startStrategy === "import" &&
@@ -904,9 +615,7 @@ export function validateStrictByRecipe(draft: AssistantDraft): RecipeStrictValid
       sourceStatus: draft.sourceStatus,
     })
   ) {
-    blockingIssues.push(
-      "Importacao exige status da fonte em 'Pronta para tentar importar' ou 'Importada com sucesso'.",
-    );
+    blockingIssueCodes.push("import_source_not_ready");
   }
 
   if (
@@ -914,10 +623,8 @@ export function validateStrictByRecipe(draft: AssistantDraft): RecipeStrictValid
     draft.startSource &&
     !draft.sourceConfig
   ) {
-    warnings.push(
-      "Modo hibrido sem configuracao de fonte: o mapa inicial sera criado sem importacao automatica.",
-    );
+    warningCodes.push("hybrid_without_source_config_creates_manual_map");
   }
 
-  return buildStrictResult(blockingIssues, warnings);
+  return buildStrictResult(blockingIssueCodes, warningCodes);
 }

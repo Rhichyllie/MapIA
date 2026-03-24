@@ -1,6 +1,5 @@
 import {
   AssistantDraftSchema,
-  getSourceStatusPresentation,
   normalizeSourceStatusCode,
 } from "@/src/modules/creation-assistant/domain";
 import {
@@ -14,7 +13,8 @@ import {
   recordCreationApplySucceeded,
   recordCreationSourceStatusChanged,
   runCreationTelemetryFanout,
-} from "@/src/server/observability";
+  scheduleCreationTelemetryOperation,
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
@@ -28,12 +28,14 @@ export async function POST(request: Request) {
 
     const body = AssistantDraftSchema.parse(await request.json());
     const requestContext = buildCreationTelemetryContextFromRequest(request);
-    await recordCreationApplyAttempted({
-      ownerIdentity: auth.identity,
-      mode: "new",
-      createInitialMap: true,
-      requestContext,
-    });
+    scheduleCreationTelemetryOperation(() =>
+      recordCreationApplyAttempted({
+        ownerIdentity: auth.identity,
+        mode: "new",
+        createInitialMap: true,
+        requestContext,
+      }),
+    );
     const { creationAssistant } = createServerUseCases();
     const result = await creationAssistant.createProjectWithAssistant.execute({
       ownerIdentity: auth.identity,
@@ -70,7 +72,7 @@ export async function POST(request: Request) {
         initialSnapshot: result.initialSnapshot,
         redirectUrl: result.redirectUrl,
         sourceStatus: sourceStatus
-          ? getSourceStatusPresentation(sourceStatus)
+          ? { statusCode: sourceStatus }
           : null,
       },
       { status: 201 },

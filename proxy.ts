@@ -1,31 +1,17 @@
 import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
-import { getPathname } from "./src/i18n/navigation";
+import {
+  buildProtectedLoginRedirect,
+} from "./src/i18n/proxy-helpers";
 import {
   normalizePathname,
   routing,
   stripLocaleFromPathname,
-  type AppLocale,
 } from "./src/i18n/routing";
-import { appRoutes, isProtectedAppPathname } from "./src/lib/routes";
+import { isProtectedAppPathname } from "./src/lib/routes";
 
 const handleI18nRouting = createMiddleware(routing);
-
-function resolveLocaleFromRequestPath(pathname: string): AppLocale {
-  const normalizedPathname = normalizePathname(pathname);
-  const strippedPathname = stripLocaleFromPathname(normalizedPathname);
-  const localeCandidate = normalizedPathname.slice(
-    0,
-    normalizedPathname.length - strippedPathname.length,
-  );
-
-  if (localeCandidate.startsWith("/en-US")) {
-    return "en-US";
-  }
-
-  return routing.defaultLocale;
-}
 
 export default async function proxy(request: NextRequest) {
   let response = handleI18nRouting(request);
@@ -52,15 +38,12 @@ export default async function proxy(request: NextRequest) {
     return response;
   }
 
-  const locale = resolveLocaleFromRequestPath(resolvedUrl.pathname);
-  const loginPathname = getPathname({
-    href: appRoutes.login,
-    locale,
+  const loginUrl = buildProtectedLoginRedirect({
+    requestUrl: request.url,
+    resolvedPathname: resolvedUrl.pathname,
+    requestPathname: request.nextUrl.pathname,
+    requestSearch: request.nextUrl.search,
   });
-  const loginUrl = new URL(loginPathname, request.url);
-  const callbackUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
-
-  loginUrl.searchParams.set("callbackUrl", callbackUrl);
   response = NextResponse.redirect(loginUrl, {
     headers: response.headers,
   });

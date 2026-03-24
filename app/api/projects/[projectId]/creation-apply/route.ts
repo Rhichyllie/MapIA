@@ -2,7 +2,6 @@ import { z } from "zod";
 import { isAppError } from "@/src/lib/app-error";
 import {
   AssistantDraftSchema,
-  getSourceStatusPresentation,
   normalizeSourceStatusCode,
 } from "@/src/modules/creation-assistant/domain";
 import {
@@ -17,7 +16,8 @@ import {
   recordCreationApplySucceeded,
   recordCreationSourceStatusChanged,
   runCreationTelemetryFanout,
-} from "@/src/server/observability";
+  scheduleCreationTelemetryOperation,
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
@@ -36,7 +36,7 @@ function buildSourceStatusMeta(status?: string) {
     return null;
   }
 
-  return getSourceStatusPresentation(normalized);
+  return { statusCode: normalized };
 }
 
 export async function POST(
@@ -57,13 +57,15 @@ export async function POST(
       ownerIdentity: auth.identity,
       projectId: params.projectId,
     });
-    await recordCreationApplyAttempted({
-      projectId: params.projectId,
-      ownerIdentity: auth.identity,
-      mode: "existing",
-      createInitialMap: body.createInitialMap ?? true,
-      requestContext,
-    });
+    scheduleCreationTelemetryOperation(() =>
+      recordCreationApplyAttempted({
+        projectId: params.projectId,
+        ownerIdentity: auth.identity,
+        mode: "existing",
+        createInitialMap: body.createInitialMap ?? true,
+        requestContext,
+      }),
+    );
     const result = await creationAssistant.applyProjectCreation.execute({
       ownerIdentity: auth.identity,
       projectId: params.projectId,
@@ -99,7 +101,6 @@ export async function POST(
       appliedAt: result.appliedAt?.toISOString() ?? null,
       appliedVersion: result.appliedVersion,
       initialSnapshot: result.initialSnapshot ?? null,
-      whatWillBeCreated: result.whatWillBeCreated,
       sourceStatus: buildSourceStatusMeta(result.appliedSettings.sourceStatus),
     });
   } catch (error) {
@@ -112,21 +113,23 @@ export async function POST(
       error.code === "CREATION_DRAFT_STRICT_VALIDATION_FAILED"
     ) {
       const details = (error.details ?? {}) as {
-        blockingIssues?: string[];
-        warnings?: string[];
+        blockingIssueCodes?: string[];
+        warningCodes?: string[];
         profile?: string;
         initialView?: string;
       };
       const requestContext = buildCreationTelemetryContextFromRequest(request);
-      await recordCreationApplyBlockedStrictValidation({
-        projectId: params.projectId,
-        ownerIdentity: auth.identity,
-        profile: (details.profile as "blank") ?? "blank",
-        initialView: (details.initialView as "free") ?? "free",
-        blockingIssueCount: details.blockingIssues?.length ?? 0,
-        warningCount: details.warnings?.length ?? 0,
-        requestContext,
-      });
+      scheduleCreationTelemetryOperation(() =>
+        recordCreationApplyBlockedStrictValidation({
+          projectId: params.projectId,
+          ownerIdentity: auth.identity,
+          profile: (details.profile as "blank") ?? "blank",
+          initialView: (details.initialView as "free") ?? "free",
+          blockingIssueCount: details.blockingIssueCodes?.length ?? 0,
+          warningCount: details.warningCodes?.length ?? 0,
+          requestContext,
+        }),
+      );
     }
     return apiErrorResponse(error);
   }

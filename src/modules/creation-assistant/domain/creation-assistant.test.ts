@@ -6,13 +6,13 @@ import {
   getContextBlocksForProfileView,
   getAllowedStartSourcesForProfile,
   getLayoutCatalogForView,
-  getSourceStatusLabel,
-  getStartStrategyLabel,
   getRecommendedViewsForProfile,
   getViewCompatibilityRank,
   isLayoutAllowedForView,
   resolveRecommendedStartStrategy,
   resolveSourceConfigPreview,
+  resolveSourceLifecycle,
+  SourcePrecheckResultSchema,
   resolveDiagramTypeForInitialView,
 } from "./creation-assistant";
 
@@ -133,10 +133,7 @@ describe("creation-assistant domain", () => {
       connectorsAvailable: ["prisma-schema", "postgres"],
     });
     expect(dataModelRecommendation.strategy).toBe("import");
-    expect(getStartStrategyLabel(dataModelRecommendation.strategy)).toBe(
-      "Importar do sistema",
-    );
-    expect(dataModelRecommendation.reason.length).toBeGreaterThan(10);
+    expect(dataModelRecommendation.reasonCode).toBe("data_model_structural_import");
 
     const existingProjectRecommendation = resolveRecommendedStartStrategy({
       profile: "mixed",
@@ -145,12 +142,18 @@ describe("creation-assistant domain", () => {
       hasPreviousSourceConfig: true,
     });
     expect(existingProjectRecommendation.strategy).toBe("hybrid");
+    expect(existingProjectRecommendation.reasonCode).toBe(
+      "existing_project_previous_source",
+    );
 
     const dataModelDbRecommendation = resolveRecommendedStartStrategy({
       profile: "data-model",
       connectorsAvailable: ["postgres"],
     });
     expect(dataModelDbRecommendation.strategy).toBe("import");
+    expect(dataModelDbRecommendation.reasonCode).toBe(
+      "data_model_configurable_import",
+    );
   });
 
   it("classifies connectors with hardening capability model", () => {
@@ -172,6 +175,7 @@ describe("creation-assistant domain", () => {
     });
     expect(csvPreview?.status).toBe("ready");
     expect(csvPreview?.fields).toContain("id");
+    expect(csvPreview?.summaryCode).toBe("csv_preview_columns_detected");
 
     const jsonPreview = resolveSourceConfigPreview({
       kind: "json",
@@ -183,6 +187,7 @@ describe("creation-assistant domain", () => {
     });
     expect(jsonPreview?.status).toBe("ready");
     expect(jsonPreview?.fields).toContain("id");
+    expect(jsonPreview?.summaryCode).toBe("json_preview_recognized");
 
     const openApiPreview = resolveSourceConfigPreview({
       kind: "openapi",
@@ -191,6 +196,7 @@ describe("creation-assistant domain", () => {
     });
     expect(openApiPreview?.status).toBe("ready");
     expect(openApiPreview?.recognizedAs).toBe("openapi");
+    expect(openApiPreview?.summaryCode).toBe("openapi_preview_recognized");
 
     const graphQlPreview = resolveSourceConfigPreview({
       kind: "graphql",
@@ -198,6 +204,55 @@ describe("creation-assistant domain", () => {
     });
     expect(graphQlPreview?.status).toBe("ready");
     expect(graphQlPreview?.recognizedAs).toContain("graphql");
+    expect(graphQlPreview?.summaryCode).toBe("graphql_preview_recognized");
+  });
+
+  it("emits canonical preview and lifecycle descriptors without textual summary fields", () => {
+    const preview = resolveSourceConfigPreview({
+      kind: "openapi",
+      inputMode: "paste",
+      specText: JSON.stringify({
+        openapi: "3.0.3",
+        info: { title: "Platform API" },
+        paths: {
+          "/health": {
+            get: {
+              responses: {
+                200: { description: "ok" },
+              },
+            },
+          },
+        },
+      }),
+    });
+
+    expect(preview).not.toHaveProperty("message");
+    expect(preview?.summaryCode).toBe("openapi_preview_recognized");
+    expect(preview?.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "openapi_preview_format" }),
+        expect.objectContaining({ code: "openapi_preview_title" }),
+      ]),
+    );
+    expect(
+      preview?.details?.some((detail) => detail.code === "legacy_runtime_text"),
+    ).toBe(false);
+
+    const lifecycle = resolveSourceLifecycle({
+      startStrategy: "import",
+      startSource: "openapi",
+      sourceConfig: {
+        kind: "openapi",
+        inputMode: "paste",
+        specText: '{"info":{"title":"API without marker"},"paths":{}}',
+      },
+    });
+
+    expect(lifecycle.precheckResult).not.toHaveProperty("summary");
+    expect(lifecycle.precheckResult?.summaryCode).toBe(
+      "openapi_document_missing_spec_marker",
+    );
+    expect(lifecycle.precheckResult?.summaryCode).not.toBe("legacy_runtime_text");
   });
 
   it("resolves recipe context blocks for prioritized profile:view", () => {
@@ -216,7 +271,7 @@ describe("creation-assistant domain", () => {
     ).toEqual(["setup", "graph"]);
   });
 
-  it("derives source lifecycle and labels for import state", () => {
+  it("derives source lifecycle for import state", () => {
     const nextDraft = applyResolvedSourceLifecycleToDraft({
       projectName: "Projeto",
       profile: "data-model",
@@ -242,7 +297,10 @@ describe("creation-assistant domain", () => {
 
     expect(nextDraft.sourceStatus).toBe("ready_to_attempt_import");
     expect(nextDraft.precheckResult?.level).toBe("ok");
-    expect(getSourceStatusLabel(nextDraft.sourceStatus!)).toContain("tentar");
+    expect(nextDraft.precheckResult?.summaryCode).toBe(
+      "prisma_preview_models_detected",
+    );
+    expect("summary" in (nextDraft.precheckResult ?? {})).toBe(false);
   });
 
   it("derives precheck_ok for preview-only connectors", () => {
@@ -273,6 +331,28 @@ describe("creation-assistant domain", () => {
     });
 
     expect(nextDraft.sourceStatus).toBe("precheck_ok");
-    expect(getSourceStatusLabel(nextDraft.sourceStatus!)).toContain("Pre-verificacao");
+  });
+
+  it("keeps legacy textual precheck compatibility read-only", () => {
+    const parsed = SourcePrecheckResultSchema.parse({
+      level: "warning",
+      summary: "Resumo legado",
+      details: ["Detalhe legado"],
+      recognizedAs: "legacy-source",
+    });
+
+    expect(parsed).toEqual({
+      level: "warning",
+      summaryCode: "legacy_runtime_text",
+      summaryValues: { text: "Resumo legado" },
+      details: [
+        {
+          code: "legacy_runtime_text",
+          values: { text: "Detalhe legado" },
+        },
+      ],
+      recognizedAs: "legacy-source",
+    });
+    expect("summary" in parsed).toBe(false);
   });
 });

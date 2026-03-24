@@ -33,6 +33,21 @@
     "cardOption": {
       "selected": "Selected",
       "select": "Select"
+    },
+    "localeSwitcher": {
+      "label": "Language",
+      "ariaLabel": "Select the interface language",
+      "currentLocaleTitle": "Current language: {locale}",
+      "options": {
+        "ptBR": {
+          "label": "PT-BR",
+          "description": "Portuguese (Brazil)"
+        },
+        "enUS": {
+          "label": "EN-US",
+          "description": "English (US)"
+        }
+      }
     }
   },
   "Auth": {
@@ -226,7 +241,8 @@
     },
     "defaults": {
       "projectName": "New project",
-      "rootName": "Core"
+      "rootName": "Core",
+      "hierarchyRootName": "Root node"
     },
     "steps": {
       "project": {
@@ -610,10 +626,111 @@
         "imported": "Imported successfully",
         "failed": "Source configuration failed"
       },
-      "sourceStatusSummary": {
-        "notSelected": "Source not selected.",
-        "selected": "Source selected.",
-        "withPrecheck": "{status} ({summary})"
+    "sourceStatusSummary": {
+      "notSelected": "Source not selected.",
+      "selected": "Source selected.",
+      "withPrecheck": "{status} ({summary})"
+    },
+    "sourcePreviewSummary": {
+      "prisma_preview_schema_required": "Paste the Prisma schema for initial validation or import.",
+      "prisma_preview_models_detected": "Preliminary recognition: {count} models identified.",
+      "prisma_preview_ready_without_models": "Schema provided; run the initial validation to confirm entities.",
+      "relational_preview_connection_string_ready": "Connection string provided. The real connection can happen later.",
+      "relational_preview_connection_string_required": "Fill in the connection string to enable the local initial validation.",
+      "relational_preview_fields_ready": "Basic connection fields are filled in.",
+      "relational_preview_fields_required": "Complete host, port and database to continue.",
+      "openapi_preview_url_ready": "Specification URL provided.",
+      "openapi_preview_url_required": "Provide an OpenAPI URL for the initial validation.",
+      "openapi_preview_spec_required": "Paste the OpenAPI specification for assisted preview.",
+      "openapi_preview_recognized": "OpenAPI preliminary recognition completed ({version}, {pathCount} routes).",
+      "graphql_preview_recognized": "GraphQL preliminary recognition completed ({typeCount} types).",
+      "graphql_preview_endpoint_ready": "GraphQL endpoint provided.",
+      "graphql_preview_endpoint_or_schema_required": "Provide an endpoint or schema for the initial validation.",
+      "csv_preview_text_required": "Paste the CSV content for assisted preview.",
+      "csv_preview_columns_detected": "Preliminary recognition: {count} columns found.",
+      "csv_preview_header_not_recognized": "The CSV header could not be recognized in the assisted preview.",
+      "json_preview_text_required": "Paste the JSON content for assisted preview.",
+      "json_preview_invalid": "Invalid JSON.",
+      "json_preview_recognized": "JSON recognized in the assisted preview for the initial setup.",
+      "spreadsheet_preview_ready": "Spreadsheet data received for the initial mapping.",
+      "spreadsheet_preview_text_required": "Paste the exported spreadsheet data for assisted preview.",
+      "generic_preview_ready": "Source configured for a later connection or import.",
+      "generic_preview_text_required": "Add the source content or choose connect later."
+    },
+    "sourcePreviewDetails": {
+      "openapi_preview_format": "Format: {format}",
+      "openapi_preview_title": "Title: {title}",
+      "graphql_preview_source_sdl": "Source: SDL",
+      "graphql_preview_source_introspection_json": "Source: introspection JSON"
+    },
+    "sourceLifecycleSummary": {
+      "source_lifecycle_precheck_failed": "Initial validation failed.",
+      "source_lifecycle_imported": "Initial import executed."
+    },
+    "validationIssues": {
+      "setup_initial_root_name_required": "Provide the initial root node name.",
+      "relational_connection_string_invalid": "Use a valid connection string (for example: postgresql://...).",
+      "relational_host_required": "Provide the host.",
+      "relational_database_required": "Provide the database.",
+      "relational_port_required": "Provide the port.",
+      "relational_username_required": "Provide the username.",
+      "prisma_schema_required": "Paste the Prisma schema content.",
+      "openapi_url_required": "Provide the OpenAPI specification URL.",
+      "openapi_url_invalid": "Provide a valid OpenAPI URL.",
+      "openapi_spec_required": "Paste the OpenAPI specification.",
+      "graphql_endpoint_or_schema_required": "Provide an endpoint or paste the GraphQL schema.",
+      "graphql_endpoint_invalid": "Provide a valid GraphQL endpoint.",
+      "generic_text_required": "Paste the selected source content.",
+      "generic_json_invalid": "Invalid JSON.",
+      "generic_csv_headers_invalid": "Invalid CSV: include at least two columns in the header.",
+      "generic_mapping_field_not_found": "Mapped field not found in preview: {field}.",
+      "source_config_required_for_import": "Configure the source to continue with import.",
+      "start_source_required_for_source_config": "Define a source before configuring it.",
+      "source_config_kind_mismatch": "The source configuration does not match the selected source.",
+      "template_preset_required": "Select a starter template.",
+      "template_cannot_use_source": "A template does not use an import source.",
+      "template_cannot_use_source_config": "A template does not require source configuration.",
+      "manual_cannot_use_source": "Manual creation does not require an initial source.",
+      "manual_cannot_use_template_preset": "Manual creation does not use a template preset.",
+      "manual_cannot_use_source_config": "Manual creation does not require source configuration.",
+      "import_cannot_use_template_preset": "Pure import should not use a template preset.",
+      "start_source_incompatible_with_profile": "The selected source is not compatible with the chosen profile.",
+      "initial_view_incompatible_with_profile": "The selected initial view is incompatible with the chosen profile.",
+      "layout_incompatible_with_initial_view": "Layout unavailable for the selected initial view.",
+      "openapi_document_empty": "OpenAPI specification is empty.",
+      "openapi_document_parse_failed": "The document could not be parsed as valid JSON or YAML.",
+      "openapi_document_missing_spec_marker": "Document missing an openapi or swagger field.",
+      "openapi_document_missing_version": "Document missing the OpenAPI or Swagger version.",
+      "graphql_schema_empty": "GraphQL schema is empty.",
+      "graphql_schema_missing_valid_types": "No valid SDL types were found."
+    },
+    "startStrategyRecommendationReasons": {
+      "existing_project_previous_source": "Existing project with a previous source: keep the configured import and complement it manually.",
+        "data_model_structural_import": "A data model stays more consistent when it starts from a schema or structural import.",
+        "data_model_configurable_import": "A configurable connector is available for relational data, so starting with a configured import is recommended.",
+        "data_model_preview_hybrid": "A guided preview source is available, so combine the initial recognition with manual editing.",
+        "data_model_template": "No active data connector is available yet: use an ERD preset and connect the source later.",
+        "system_architecture_import": "Architecture gains speed when it starts from a configured technical source.",
+        "system_architecture_hybrid": "With guided API previews, start with preliminary recognition and then refine manually.",
+        "system_architecture_template": "Without a specification ready for import, the starter preset reduces rework.",
+        "information_structure_import": "Information structures stay more faithful when they start from a configurable source.",
+        "information_structure_hybrid": "A tabular source with guided preview works better in hybrid mode.",
+        "information_structure_template": "Without a tabular source ready, the initial model speeds up the setup.",
+        "process_template": "Process flows become clearer with a starter preset and guided adjustments.",
+        "mixed_hybrid": "A mixed scenario calls for a combination of partial import and guided manual editing.",
+        "mixed_manual_preview": "The available sources only provide guided preview, so start manually and connect later.",
+        "mixed_manual_blank": "Without active connectors, start on the free canvas and connect sources later.",
+        "blank_manual": "The blank profile prioritizes initial exploration before deciding on an external source."
+      },
+      "layoutWarnings": {
+        "legacy_layout_normalized_to_auto": "An incompatible legacy layout was normalized to Automatic."
+      },
+      "strictValidationIssues": {
+        "import_source_not_ready": "Import requires a source in 'Ready to attempt import' or 'Imported successfully' state.",
+        "process_auto_start_end_requires_examples": "With 'Create start and end automatically' enabled, turn on 'Create automatic examples' to generate the initial plan.",
+        "sitemap_auto_home_requires_examples": "With 'Create Home automatically' enabled, turn on 'Create automatic examples' to generate the initial Home node.",
+        "hierarchy_root_requires_examples": "With 'Create root node' enabled, turn on 'Create automatic examples' to generate the initial root.",
+        "system_graph_requires_examples": "For this scope, keep 'Create automatic examples' enabled to guarantee the initial core node in the graph."
       },
       "viewCompatibility": {
         "primary": "Primary",
@@ -650,7 +767,7 @@
     "commandPalette": {
       "dialogAria": "Search canvas node",
       "label": "Search node",
-      "placeholder": "Type to find by name",
+      "placeholder": "Type to search by name",
       "emptyState": "No node found.",
       "technicalKind": " (kind: {kind})"
     },
@@ -677,6 +794,1057 @@
         "applyRepair": "Apply and repair",
         "applyRemoveInvalid": "Apply and remove invalid items",
         "cancel": "Cancel"
+      }
+    },
+    "autosave": {
+      "noPendingChanges": "No pending changes.",
+      "pendingChanges": "Pending changes.",
+      "pendingChangesQueued": "Pending changes queued for saving.",
+      "saving": "Saving...",
+      "savingChanges": "Saving changes...",
+      "savingManually": "Saving manually...",
+      "saved": "Saved."
+    },
+    "inspectorFeedback": {
+      "defaultValidationMessage": "The form could not be validated.",
+      "reviewFields": "Review the fields with errors.",
+      "invalidKind": "Invalid type.",
+      "jsonObjectRequired": "Data must be a JSON object (key/value).",
+      "invalidJson": "Invalid JSON. Check keys, commas and quotes.",
+      "labelRequired": "Label is required."
+    },
+    "presentation": {
+      "fallbacks": {
+        "untitled": "Untitled",
+        "untitledNode": "Untitled node",
+        "manualSource": "Manual source"
+      },
+      "nodeKinds": {
+        "workspace": {
+          "labelOperational": "Workspace",
+          "description": "Root organization context for the project."
+        },
+        "project": {
+          "labelOperational": "Project",
+          "description": "Main scope currently being edited."
+        },
+        "entity": {
+          "labelOperational": "Entity",
+          "description": "Modeled business object, data asset or resource."
+        },
+        "page": {
+          "labelOperational": "Section",
+          "description": "Content section, chapter or hierarchical grouping."
+        },
+        "flow-step": {
+          "labelOperational": "Step",
+          "description": "Flow-oriented process step."
+        },
+        "note": {
+          "labelOperational": "Note",
+          "description": "Contextual annotation for notes and decisions."
+        }
+      },
+      "edgeKinds": {
+        "contains": {
+          "labelOperational": "Contains",
+          "description": "Composition relationship between parent and child."
+        },
+        "references": {
+          "labelOperational": "Reference",
+          "description": "Reference link without structural dependency."
+        },
+        "depends-on": {
+          "labelOperational": "Depends on",
+          "description": "Dependency between items for execution or decision."
+        },
+        "flows-to": {
+          "labelOperational": "Flow",
+          "description": "Process sequence between steps."
+        },
+        "relates-to": {
+          "labelOperational": "Relates",
+          "description": "Generic semantic association."
+        }
+      },
+      "contextualActions": {
+        "treeAddChild": "Add child",
+        "treeAddSibling": "Add sibling",
+        "sitemapAddPage": "Add page",
+        "sitemapAddSubpage": "Add subpage",
+        "mindmapAddBranch": "Add branch",
+        "mindmapAddReference": "Add reference",
+        "erdAddRelation": "Add relationship",
+        "erdAddField": "Add field",
+        "graphAddComponent": "Add component",
+        "graphAddDependency": "Add dependency",
+        "graphAddSupportingService": "Add supporting service",
+        "timelineAddMilestone": "Add milestone",
+        "timelineAddDependency": "Add temporal dependency",
+        "defaultAddRelated": "Add related item"
+      },
+      "contextualActionEdgeLabels": {
+        "timelineNext": "Next",
+        "timelineDependency": "Dependency"
+      }
+    },
+    "processInspector": {
+      "node": {
+        "openPrevious": "Open previous step",
+        "openBranch": "Open branch",
+        "openNote": "Open note",
+        "openNext": "Open next step",
+        "flowReadingTitle": "Flow reading",
+        "positionLabel": "Position",
+        "connectivityLabel": "Connectivity",
+        "generalHelper": "Adjust the name and role of the focused segment.",
+        "outOfProfile": " (out of profile)",
+        "detailsHelper": "Use operational context and tags only when they improve understanding.",
+        "relationsHelper": "{incomingCount} incoming, {outgoingCount} outgoing and {previewCount} highlighted relation(s).",
+        "openTransition": "Open transition"
+      },
+      "edge": {
+        "transitionReadingTitle": "Transition reading",
+        "readingLabel": "Reading",
+        "removeTransition": "Remove transition"
+      }
+    },
+    "renderers": {
+      "tree": {
+        "rootBadge": "Root",
+        "hierarchyBadge": "Hierarchy",
+        "expand": "Expand",
+        "collapse": "Collapse"
+      },
+      "erd": {
+        "comment": "Comment",
+        "table": {
+          "field": "Field",
+          "type": "Type",
+          "flags": "Flags"
+        },
+        "emptyFields": "No fields defined."
+      },
+      "sitemap": {
+        "home": "Home",
+        "section": "Section"
+      },
+      "timeline": {
+        "milestone": "Milestone"
+      },
+      "mindmap": {
+        "root": "Central topic",
+        "reference": "Reference",
+        "branch": "Branch"
+      }
+    },
+    "versionDiff": {
+      "edgeKindCount": "{prefix}{count} relation(s) {label}",
+      "nodeRenamed": "{nodeKind} '{previousLabel}' renamed to '{nextLabel}'.",
+      "nodeKindChanged": "{nodeLabel} changed kind: {previousKind} -> {nextKind}.",
+      "nodePayloadUpdated": "Payload for '{nodeLabel}' was updated.",
+      "nodeAdded": "+ {nodeKind} '{nodeLabel}' added.",
+      "nodeRemoved": "- {nodeKind} '{nodeLabel}' removed.",
+      "edgesAddedSuffix": "{edgeEntry} created.",
+      "edgesRemovedSuffix": "{edgeEntry} removed.",
+      "edgesChanged": "{count} relation(s) had attributes changed.",
+      "viewportChanged": "Canvas viewport changed.",
+      "noChanges": "No changes detected."
+    },
+    "graph": {
+      "quickAddRoles": {
+        "graph-core": {
+          "label": "Core",
+          "description": "Central component in the network."
+        },
+        "graph-topic": {
+          "label": "Component",
+          "description": "Architecture piece connected to the core or other components."
+        },
+        "graph-supporting": {
+          "label": "Supporting service",
+          "description": "Supporting, adapter, edge or transversal context in the structure."
+        }
+      },
+      "nodeKinds": {
+        "workspace": {
+          "labelOperational": "Component",
+          "description": "Element used in the architectural reading of the network."
+        },
+        "project": {
+          "labelOperational": "Component",
+          "description": "Element used in the architectural reading of the network."
+        },
+        "entity": {
+          "labelOperational": "Component",
+          "description": "Service, module or main capability inside the network."
+        },
+        "page": {
+          "labelOperational": "Supporting service",
+          "description": "Cross-cutting support, adapter, boundary or side infrastructure."
+        },
+        "note": {
+          "labelOperational": "Context",
+          "description": "Supporting note for architectural context, constraint or observation."
+        },
+        "flow-step": {
+          "labelOperational": "Service",
+          "description": "Operational element used as an active network capability."
+        }
+      },
+      "roles": {
+        "graph-core": {
+          "roleBadgeLabel": "Network core",
+          "selectionBadgeLabel": "Core in focus",
+          "footprintLabel": "Coordinates the main network",
+          "summaryFallback": "Central architecture point. Use it to organize dependencies, integrations and network boundaries."
+        },
+        "graph-topic": {
+          "roleBadgeLabel": "Connected component",
+          "selectionBadgeLabel": "Component in focus",
+          "footprintLabel": "Participates in the active network",
+          "summaryFallback": "Component that participates in the structure's integrations and dependencies."
+        },
+        "graph-supporting": {
+          "roleBadgeLabel": "Architecture support",
+          "selectionBadgeLabel": "Support in focus",
+          "footprintLabel": "Supports and contextualizes the network",
+          "summaryFallback": "Transversal capability, supporting service or context for the network."
+        }
+      },
+      "structureTips": {
+        "connectivity": "Network reading: {incomingCount} incoming and {outgoingCount} outgoing connection(s).",
+        "core": "Use this item to orient the main network and avoid diffuse dependencies.",
+        "topic": "Review side integrations and direct dependencies of this component.",
+        "supporting": "Use this item for support, context, adaptation or system boundary."
+      },
+      "connectivityLabel": "Receives {incomingCount} connection(s) and sends {outgoingCount}."
+    },
+    "shell": {
+      "canvasAriaLabel": "Editor canvas",
+      "rendererLabels": {
+        "tree": "Hierarchy",
+        "flow": "Flow",
+        "sitemap": "Sitemap",
+        "erd": "ERD",
+        "graph": "Graph",
+        "timeline": "Timeline",
+        "mindmap": "Mind map"
+      },
+      "topBar": {
+        "quickFind": "Search (Ctrl+K)",
+        "fitView": "Fit view",
+        "organize": "Organize",
+        "showValidation": "Validate",
+        "hideValidation": "Hide validation",
+        "erdValidationLevel": "ERD validation",
+        "exportPreview": "Generate/Export (preview)",
+        "exportPreviewGenerating": "Generating preview...",
+        "enterFocus": "Enter focus",
+        "exitFocus": "Exit focus",
+        "canvasBarAriaLabel": "Canvas top bar"
+      },
+      "buttons": {
+        "removeSelected": "Remove selected",
+        "save": "Save",
+        "reapplyLayout": "Reapply layout"
+      },
+      "common": {
+        "cancel": "Cancel",
+        "save": "Save"
+      },
+      "selection": {
+        "openTransition": "Edit transition",
+        "openInspector": "Edit in inspector",
+        "edit": "Edit",
+        "center": "Center",
+        "addField": "Add field",
+        "expandSubtree": "Expand subtree",
+        "collapseSubtree": "Collapse subtree",
+        "edgeFocused": "Connection in focus",
+        "none": "No selected item",
+        "transitionInFocus": "Transition in focus",
+        "semanticAttention": "Semantic: attention",
+        "semanticWarning": "Semantic: warning",
+        "semanticSuggestion": "Semantic: suggestion",
+        "semanticInfo": "Semantic: info",
+        "semanticOk": "Semantic: OK",
+        "technicalKind": " (kind: {kind})",
+        "nodeFocused": "Item in focus"
+      },
+      "inlineRename": {
+        "label": "Rename node"
+      },
+      "addNode": {
+        "roleLabelFlow": "Flow role",
+        "roleLabelDefault": "Node role",
+        "titleLabelGraph": "Item name",
+        "titleLabelFlow": "Visible flow name",
+        "titleLabelDefault": "Title",
+        "titlePlaceholder": "E.g. {title}",
+        "descriptionLabelFlow": "Operational reading (optional)",
+        "descriptionLabelDefault": "Description (optional)",
+        "tagsLabelFlow": "Operational tags (optional)",
+        "tagsLabelDefault": "Tags (optional)",
+        "tagsPlaceholder": "E.g. onboarding, approval"
+      },
+      "quickRelate": {
+        "title": "Relate entities"
+      },
+      "semanticOverride": {
+        "ariaLabel": "Technical override",
+        "complianceHint": "The technical override records a reason for audit and compliance.",
+        "reasonLabel": "Reason",
+        "reasonRequiredSuffix": " required (minimum {min} characters)",
+        "reasonOptionalSuffix": " (optional)",
+        "placeholder": "Describe the technical reason for the override.",
+        "apply": "Apply override"
+      },
+      "inspector": {
+        "ariaLabel": "Inspector",
+        "currentRole": "Current role:",
+        "dominantReading": "Dominant reading",
+        "draftBadge": "Draft not applied",
+        "hide": "Hide inspector",
+        "modeAria": "Inspector mode",
+        "modeOperational": "Operational",
+        "modeTechnical": "Technical",
+        "neighborhood": "Neighborhood",
+        "neighborhoodSummary": "{incomingCount} incoming and {outgoingCount} outgoing",
+        "outOfProfileSuffix": " (out of profile)",
+        "show": "Show inspector",
+        "subtitle": {
+          "noneSelected": "Select a node or relationship to inspect.",
+          "graphEdge": "Read the network connection and adjust the technical context.",
+          "flowEdge": "Review the transition before changing its reading.",
+          "defaultEdge": "Adjust the details of the selected connection.",
+          "graphNode": "Understand the component's role in the network before editing.",
+          "flowNode": "Review the process segment and then refine its details.",
+          "sitemap": "Review this item's navigation and hierarchy.",
+          "tree": "Review this node's structural role.",
+          "erd": "Adjust the entity, fields and relationships with consistency in mind.",
+          "timeline": "Review the milestone and its temporal connection.",
+          "mindmap": "Adjust the topic, context and related connections.",
+          "defaultNode": "Review the context and details of the selected node."
+        },
+        "confirmDiscardDraft": "There are unapplied changes in this inspector. Discard them?"
+      },
+      "audit": {
+        "ariaLabel": "Semantic validation",
+        "title": "Semantic validation",
+        "summary": "{total} item(s), {errors} error(s)",
+        "applyAllSafeFixes": "Apply all safe fixes",
+        "goToIssue": "Go to",
+        "empty": "No semantic inconsistencies found.",
+        "collapsedHint": "Open to review validations and focus the affected items."
+      },
+      "graph": {
+        "readingTitle": "Network reading",
+        "networkPosition": "Network position",
+        "edgeReadingTitle": "Connection reading"
+      },
+      "layoutPolicy": {
+        "allowed": "Layout allowed",
+        "blocked": "Layout blocked",
+        "blockedDescription": "This map was frozen by the assistant. Reopen the creation flow to change the policy.",
+        "blockedTooltip": "The assistant marked this snapshot so layout should not be automatically reapplied."
+      },
+      "diagram": {
+        "current": "Current diagram: {diagramType}",
+        "pending": "Pending diagram type"
+      },
+      "saveStatus": {
+        "error": "Save failed."
+      },
+      "relations": {
+        "incoming": "Incoming",
+        "outgoing": "Outgoing",
+        "graphIncoming": "Receives from",
+        "graphOutgoing": "Sends to",
+        "graphSummary": "{incomingCount} incoming and {outgoingCount} outgoing network connection(s).",
+        "flowSummary": "{incomingCount} previous and {outgoingCount} next transition(s).",
+        "openComponent": "Open component",
+        "openRelatedNode": "Open related item",
+        "editConnection": "Edit connection",
+        "emptyGraph": "No connection was found for this component.",
+        "empty": "No relationship was found for this item."
+      },
+      "nodeFields": {
+        "title": "Title",
+        "graphTitle": "Component name",
+        "kind": "Type",
+        "graphKind": "Network role",
+        "description": "Description",
+        "graphDescription": "Architecture reading",
+        "descriptionPlaceholder": "Describe this item in operational language.",
+        "graphDescriptionPlaceholder": "Describe the main technical responsibility, boundary or dependency.",
+        "tags": "Tags",
+        "graphTags": "Architecture tags",
+        "tagsPlaceholder": "E.g. owner, priority, channel",
+        "graphTagsPlaceholder": "E.g. core, adapter, risk, integration",
+        "tagsHelper": "Use short tags for context, group or criticality.",
+        "graphTagsHelper": "Use short tags for boundary, dependency, domain or risk.",
+        "contextTitle": "Context",
+        "graphContextTitle": "Architecture reading"
+      },
+      "edgeFields": {
+        "label": "Label",
+        "graphLabel": "Connection verb",
+        "kind": "Link type",
+        "graphKind": "Connection semantics",
+        "source": "Source",
+        "graphSource": "Source component",
+        "target": "Target",
+        "graphTarget": "Target component"
+      },
+      "sections": {
+        "general": "General",
+        "details": "Details",
+        "relations": "Relationships",
+        "graphGeneral": "Primary reading",
+        "graphDetails": "Network context",
+        "graphRelations": "Connectivity",
+        "graphEdgeGeneral": "Connection reading"
+      },
+      "technical": {
+        "generalSection": "General",
+        "detailsSection": "Details",
+        "advancedSection": "Advanced",
+        "node": {
+          "label": "Label",
+          "rawKind": "Raw kind",
+          "dataJson": "Data (JSON)"
+        },
+        "edge": {
+          "label": "Label",
+          "rawKind": "Raw kind",
+          "dataJson": "Data (JSON)"
+        },
+        "formatJson": "Format JSON",
+        "copyJson": "Copy JSON",
+        "copyId": "Copy ID",
+        "friendlyLabel": "Friendly label: {label}",
+        "position": "Position",
+        "link": "Link"
+      },
+      "metadata": {
+        "description": "Editor working snapshot with incremental saving, layout and versions.",
+        "visualMode": "Visual mode: {mode}",
+        "changeInAssistant": "Change in assistant",
+        "layoutPolicy": "Layout policy: {policy}",
+        "toggleOpen": "Hide metadata",
+        "toggleClosed": "Show metadata ({count} nodes)",
+        "workingSnapshot": "Working snapshot",
+        "counts": "{pendingCount} pending, {nodeCount} node(s), {edgeCount} edge(s)",
+        "lastSavedAt": "Last saved: {time}",
+        "rendererMismatch": "The visual renderer does not match the persisted diagram type."
+      },
+      "prisma": {
+        "ariaLabel": "Prisma import",
+        "title": "Import Prisma schema",
+        "description": "Use this area to generate entities and relationships from a Prisma schema.",
+        "import": "Import schema",
+        "importing": "Importing schema...",
+        "overwriteWarning": "The import adds and adjusts the current snapshot. Review it before saving a new version.",
+        "toggleOpen": "Hide Prisma import",
+        "toggleClosed": "Show Prisma import",
+        "saved": "Prisma schema imported into the working snapshot.",
+        "synced": "Snapshot synced after the Prisma import.",
+        "feedbackSuccess": "Prisma schema imported successfully into the working snapshot.",
+        "feedbackSuccessWithCounts": "Prisma schema imported successfully ({modelsCount} model(s), {relationsCount} relation(s), {scalarFieldsCount} scalar field(s)).",
+        "errors": {
+          "emptySchema": "Paste a Prisma schema before importing.",
+          "import": "The Prisma schema could not be imported."
+        },
+        "confirmImport": "Import the Prisma schema and apply the changes to the current snapshot?",
+        "confirmImportDiscard": "There are pending changes. Import the Prisma schema and replace the current context?"
+      },
+      "versions": {
+        "ariaLabel": "Snapshot versions",
+        "title": "Versions",
+        "description": "Compare, name and restore saved project snapshots.",
+        "toggleOpen": "Hide versions",
+        "toggleClosed": "Show versions ({count})",
+        "refresh": "Refresh list",
+        "refreshing": "Refreshing...",
+        "refreshSuccess": "{count} version(s) loaded.",
+        "newVersionNameAria": "New version name",
+        "newVersionNamePlaceholder": "E.g. baseline before review",
+        "create": "Create version",
+        "creating": "Creating version...",
+        "summaryTitle": "Executive summary",
+        "empty": "No versions recorded yet.",
+        "originLabel": "Origin: {origin}",
+        "localNameHint": "Local names help you identify a version quickly in your browser.",
+        "localNameLabel": "Local name",
+        "localNamePlaceholder": "E.g. team-approved version",
+        "localNameDescription": "This name is stored only in your browser for quick reference.",
+        "saveName": "Save name",
+        "localNameSaved": "Local name saved.",
+        "localNameRemoved": "Local name removed.",
+        "unnamed": "Unnamed",
+        "compare": "Compare",
+        "comparing": "Comparing...",
+        "restore": "Restore",
+        "restoring": "Restoring...",
+        "restoreSaved": "Version restored into the working snapshot.",
+        "restoreSynced": "Snapshot synced with the restored version.",
+        "changedBreakdown": "{renamed} renamed, {kindChanged} kind change(s), {payloadChanged} payload change(s).",
+        "topChangesTitle": "Top changes",
+        "cards": {
+          "nodesAdded": "Nodes added",
+          "nodesRemoved": "Nodes removed",
+          "nodesChanged": "Nodes changed",
+          "edgesChanged": "Edges changed"
+        },
+        "origin": {
+          "manual": "Manual"
+        },
+        "diff": {
+          "noChanges": "No changes between the selected version and the working snapshot.",
+          "nodesAdded": "{count} node(s) added",
+          "nodesRemoved": "{count} node(s) removed",
+          "nodesChanged": "{count} node(s) changed",
+          "edgesAdded": "{count} edge(s) added",
+          "edgesRemoved": "{count} edge(s) removed",
+          "edgesChanged": "{count} edge(s) changed",
+          "viewportChanged": "viewport changed",
+          "summary": "Summary: {parts}."
+        },
+        "errors": {
+          "saveBeforeCreate": "Save or finish the pending save before creating a version.",
+          "create": "The version could not be created.",
+          "refresh": "The version list could not be refreshed.",
+          "compare": "The selected version could not be compared.",
+          "restore": "The selected version could not be restored.",
+          "load": "The project versions could not be loaded."
+        },
+        "confirmRestore": "Restore the selected version into the working snapshot?",
+        "confirmRestoreDiscard": "There are pending changes. Restore this version and discard what was not saved?",
+        "createSuccess": "Version created successfully.",
+        "restoreCompleted": "Working snapshot restored successfully."
+      },
+      "erd": {
+        "badges": {
+          "noPk": "No PK",
+          "fkPending": "Pending FK",
+          "nnSuggestsAssociative": "N:N suggests associative"
+        },
+        "exportPreviewSuccess": "ERD export preview generated successfully.",
+        "exportBlockedStrict": "ERD export was blocked by the policy strict mode.",
+        "exportBlockedStrictWithSafeFixes": "ERD export was blocked. Apply the safe fixes before exporting.",
+        "entity": {
+          "badge": "Entity (ERD)",
+          "nameLabel": "Entity name",
+          "tableNameLabel": "Table name (optional)",
+          "tableNamePlaceholder": "E.g. users",
+          "descriptionLabel": "Description (optional)",
+          "grid": {
+            "name": "Name",
+            "type": "Type",
+            "flags": "Flags",
+            "actions": "Actions"
+          },
+          "addField": "+ Field",
+          "keyboardHint": "Press Enter to create a new field. Row shortcuts: P (PK), F (FK), U (UQ), N (NOT_NULL)."
+        },
+        "relation": {
+          "badge": "Relationship (ERD)",
+          "sections": {
+            "general": "General",
+            "cardinality": "Cardinality",
+            "roles": "Roles",
+            "materialization": "Materialization",
+            "referentialIntegrity": "Referential integrity",
+            "diagnostics": "Diagnostics"
+          },
+          "nameLabel": "Relationship name",
+          "optionalPlaceholder": "Optional",
+          "descriptionLabel": "Description",
+          "source": "Source",
+          "target": "Target",
+          "swapDirection": "Swap direction",
+          "minSource": "Source min",
+          "maxSource": "Source max",
+          "minTarget": "Target min",
+          "maxTarget": "Target max",
+          "optionalSource": "Optional source",
+          "optionalTarget": "Optional target",
+          "roleFallback": "relates",
+          "currentState": "Current state:",
+          "dependentSide": "Dependent side",
+          "fkField": "FK field",
+          "createNewField": "Create new field",
+          "uniqueOnFk": "Apply UNIQUE on FK",
+          "materializeFk": "Materialize as FK",
+          "applyUnique": "Apply UNIQUE (1:1)",
+          "convertAssociative": "Convert to associative",
+          "markConceptual": "Mark as conceptual",
+          "defaultOption": "(default)",
+          "diagnosticsEmpty": "No diagnostics for this relationship.",
+          "remove": "Remove relationship",
+          "materialization": {
+            "fk": "Materialized FK",
+            "associative": "Associative table",
+            "conceptual": "Conceptual"
+          }
+        }
+      },
+      "errors": {
+        "applyChange": "The change could not be applied.",
+        "saveChanges": "Pending changes could not be saved.",
+        "saveSnapshot": "The working snapshot could not be saved.",
+        "connectionNodesNotFound": "The nodes involved in the connection could not be found on the canvas.",
+        "createTransitionOnServer": "The transition could not be created on the server.",
+        "createRelationOnServer": "The relationship could not be created on the server.",
+        "invalidConnectionForDiagram": "The selected connection is not allowed for this diagram type.",
+        "serverSemanticAudit": "The semantic validation could not be run on the server.",
+        "copySelection": "The selection could not be copied.",
+        "pasteSelection": "The selection could not be pasted.",
+        "cutSelection": "The selection could not be cut.",
+        "duplicateSelection": "The selection could not be duplicated.",
+        "selectErdEntityToEdit": "Select an ERD entity to edit its fields and properties.",
+        "selectErdEntityToAddField": "Select an ERD entity before adding a field.",
+        "applySuggestedFix": "The suggested fix could not be applied.",
+        "applySafeFixes": "The safe fixes could not be applied.",
+        "updateErdValidation": "The ERD validation level could not be updated.",
+        "erdExportOnly": "Export preview is available only for ERD diagrams.",
+        "erdExportPreview": "The ERD export preview could not be generated.",
+        "quickRelationEntityNotFound": "The selected entities for quick relationship could not be found.",
+        "createQuickRelation": "The quick relationship could not be created.",
+        "finishPendingSaveBeforeRelation": "Finish the pending save before creating or changing relationships.",
+        "semanticOverrideReasonRequired": "Provide a reason with at least {min} characters to apply the override.",
+        "applySemanticOverride": "The technical override could not be applied.",
+        "clipboardUnavailable": "The clipboard API is not available in this browser/context.",
+        "pasteBlockedByPolicy": "Paste was blocked by semantic rules or diagram policy.",
+        "validatePasteWithBackend": "The paste content could not be validated with the backend.",
+        "duplicateCurrentSelection": "The current selection could not be duplicated.",
+        "invalidClipboardFragment": "The clipboard content does not contain a valid MapIA fragment.",
+        "layoutBlockedByAssistant": "The assistant blocked layout reapplication for this snapshot.",
+        "organizeRequiresSupportedType": "Automatic organization requires a supported diagram type.",
+        "reapplyLayoutRequiresSupportedType": "The layout could not be reapplied because the diagram type is not supported.",
+        "invalidJsonFormat": "Invalid JSON. Fix the structure before continuing.",
+        "copyNodeId": "The node ID could not be copied.",
+        "copyEdgeId": "The edge ID could not be copied.",
+        "copyJson": "The JSON could not be copied.",
+        "finishPendingSaveBeforeApply": "Finish the pending save before applying these changes.",
+        "requiredTitle": "Title is required.",
+        "renameNode": "The node could not be renamed.",
+        "insertNode": "The new node could not be inserted.",
+        "applyCommand": "The command could not be applied on the backend.",
+        "applyCommands": "The commands could not be applied on the backend.",
+        "loadSnapshot": "The working snapshot could not be loaded.",
+        "loadSemanticPolicy": "The semantic policy could not be loaded.",
+        "updateSemanticPolicy": "The semantic policy could not be updated.",
+        "validateSemanticDraft": "The draft could not be validated on the server.",
+        "updateRelationOnServer": "The relationship could not be updated on the server.",
+        "updateNodeOnServer": "The node could not be updated on the server."
+      },
+      "messages": {
+        "transitionRemoved": "Transition removed.",
+        "relationRemoved": "Relationship removed.",
+        "transitionAutoAdjusted": "Transition automatically adjusted to {nextKind}.",
+        "relationAutoAdjusted": "Relationship automatically adjusted to {nextKind}.",
+        "auditCompleted": "Validation completed with {count} item(s).",
+        "titleUpdated": "Title updated.",
+        "fieldAdded": "Field {fieldName} added to {entityName}.",
+        "connectionCancelled": "Connection creation cancelled.",
+        "fixApplied": "{applied} of {total} fix(es) applied.",
+        "noSafeFixes": "No safe fixes are available.",
+        "safeFixesApplied": "{applied} of {total} safe fix(es) applied.",
+        "erdValidationLevelUpdated": "ERD validation level updated to {level}.",
+        "relationDirectionSwapped": "Relationship direction swapped.",
+        "relationMaterializedExistingField": "Relationship materialized using an existing field.",
+        "quickRelationCreatedSuggestAssociative": "N:N relationship created. Consider materializing it with an associative table.",
+        "quickRelationConvertedAssociative": "N:N relationship created and converted to an associative table.",
+        "quickRelationSuggestMaterialize": "Relationship created. Consider materializing the FK in {dependentLabel} referencing {referencedLabel}.",
+        "quickRelationMaterializedAutomatically": "Relationship created and materialized automatically.",
+        "kindChangeCancelled": "Kind change cancelled.",
+        "nodeUpdatedAutosaveQueued": "Update applied. Autosave has been queued.",
+        "kindAppliedWithRepair": "Kind updated with {count} applied repair(s).",
+        "kindAppliedWithRemoval": "Kind updated with {count} applied removal(s).",
+        "selectionCopied": "Selection copied.",
+        "selectionCut": "Selection cut.",
+        "duplicateCompleted": "Duplication completed: {nodes} node(s), {edges} edge(s), {skippedEdges} skipped edge(s).",
+        "pasteCompleted": "Paste completed: {nodes} node(s), {edges} edge(s), {skippedEdges} skipped edge(s).",
+        "diagramAlreadyOrganized": "The diagram was already organized for the current layout.",
+        "organizeApplied": "Organization applied to {count} node(s).",
+        "layoutAlreadyConsistent": "The current layout is already consistent with the configured rules.",
+        "layoutReapplied": "Layout reapplied to {count} node(s).",
+        "layoutReappliedGeneric": "Layout reapplied to the current snapshot.",
+        "jsonFormatted": "JSON formatted.",
+        "idCopied": "ID copied.",
+        "jsonCopied": "JSON copied.",
+        "nodeUpdatedSynced": "Node updated and synced.",
+        "nodeUpdatedWithOverride": "Node updated with a recorded technical override.",
+        "edgeUpdatedSynced": "Connection updated and synced.",
+        "edgeUpdatedWithOverride": "Connection updated with a recorded technical override."
+      },
+      "sync": {
+        "syncing": "Syncing...",
+        "initialIgnored": "A remote snapshot was detected, but the initial sync was ignored because local pending changes exist.",
+        "snapshotSynced": "Snapshot synced with the backend.",
+        "errors": {
+          "snapshot": "The editor snapshot could not be synchronized."
+        }
+      },
+      "emptyState": {
+        "title": "No item selected on the canvas.",
+        "summary": "Select a node or edge to review titles, relationships and details.",
+        "guidance": "To start editing, select an element in the diagram or add a new node from the top bar.",
+        "nodes": "Nodes",
+        "edges": "Edges",
+        "viewport": "Viewport"
+      },
+      "edgeActions": {
+        "remove": "Remove"
+      },
+      "applyChanges": "Apply changes",
+      "revert": "Revert",
+      "quickAdd": {
+        "copy": {
+          "default": {
+            "addPrimary": "Add item",
+            "dialogTitle": "Quick add",
+            "dialogHint": "Add items and connect them quickly.",
+            "addConfirm": "Add item",
+            "quickActionHint": "Suggestion: start with the main item and connect the next relation."
+          },
+          "flow": {
+            "addPrimary": "Add activity",
+            "dialogTitle": "Flow quick add",
+            "dialogHint": "Add activities, decisions, endings and notes to the operational flow.",
+            "addConfirm": "Insert into flow",
+            "quickActionHint": "Suggestion: continue the flow or open a branch when a rule applies."
+          },
+          "erd": {
+            "addPrimary": "Add entity",
+            "dialogTitle": "Entity quick add",
+            "dialogHint": "Create entities with fields, PK/FK and cardinality.",
+            "addConfirm": "Add entity",
+            "quickActionHint": "Suggested action: define cardinality."
+          },
+          "sitemap": {
+            "addPrimary": "Add page",
+            "dialogTitle": "Page quick add",
+            "dialogHint": "Create pages and sections with coherent navigation.",
+            "addConfirm": "Add page",
+            "quickActionHint": "Suggestion: add the next page and keep the navigation path clear."
+          },
+          "tree": {
+            "addPrimary": "Add section",
+            "dialogTitle": "Hierarchy quick add",
+            "dialogHint": "Structure sections with consistent hierarchy.",
+            "addConfirm": "Add section",
+            "quickActionHint": "Suggestion: define the parent level before expanding the structure."
+          },
+          "graph": {
+            "addPrimary": "Add component",
+            "dialogTitle": "Architecture quick add",
+            "dialogHint": "Map components, interfaces and dependencies.",
+            "addConfirm": "Add component",
+            "quickActionHint": "Suggested action: connect a dependency or support link."
+          },
+          "timeline": {
+            "addPrimary": "Add milestone",
+            "dialogTitle": "Timeline quick add",
+            "dialogHint": "Add milestones and temporal dependencies.",
+            "addConfirm": "Add milestone",
+            "quickActionHint": "Suggestion: add the next milestone or register a dependency."
+          },
+          "mindmap": {
+            "addPrimary": "Add branch",
+            "dialogTitle": "Mind map quick add",
+            "dialogHint": "Add branches and related references around the central topic.",
+            "addConfirm": "Add branch",
+            "quickActionHint": "Suggestion: open a branch or register a supporting reference."
+          }
+        },
+        "roles": {
+          "hierarchyRoot": {
+            "label": "Root node",
+            "description": "Marks the main point of the structure."
+          },
+          "hierarchyNode": {
+            "label": "Hierarchy node",
+            "description": "Organizes content across related levels."
+          },
+          "sitemapHome": {
+            "label": "Home",
+            "description": "Starting page of the navigation."
+          },
+          "sitemapSection": {
+            "label": "Section",
+            "description": "Navigable section linked to an area of the map."
+          },
+          "timelineMilestone": {
+            "label": "Milestone",
+            "description": "Event or delivery that marks the timeline."
+          }
+        },
+        "defaultProcessConnection": "Initial connection: {nodeLabel} {relationLabel} the new point.",
+        "defaultConnection": "Default connection: {nodeLabel} -[{relationLabel}]- new node."
+      },
+      "connection": {
+        "invalidRules": "Invalid connection for the diagram rules."
+      },
+      "repair": {
+        "summaryFallback": "Changing the type requires repair to keep the graph consistent.",
+        "updateRelation": "Update relationship {edgeId} to {nextKind}.",
+        "removeInvalidRelation": "Remove invalid relationship {edgeId}.",
+        "adjustNodeKind": "Adjust the node to {nextKind}."
+      },
+      "roles": {
+        "metaWorkspace": "Workspace",
+        "metaProject": "Project",
+        "treeRoot": "Root",
+        "treeNode": "Hierarchy node",
+        "hierarchyRoot": "Root node",
+        "hierarchyNode": "Hierarchy node",
+        "sitemapHome": "Home page",
+        "sitemapSection": "Navigable section",
+        "mindmapRoot": "Central topic",
+        "mindmapBranch": "Branch",
+        "mindmapReference": "Reference",
+        "graphCore": "Network core",
+        "graphTopic": "Connected component",
+        "graphSupporting": "Architecture support",
+        "timelineMilestone": "Temporal milestone",
+        "erdEntity": "Entity",
+        "erdComment": "ERD comment",
+        "undefined": "No role defined"
+      },
+      "structureTips": {
+        "treeSitemapFocus": "Focus on parent, children, level and order.",
+        "treeSitemapCurrent": "Current structure: {incomingCount} link(s) above and {outgoingCount} below.",
+        "erd": "Focus on fields, keys and cardinality.",
+        "mindmap": "Focus on branches and related topics.",
+        "timeline": "Focus on milestones, dependencies and temporal sequence.",
+        "default": "Focus on context and main connections."
+      },
+      "semanticSeverity": {
+        "error": "Error",
+        "warning": "Warning",
+        "suggestion": "Suggestion",
+        "info": "Info"
+      }
+    },
+    "process": {
+      "fallbacks": {
+        "untitledItem": "Untitled item"
+      },
+      "guidance": {
+        "decisionNeedsPaths": "A decision is clearer when it explicitly shows at least two paths.",
+        "decisionNeedsShortLabels": "Use short labels to differentiate each branch of the decision.",
+        "noteNeedsAnchor": "Connect the note to the point it explains to avoid loose noise on the canvas.",
+        "endShouldTerminate": "Review extra outputs. Strong endings usually terminate the path.",
+        "startHasIncoming": "Inputs reaching the start usually indicate an earlier point is still missing from the map."
+      },
+      "lanes": {
+        "before": "Comes before",
+        "after": "Comes after",
+        "branch": "Branch",
+        "note": "Note"
+      },
+      "summaryChips": {
+        "before": "Before",
+        "after": "After",
+        "branch": "Branches",
+        "note": "Notes"
+      },
+      "nodeKinds": {
+        "flow-step": {
+          "labelOperational": "Activity",
+          "description": "Executable work unit inside the process."
+        },
+        "note": {
+          "labelOperational": "Note",
+          "description": "Context, risk or exception that supports the flow reading."
+        }
+      },
+      "quickActions": {
+        "flow-add-next-step": {
+          "label": "Continue flow"
+        },
+        "flow-add-branch": {
+          "label": "Create branch",
+          "edgeLabel": "Condition"
+        },
+        "flow-add-note": {
+          "label": "Record note",
+          "edgeLabel": "Note"
+        }
+      },
+      "inspector": {
+        "selectionBadgeLabel": "Segment in focus",
+        "emptyTitle": "Flow reading",
+        "emptySummary": "Select a process point to review role, continuity and context.",
+        "emptyGuidance": "Prefer opening the start, activity, decision or end to review the operational sequence.",
+        "titleLabel": "Flow name",
+        "kindLabel": "Flow shape",
+        "descriptionLabel": "Operational reading",
+        "descriptionPlaceholder": "Describe what happens at this point, which criterion decides the transition and what leaves this point.",
+        "tagsLabel": "Operational tags",
+        "tagsPlaceholder": "E.g. SLA, exception, approval, channel, queue",
+        "tagsHelper": "Use short tags for risk, channel, shift, rule or criticality.",
+        "contextTitle": "Operational reading",
+        "generalSectionTitle": "Identification",
+        "detailsSectionTitle": "Context and notes",
+        "relationsSectionTitle": "Before and after",
+        "edgeGeneralSectionTitle": "Transition reading",
+        "edgeLabelLabel": "Transition label",
+        "edgeKindLabel": "Transition type",
+        "edgeSourceLabel": "Leaves from",
+        "edgeTargetLabel": "Arrives at",
+        "nodeSubtitle": "Understand the role of this point in the flow before editing the text.",
+        "edgeSubtitle": "Read the transition first and refine the detail only when necessary.",
+        "relationsEmptyState": "There are no transitions or notes connected to this point yet."
+      },
+      "edgeOverview": {
+        "currentLabel": "Current label: {relationLabel}."
+      },
+      "connectivity": {
+        "none": "No connections recorded yet.",
+        "summary": "{incomingCount} incoming and {outgoingCount} outgoing in the flow."
+      },
+      "edgeKinds": {
+        "contains": {
+          "labelOperational": "Contains",
+          "description": "Structural grouping, uncommon in operational flow.",
+          "outgoingLaneLabel": "Groups into",
+          "incomingLaneLabel": "Grouped by",
+          "supportingLabel": "structural link",
+          "edgeBadgeLabel": "Structure",
+          "edgeSummary": "{sourceLabel} organizes {targetLabel} in the same group.",
+          "guidance": [
+            "Use this only when the flow really needs explicit grouping."
+          ]
+        },
+        "references": {
+          "labelOperational": "Annotates",
+          "description": "Connects notes and context without changing the main sequence.",
+          "outgoingLaneLabel": "Annotates",
+          "incomingLaneLabel": "Receives note from",
+          "supportingLabel": "contextual support",
+          "edgeBadgeLabel": "Note",
+          "edgeSummary": "{sourceLabel} adds operational context to {targetLabel}.",
+          "guidance": [
+            "Use this for notes, risks, exceptions or agreements alongside the flow.",
+            "Avoid using this connection to move work between steps."
+          ]
+        },
+        "depends-on": {
+          "labelOperational": "Branches to",
+          "description": "Opens a conditional path or dependency that changes continuity.",
+          "outgoingLaneLabel": "Branches to",
+          "incomingLaneLabel": "Depends on",
+          "supportingLabel": "conditional transition",
+          "edgeBadgeLabel": "Branch",
+          "edgeSummary": "{sourceLabel} branches to or conditions the path toward {targetLabel}.",
+          "guidance": [
+            "Use this for decisions, exceptions and path deviations.",
+            "Prefer short labels that make the branching condition explicit."
+          ]
+        },
+        "flows-to": {
+          "labelOperational": "Continues to",
+          "description": "Main handoff between one point in the flow and the next.",
+          "outgoingLaneLabel": "Continues to",
+          "incomingLaneLabel": "Comes from",
+          "supportingLabel": "main continuity",
+          "edgeBadgeLabel": "Transition",
+          "edgeSummary": "{sourceLabel} continues to {targetLabel}.",
+          "guidance": [
+            "Use this for the main sequence of the operation.",
+            "Keep the label only when it truly adds context."
+          ]
+        },
+        "relates-to": {
+          "labelOperational": "Relates to",
+          "description": "Creates a complementary link outside the main sequence.",
+          "outgoingLaneLabel": "Relates to",
+          "incomingLaneLabel": "Related to",
+          "supportingLabel": "complementary link",
+          "edgeBadgeLabel": "Link",
+          "edgeSummary": "{sourceLabel} relates to {targetLabel}.",
+          "guidance": [
+            "Prefer transition, branch or note when a stronger semantic exists."
+          ]
+        }
+      },
+      "quickAddRoles": {
+        "flow-start": {
+          "label": "Start",
+          "description": "Marks where the operation begins."
+        },
+        "flow-step": {
+          "label": "Activity",
+          "description": "Executes a clear action inside the process."
+        },
+        "flow-decision": {
+          "label": "Decision",
+          "description": "Opens paths based on a rule, condition or response."
+        },
+        "flow-note": {
+          "label": "Note",
+          "description": "Records context, risk or exception without becoming another step."
+        },
+        "flow-end": {
+          "label": "End",
+          "description": "Indicates where this path ends."
+        }
+      },
+      "roles": {
+        "flow-start": {
+          "badgeLabel": "Start",
+          "kindLabel": "Starting point",
+          "canvasHint": "Triggers the process and frames the first pass.",
+          "summary": "Marks where the operation begins and what pace it sets for the rest of the flow.",
+          "positionEmptyLabel": "No previous incoming transitions, as expected for the start of the flow.",
+          "positionConnectedLabel": "It already receives incoming transitions. Review whether this is still the correct start.",
+          "guidanceWhenSparse": "Connect the first activity to keep the path legible.",
+          "guidanceWhenConnected": "Confirm whether the incoming transitions should point to an earlier step instead."
+        },
+        "flow-step": {
+          "badgeLabel": "Step",
+          "kindLabel": "Activity",
+          "canvasHint": "Performs observable work within the operation.",
+          "summary": "Represents an executable activity with a clear responsibility before moving forward.",
+          "positionEmptyLabel": "Still isolated. Show where this activity comes from and where it goes next.",
+          "positionConnectedLabel": "It already occupies a defined operational segment in the flow.",
+          "guidanceWhenSparse": "Connect what comes before and after to avoid operational islands.",
+          "guidanceWhenConnected": "Review whether the next transition is named with the right action."
+        },
+        "flow-decision": {
+          "badgeLabel": "Decision",
+          "kindLabel": "Decision point",
+          "canvasHint": "Evaluates a rule and opens alternate paths.",
+          "summary": "Concentrates the question, criterion or rule that makes the process branch.",
+          "positionEmptyLabel": "Not enough paths yet. A decision needs at least one clear output.",
+          "positionConnectedLabel": "It already influences the path with conditional transitions.",
+          "guidanceWhenSparse": "Create named outputs to make the alternatives explicit.",
+          "guidanceWhenConnected": "Use short labels to differentiate each branch of the decision."
+        },
+        "flow-end": {
+          "badgeLabel": "End",
+          "kindLabel": "Closure",
+          "canvasHint": "Consolidates the operational outcome of this flow.",
+          "summary": "Closes the path and communicates the final result or state of the operation.",
+          "positionEmptyLabel": "No previous step connected yet. Show how the flow reaches this point.",
+          "positionConnectedLabel": "Receives the result of previous steps without continuing further.",
+          "guidanceWhenSparse": "Connect the step that delivers this ending.",
+          "guidanceWhenConnected": "Avoid new outgoing transitions to keep the ending terminal and clear."
+        },
+        "flow-note": {
+          "badgeLabel": "Note",
+          "kindLabel": "Operational note",
+          "canvasHint": "Records risk, exception or context without moving the flow.",
+          "summary": "Documents agreements, alerts or supporting context without turning into another step.",
+          "positionEmptyLabel": "Still loose on the canvas. Attach the note to the segment it explains.",
+          "positionConnectedLabel": "Supports reading the flow without competing with the main sequence.",
+          "guidanceWhenSparse": "Connect the note to the point in the flow it clarifies.",
+          "guidanceWhenConnected": "Use notes for exceptions, SLA, risk or complementary rules."
+        }
       }
     }
   }

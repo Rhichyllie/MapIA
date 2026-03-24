@@ -1,6 +1,16 @@
 import { z } from "zod";
 import YAML from "yaml";
 
+export type OpenApiParseErrorCode =
+  | "openapi_document_empty"
+  | "openapi_document_parse_failed"
+  | "openapi_document_missing_spec_marker"
+  | "openapi_document_missing_version";
+
+export type GraphQlParseErrorCode =
+  | "graphql_schema_empty"
+  | "graphql_schema_missing_valid_types";
+
 const OpenApiEnvelopeSchema = z
   .object({
     openapi: z.string().optional(),
@@ -18,7 +28,7 @@ const OpenApiEnvelopeSchema = z
     if (!value.openapi && !value.swagger) {
       ctx.addIssue({
         code: "custom",
-        message: "Documento sem campo openapi/swagger.",
+        message: "openapi_document_missing_spec_marker",
       });
     }
   });
@@ -33,7 +43,7 @@ export type OpenApiParseResult =
     }
   | {
       ok: false;
-      error: string;
+      errorCode: OpenApiParseErrorCode;
     };
 
 export type GraphQlParseResult =
@@ -44,7 +54,7 @@ export type GraphQlParseResult =
     }
   | {
       ok: false;
-      error: string;
+      errorCode: GraphQlParseErrorCode;
     };
 
 function toObjectRecord(value: unknown) {
@@ -75,7 +85,7 @@ export function parseOpenApiDocument(specText: string): OpenApiParseResult {
   const trimmed = specText.trim();
 
   if (!trimmed) {
-    return { ok: false, error: "Especificacao vazia." };
+    return { ok: false, errorCode: "openapi_document_empty" };
   }
 
   const jsonCandidate = parseAsJson(trimmed);
@@ -85,7 +95,7 @@ export function parseOpenApiDocument(specText: string): OpenApiParseResult {
   if (!parsedDocument) {
     return {
       ok: false,
-      error: "Nao foi possivel interpretar o documento como JSON/YAML valido.",
+      errorCode: "openapi_document_parse_failed",
     };
   }
 
@@ -94,7 +104,9 @@ export function parseOpenApiDocument(specText: string): OpenApiParseResult {
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "Documento OpenAPI invalido.",
+      errorCode:
+        (parsed.error.issues[0]?.message as OpenApiParseErrorCode | undefined) ??
+        "openapi_document_missing_spec_marker",
     };
   }
 
@@ -102,7 +114,7 @@ export function parseOpenApiDocument(specText: string): OpenApiParseResult {
   if (!version) {
     return {
       ok: false,
-      error: "Documento sem versao OpenAPI/Swagger.",
+      errorCode: "openapi_document_missing_version",
     };
   }
 
@@ -119,7 +131,7 @@ export function parseGraphQlSchema(schemaText: string): GraphQlParseResult {
   const trimmed = schemaText.trim();
 
   if (!trimmed) {
-    return { ok: false, error: "Schema GraphQL vazio." };
+    return { ok: false, errorCode: "graphql_schema_empty" };
   }
 
   const parsedJson = parseAsJson(trimmed);
@@ -146,7 +158,7 @@ export function parseGraphQlSchema(schemaText: string): GraphQlParseResult {
   if (typeCount === 0) {
     return {
       ok: false,
-      error: "Nao foram encontrados tipos SDL validos.",
+      errorCode: "graphql_schema_missing_valid_types",
     };
   }
 

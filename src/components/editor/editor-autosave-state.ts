@@ -15,37 +15,33 @@ export function createInitialEditorAutosaveState(
   return {
     status: "saved",
     isDirty: false,
-    message: translateEditor(
-      t,
-      "autosave.noPendingChanges",
-      "Sem alteracoes pendentes.",
-    ),
+    message: translateEditor(t, "autosave.noPendingChanges"),
   };
 }
 
 export function markEditorDirty(
   state: EditorAutosaveState,
-  message = "Alteracoes pendentes.",
+  message?: string,
   t?: EditorTranslationFn,
 ): EditorAutosaveState {
   return {
     ...state,
     status: "dirty",
     isDirty: true,
-    message: translateEditor(t, "autosave.pendingChanges", message),
+    message: message ?? translateEditor(t, "autosave.pendingChanges"),
   };
 }
 
 export function markEditorSaving(
   state: EditorAutosaveState,
-  message = "Salvando...",
+  message?: string,
   t?: EditorTranslationFn,
 ): EditorAutosaveState {
   return {
     ...state,
     status: "saving",
     isDirty: state.isDirty,
-    message: translateEditor(t, "autosave.saving", message),
+    message: message ?? translateEditor(t, "autosave.saving"),
   };
 }
 
@@ -57,7 +53,7 @@ export function markEditorSaveSuccess(
   return {
     status: "saved",
     isDirty: false,
-    message: translateEditor(t, "autosave.saved", "Salvo."),
+    message: translateEditor(t, "autosave.saved"),
     lastSavedAt: timestamp,
   };
 }

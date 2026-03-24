@@ -7,6 +7,7 @@ import {
 } from "@xyflow/react";
 import type { EdgeKind } from "@/src/domain";
 import type { EditorNodeData } from "../editor-graph-mappers";
+import type { EditorTranslationFn } from "../editor-i18n";
 import {
   getProcessRoleMeta,
   resolveProcessNodeRole,
@@ -162,13 +163,14 @@ export function resolveFlowNodePresentation(input: {
   diagramRole?: EditorNodeData["diagramRole"];
   kind: EditorNodeData["kind"];
   label: string;
+  t?: EditorTranslationFn;
 }): FlowNodePresentation {
   const variant = resolveProcessNodeRole({
     diagramRole: input.diagramRole,
     kind: input.kind,
     label: input.label,
   });
-  const meta = getProcessRoleMeta(variant);
+  const meta = getProcessRoleMeta(variant, input.t);
   const semantics = FLOW_NODE_VARIANT_PRESENTATION[variant];
 
   return {

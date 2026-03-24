@@ -1,3 +1,8 @@
+import {
+  translateEditor,
+  type EditorTranslationFn,
+} from "./editor-i18n";
+
 export type InspectorSelectionInput = {
   hasSelectedNode: boolean;
   hasSelectedEdge: boolean;
@@ -11,12 +16,13 @@ export type InspectorSelectionState = {
 
 export function resolveInspectorSelectionState(
   input: InspectorSelectionInput,
+  t?: EditorTranslationFn,
 ): InspectorSelectionState {
   if (input.hasSelectedNode) {
     return {
       nodeSelected: true,
       edgeSelected: false,
-      badgeLabel: "Item em foco",
+      badgeLabel: translateEditor(t, "shell.selection.nodeFocused"),
     };
   }
 
@@ -24,13 +30,13 @@ export function resolveInspectorSelectionState(
     return {
       nodeSelected: false,
       edgeSelected: true,
-      badgeLabel: "Conexao em foco",
+      badgeLabel: translateEditor(t, "shell.selection.edgeFocused"),
     };
   }
 
   return {
     nodeSelected: false,
     edgeSelected: false,
-    badgeLabel: "Sem selecao",
+    badgeLabel: translateEditor(t, "shell.selection.none"),
   };
 }

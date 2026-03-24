@@ -1,4 +1,5 @@
 import { AppError } from "@/src/lib/app-error";
+import { withTelemetrySpan } from "@/src/lib/telemetry-span";
 import { validateGraphSnapshotInvariants } from "@/src/modules/graph/domain";
 import {
   normalizeErdPolicyFromCustomRules,
@@ -686,19 +687,31 @@ export class GetWorkingSnapshotForEditorUseCase {
   async execute(
     input: GetWorkingSnapshotForEditorInput,
   ): Promise<WorkingSnapshotRecord | null> {
-    const parsed = GetWorkingSnapshotForEditorInputSchema.parse(input);
-    const current = await this.deps.editorSnapshotGateway.loadWorkingSnapshot(
-      parsed.projectId,
+    return await withTelemetrySpan(
+      "editor.snapshot.read",
+      {
+        attributes: {
+          "editor.snapshot.source": "editor_gateway",
+        },
+      },
+      async (span) => {
+        const parsed = GetWorkingSnapshotForEditorInputSchema.parse(input);
+        span.setAttribute("editor.snapshot.project_id", parsed.projectId);
+        const current = await this.deps.editorSnapshotGateway.loadWorkingSnapshot(
+          parsed.projectId,
+        );
+
+        span.setAttribute("editor.snapshot.found", Boolean(current));
+        if (!current) {
+          return null;
+        }
+
+        return {
+          ...current,
+          snapshot: validateGraphSnapshotInvariants(current.snapshot),
+        };
+      },
     );
-
-    if (!current) {
-      return null;
-    }
-
-    return {
-      ...current,
-      snapshot: validateGraphSnapshotInvariants(current.snapshot),
-    };
   }
 }
 

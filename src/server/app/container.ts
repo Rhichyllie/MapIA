@@ -69,7 +69,7 @@ import {
   PrismaSemanticEventLogRepository,
   PrismaSemanticPolicyRepository,
 } from "@/src/modules/semantics/infrastructure";
-import { ensureServerOpenTelemetryRuntimeStarted } from "@/src/server/observability";
+import { ensureServerOpenTelemetryRuntimeStarted } from "@/src/server/observability/otel-runtime";
 
 let cachedImportingTelemetryCollectorProvider:
   | ReturnType<typeof createImportTelemetryCollectorProvider>

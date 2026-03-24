@@ -4,7 +4,7 @@ import {
   BufferedImportTelemetryCollector,
   NoopImportTelemetryCollector,
 } from "../../domain";
-import type { OpenTelemetryRuntime } from "@/src/server/observability";
+import type { OpenTelemetryRuntime } from "@/src/server/observability/otel-runtime";
 import {
   ImportTelemetryCollectorProvider,
   createImportTelemetryCollectorProvider,

@@ -43,6 +43,15 @@ export type EdgeKindPresentation = {
   description: string;
 };
 
+type NodeKindStaticPresentation = Omit<
+  NodeKindPresentation,
+  "labelOperational" | "description"
+>;
+type EdgeKindStaticPresentation = Omit<
+  EdgeKindPresentation,
+  "labelOperational" | "description"
+>;
+
 export type DiagramContextualAddAction = {
   label: string;
   nodeKind: NodeKind;
@@ -75,109 +84,87 @@ export type DiagramContextualAction = {
   edgeLabel?: string;
 };
 
-const NODE_KIND_PRESENTATION: Record<NodeKind, NodeKindPresentation> = {
+const NODE_KIND_PRESENTATION: Record<NodeKind, NodeKindStaticPresentation> = {
   workspace: {
-    labelOperational: "Area de trabalho",
     labelTechnical: "workspace",
     icon: {
       viewBox: "0 0 24 24",
       path: "M3 4h18v6H3V4Zm0 10h8v6H3v-6Zm10 0h8v6h-8v-6Z",
     },
     tone: "slate",
-    description: "Contexto raiz de organizacao do projeto.",
   },
   project: {
-    labelOperational: "Projeto",
     labelTechnical: "project",
     icon: {
       viewBox: "0 0 24 24",
       path: "M3 6h8l2 2h8v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z",
     },
     tone: "teal",
-    description: "Escopo principal em edicao.",
   },
   entity: {
-    labelOperational: "Entidade",
     labelTechnical: "entity",
     icon: {
       viewBox: "0 0 24 24",
       path: "M4 4h16v6H4V4Zm0 10h7v6H4v-6Zm9 0h7v6h-7v-6Z",
     },
     tone: "blue",
-    description: "Objeto de negocio, dado ou recurso modelado.",
   },
   page: {
-    labelOperational: "Secao",
     labelTechnical: "page",
     icon: {
       viewBox: "0 0 24 24",
       path: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 4h8v2H8V7Zm0 4h8v2H8v-2Zm0 4h5v2H8v-2Z",
     },
     tone: "amber",
-    description: "Secao de conteudo, capitulo ou agrupador hierarquico.",
   },
   "flow-step": {
-    labelOperational: "Etapa",
     labelTechnical: "flow-step",
     icon: {
       viewBox: "0 0 24 24",
       path: "M3 7h10v3h4V7l5 5-5 5v-3h-4v3H3V7Z",
     },
     tone: "green",
-    description: "Passo de processo orientado a fluxo.",
   },
   note: {
-    labelOperational: "Nota",
     labelTechnical: "note",
     icon: {
       viewBox: "0 0 24 24",
       path: "M5 3h14a2 2 0 0 1 2 2v11l-5 5H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 5h8v2H8V8Zm0 4h8v2H8v-2Z",
     },
     tone: "violet",
-    description: "Anotacao contextual para observacoes e decisoes.",
   },
 };
 
-const EDGE_KIND_PRESENTATION: Record<EdgeKind, EdgeKindPresentation> = {
+const EDGE_KIND_PRESENTATION: Record<EdgeKind, EdgeKindStaticPresentation> = {
   contains: {
-    labelOperational: "Contem",
     labelTechnical: "contains",
     lineStyle: "solid",
     arrowStyle: "arrow",
     tone: "slate",
-    description: "Relacao de composicao entre pai e filho.",
   },
   references: {
-    labelOperational: "Referencia",
     labelTechnical: "references",
     lineStyle: "dotted",
     arrowStyle: "open",
     tone: "violet",
-    description: "Ligacao de referencia sem dependencia estrutural.",
   },
   "depends-on": {
-    labelOperational: "Depende de",
     labelTechnical: "depends-on",
     lineStyle: "dashed",
     arrowStyle: "arrow",
     tone: "amber",
-    description: "Dependencia entre itens para execucao ou decisao.",
   },
   "flows-to": {
-    labelOperational: "Fluxo",
     labelTechnical: "flows-to",
     lineStyle: "solid",
     arrowStyle: "arrow",
     tone: "green",
-    description: "Sequencia de processo entre etapas.",
   },
   "relates-to": {
-    labelOperational: "Relaciona",
     labelTechnical: "relates-to",
     lineStyle: "dashed",
     arrowStyle: "none",
     tone: "blue",
-    description: "Associacao semantica generica.",
   },
 };
 
@@ -196,16 +183,8 @@ export function getNodeKindPresentation(
 
   return {
     ...presentation,
-    labelOperational: translateEditor(
-      t,
-      `presentation.nodeKinds.${kind}.labelOperational`,
-      presentation.labelOperational,
-    ),
-    description: translateEditor(
-      t,
-      `presentation.nodeKinds.${kind}.description`,
-      presentation.description,
-    ),
+    labelOperational: translateEditor(t, `presentation.nodeKinds.${kind}.labelOperational`),
+    description: translateEditor(t, `presentation.nodeKinds.${kind}.description`),
   };
 }
 
@@ -217,16 +196,8 @@ export function getEdgeKindPresentation(
 
   return {
     ...presentation,
-    labelOperational: translateEditor(
-      t,
-      `presentation.edgeKinds.${kind}.labelOperational`,
-      presentation.labelOperational,
-    ),
-    description: translateEditor(
-      t,
-      `presentation.edgeKinds.${kind}.description`,
-      presentation.description,
-    ),
+    labelOperational: translateEditor(t, `presentation.edgeKinds.${kind}.labelOperational`),
+    description: translateEditor(t, `presentation.edgeKinds.${kind}.description`),
   };
 }
 
@@ -417,22 +388,14 @@ export function getContextualActionsForDiagram(
       {
         id: "tree-add-child",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.treeAddChild",
-          "Adicionar filho",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.treeAddChild"),
         nodeKind: "page",
         edgeKind: "contains",
       },
       {
         id: "tree-add-sibling",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.treeAddSibling",
-          "Adicionar irmao",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.treeAddSibling"),
         nodeKind: "page",
         edgeKind: "contains",
       },
@@ -451,22 +414,14 @@ export function getContextualActionsForDiagram(
       {
         id: "sitemap-add-page",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.sitemapAddPage",
-          "Adicionar pagina",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.sitemapAddPage"),
         nodeKind: "page",
         edgeKind: "contains",
       },
       {
         id: "sitemap-add-subpage",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.sitemapAddSubpage",
-          "Adicionar subpagina",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.sitemapAddSubpage"),
         nodeKind: "page",
         edgeKind: "contains",
       },
@@ -478,22 +433,14 @@ export function getContextualActionsForDiagram(
       {
         id: "mindmap-add-branch",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.mindmapAddBranch",
-          "Adicionar ramificacao",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.mindmapAddBranch"),
         nodeKind: "note",
         edgeKind: "relates-to",
       },
       {
         id: "mindmap-add-reference",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.mindmapAddReference",
-          "Adicionar referencia",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.mindmapAddReference"),
         nodeKind: "note",
         edgeKind: "references",
       },
@@ -505,22 +452,14 @@ export function getContextualActionsForDiagram(
       {
         id: "erd-add-relation",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.erdAddRelation",
-          "Adicionar relacao",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.erdAddRelation"),
         nodeKind: "entity",
         edgeKind: "references",
       },
       {
         id: "erd-add-field",
         type: "add-field",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.erdAddField",
-          "Adicionar campo",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.erdAddField"),
       },
     ];
   }
@@ -530,11 +469,7 @@ export function getContextualActionsForDiagram(
       {
         id: "graph-add-component",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.graphAddComponent",
-          "Adicionar componente",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.graphAddComponent"),
         nodeKind: "entity",
         edgeKind: "relates-to",
         edgeLabel: resolveGraphActionEdgeVerb("graph-add-component", t),
@@ -542,11 +477,7 @@ export function getContextualActionsForDiagram(
       {
         id: "graph-add-dependency",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.graphAddDependency",
-          "Adicionar dependencia",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.graphAddDependency"),
         nodeKind: "entity",
         edgeKind: "depends-on",
         edgeLabel: resolveGraphActionEdgeVerb("graph-add-dependency", t),
@@ -557,7 +488,6 @@ export function getContextualActionsForDiagram(
         label: translateEditor(
           t,
           "presentation.contextualActions.graphAddSupportingService",
-          "Adicionar servico auxiliar",
         ),
         nodeKind: "page",
         edgeKind: "references",
@@ -571,33 +501,20 @@ export function getContextualActionsForDiagram(
       {
         id: "timeline-add-milestone",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.timelineAddMilestone",
-          "Adicionar marco",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.timelineAddMilestone"),
         nodeKind: "note",
         edgeKind: "flows-to",
-        edgeLabel: translateEditor(
-          t,
-          "presentation.contextualActionEdgeLabels.timelineNext",
-          "Proximo",
-        ),
+        edgeLabel: translateEditor(t, "presentation.contextualActionEdgeLabels.timelineNext"),
       },
       {
         id: "timeline-add-dependency",
         type: "add-connected-node",
-        label: translateEditor(
-          t,
-          "presentation.contextualActions.timelineAddDependency",
-          "Adicionar dependencia temporal",
-        ),
+        label: translateEditor(t, "presentation.contextualActions.timelineAddDependency"),
         nodeKind: "note",
         edgeKind: "depends-on",
         edgeLabel: translateEditor(
           t,
           "presentation.contextualActionEdgeLabels.timelineDependency",
-          "Dependencia",
         ),
       },
     ];
@@ -607,11 +524,7 @@ export function getContextualActionsForDiagram(
     {
       id: "mindmap-add-branch",
       type: "add-connected-node",
-      label: translateEditor(
-        t,
-        "presentation.contextualActions.defaultAddRelated",
-        "Adicionar relacionado",
-      ),
+      label: translateEditor(t, "presentation.contextualActions.defaultAddRelated"),
       nodeKind: "note",
       edgeKind: "relates-to",
     },
@@ -640,11 +553,7 @@ export function getContextualAddActionForDiagram(
   }
 
   return {
-    label: translateEditor(
-      t,
-      "presentation.contextualActions.defaultAddRelated",
-      "Adicionar relacionado",
-    ),
+    label: translateEditor(t, "presentation.contextualActions.defaultAddRelated"),
     nodeKind: getDefaultNodeKindForDiagram(diagramType),
     edgeKind: getDefaultEdgeKindForDiagram(diagramType),
   };
@@ -657,18 +566,14 @@ export function getOperationalDisplayLabel(input: {
   const rawLabel = input.label.trim();
 
   if (!rawLabel) {
-    return translateEditor(t, "presentation.fallbacks.untitled", "Sem titulo");
+    return translateEditor(t, "presentation.fallbacks.untitled");
   }
 
   if (
     rawLabel.toLowerCase() === "manual source" &&
     input.payload.sourceMode === "manual"
   ) {
-    return translateEditor(
-      t,
-      "presentation.fallbacks.manualSource",
-      "Fonte manual",
-    );
+    return translateEditor(t, "presentation.fallbacks.manualSource");
   }
 
   return input.label;

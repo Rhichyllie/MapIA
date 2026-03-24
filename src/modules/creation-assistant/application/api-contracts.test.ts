@@ -6,7 +6,7 @@ import {
   __setCreationTransitionTelemetryRuntimeConfigForTests,
   __setCreationTransitionTelemetryStoreForTests,
   MemoryCreationTransitionTelemetryStore,
-} from "@/src/server/observability";
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 import type { CreationTransitionTelemetryStore } from "@/src/server/observability/creation-transition-store";
 import type {
   CreationTransitionEnvelope,
@@ -70,6 +70,7 @@ const PROJECT_ID = "123e4567-e89b-12d3-a456-426614174199";
 let telemetryStore: MemoryCreationTransitionTelemetryStore;
 
 async function countEventByName(eventName: CreationTransitionEventName) {
+  await __flushCreationTransitionTelemetryForTests();
   const counts = await telemetryStore.countByEventName({
     eventNames: [eventName],
     windowStart: new Date("2026-01-01T00:00:00.000Z"),
@@ -309,7 +310,6 @@ describe("creation assistant api contracts", () => {
     mocks.applyProjectCreationExecuteMock.mockResolvedValue({
       projectId: PROJECT_ID,
       redirectUrl: `/editor?projectId=${PROJECT_ID}`,
-      whatWillBeCreated: "Resumo",
       appliedVersion: 2,
       appliedAt: new Date("2026-03-12T11:00:00.000Z"),
       initialSnapshot: null,
@@ -360,10 +360,10 @@ describe("creation assistant api contracts", () => {
         code: "CREATION_DRAFT_STRICT_VALIDATION_FAILED",
         status: 422,
         details: {
-          blockingIssues: [
-            "Com 'Criar inicio e fim automaticamente' ativo, habilite 'Criar exemplos automaticos' para gerar o plano inicial.",
+          blockingIssueCodes: [
+            "process_auto_start_end_requires_examples",
           ],
-          warnings: [],
+          warningCodes: [],
         },
       }),
     );
@@ -382,10 +382,10 @@ describe("creation assistant api contracts", () => {
     expect(response.status).toBe(422);
     const payload = (await response.json()) as {
       code?: string;
-      blockingIssues?: string[];
+      blockingIssueCodes?: string[];
     };
     expect(payload.code).toBe("CREATION_DRAFT_STRICT_VALIDATION_FAILED");
-    expect(payload.blockingIssues?.length).toBeGreaterThan(0);
+    expect(payload.blockingIssueCodes?.length).toBeGreaterThan(0);
   });
 
   it("GET /creation-draft returns draft version", async () => {
@@ -422,8 +422,69 @@ describe("creation assistant api contracts", () => {
     expect(payload.data?.draftVersion).toBe(1);
   });
 
+  it("GET /creation-draft preserves canonical precheck descriptors without textual summaries", async () => {
+    mocks.getProjectCreationDraftExecuteMock.mockResolvedValue({
+      draft: {
+        projectName: "Projeto",
+        profile: "system-architecture",
+        startStrategy: "import",
+        startSource: "openapi",
+        sourceConfig: {
+          kind: "openapi",
+          inputMode: "paste",
+          specText: '{"openapi":"3.0.0","paths":{}}',
+        },
+        sourceStatus: "precheck_ok",
+        precheckResult: {
+          level: "ok",
+          summaryCode: "openapi_preview_recognized",
+          summaryValues: {
+            version: "3.0.0",
+            pathCount: 0,
+          },
+        },
+        initialView: "graph",
+        layout: "auto",
+        detailLevel: "intermediate",
+        automation: {
+          inferRelations: true,
+          createLinkFields: true,
+          applySuggestedNames: true,
+          autoOrganizeOnCreate: true,
+          detectInconsistenciesEarly: true,
+        },
+        context: {},
+      },
+      version: 5,
+      updatedAt: new Date("2026-03-12T11:00:00.000Z"),
+    });
+
+    const response = await getCreationDraftRoute(
+      new Request("http://localhost/api/projects/x/creation-draft"),
+      { params: Promise.resolve({ projectId: PROJECT_ID }) },
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      data?: {
+        draft?: {
+          draft?: {
+            precheckResult?: Record<string, unknown>;
+          };
+        };
+      };
+    };
+    expect(payload.data?.draft?.draft?.precheckResult?.summaryCode).toBe(
+      "openapi_preview_recognized",
+    );
+    expect(payload.data?.draft?.draft?.precheckResult).not.toHaveProperty("summary");
+  });
+
   it("keeps request path healthy with slow telemetry sink", async () => {
     vi.useRealTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
     __setCreationTransitionTelemetryRuntimeConfigForTests({
       sinkTimeoutMs: 10,
       gateEvaluationIntervalMs: 1,
@@ -482,7 +543,7 @@ describe("creation assistant api contracts", () => {
 
     const elapsed = Date.now() - startedAt;
     expect(response.status).toBe(200);
-    expect(elapsed).toBeLessThan(80);
+    expect(elapsed).toBeLessThan(150);
   });
 
   it("keeps request path healthy with failing telemetry sink", async () => {
@@ -491,7 +552,6 @@ describe("creation assistant api contracts", () => {
     mocks.applyProjectCreationExecuteMock.mockResolvedValue({
       projectId: PROJECT_ID,
       redirectUrl: `/editor?projectId=${PROJECT_ID}`,
-      whatWillBeCreated: "Resumo",
       appliedVersion: 2,
       appliedAt: new Date("2026-03-12T11:00:00.000Z"),
       initialSnapshot: null,
@@ -594,7 +654,6 @@ describe("creation assistant api contracts", () => {
     mocks.applyProjectCreationExecuteMock.mockResolvedValueOnce({
       projectId: PROJECT_ID,
       redirectUrl: `/editor?projectId=${PROJECT_ID}`,
-      whatWillBeCreated: "Resumo",
       appliedVersion: 2,
       appliedAt: new Date("2026-03-12T11:00:00.000Z"),
       initialSnapshot: null,

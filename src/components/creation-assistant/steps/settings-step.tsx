@@ -1,12 +1,14 @@
 import { CardOption } from "@/src/components/ui/card-option";
 import {
-  buildDefaultContextForView,
   type AssistantDraft,
   type DetailLevel,
   type LayoutChoice,
 } from "@/src/modules/creation-assistant/domain";
 import type { CreationAssistantLabels } from "../creation-assistant-i18n";
-import { DETAIL_LEVELS } from "../shared";
+import {
+  buildLocalizedDefaultContextForView,
+  DETAIL_LEVELS,
+} from "../shared";
 
 type SettingsStepProps = {
   draft: AssistantDraft;
@@ -52,7 +54,11 @@ export function SettingsStep({
                   setup: {
                     ...(
                       current.context.setup ??
-                      buildDefaultContextForView(current.initialView, current.profile).setup ?? {
+                      buildLocalizedDefaultContextForView(
+                        current.initialView,
+                        current.profile,
+                        labels.defaults,
+                      ).setup ?? {
                         createExamples: true,
                         suggestedBlockCount: 3,
                         createInitialRoot: false,
@@ -85,7 +91,11 @@ export function SettingsStep({
                   setup: {
                     ...(
                       current.context.setup ??
-                      buildDefaultContextForView(current.initialView, current.profile).setup ?? {
+                      buildLocalizedDefaultContextForView(
+                        current.initialView,
+                        current.profile,
+                        labels.defaults,
+                      ).setup ?? {
                         createExamples: true,
                         suggestedBlockCount: 3,
                         createInitialRoot: false,
@@ -129,7 +139,11 @@ export function SettingsStep({
                       setup: {
                         ...(
                           current.context.setup ??
-                          buildDefaultContextForView(current.initialView, current.profile)
+                          buildLocalizedDefaultContextForView(
+                            current.initialView,
+                            current.profile,
+                            labels.defaults,
+                          )
                             .setup ?? {
                               createExamples: true,
                               suggestedBlockCount: 3,
@@ -161,13 +175,17 @@ export function SettingsStep({
                         setup: {
                           ...(
                             current.context.setup ??
-                            buildDefaultContextForView(current.initialView, current.profile)
+                            buildLocalizedDefaultContextForView(
+                              current.initialView,
+                              current.profile,
+                              labels.defaults,
+                            )
                               .setup ?? {
-                              createExamples: true,
-                              suggestedBlockCount: 3,
-                              createInitialRoot: true,
-                              initialRootName: labels.defaults.rootName,
-                            }
+                                createExamples: true,
+                                suggestedBlockCount: 3,
+                                createInitialRoot: true,
+                                initialRootName: labels.defaults.rootName,
+                              }
                           ),
                           initialRootName: event.target.value,
                         },

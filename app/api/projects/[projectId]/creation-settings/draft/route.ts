@@ -13,7 +13,7 @@ import {
   recordCreationDraftSaved,
   recordCreationSourceStatusChanged,
   runCreationTelemetryFanout,
-} from "@/src/server/observability";
+} from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 

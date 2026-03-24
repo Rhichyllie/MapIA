@@ -1,5 +1,6 @@
 import { AppError } from "@/src/lib/app-error";
 import type { GraphSnapshot } from "@/src/domain";
+import { withTelemetrySpan } from "@/src/lib/telemetry-span";
 import { normalizeErdPolicyFromCustomRules } from "@/src/modules/erd/domain";
 import {
   runGraphAudit,
@@ -102,33 +103,52 @@ async function loadOrCreatePolicy(
   deps: SemanticUseCaseDeps,
   input: ResolveSemanticPolicyInput,
 ): Promise<SemanticPolicyRecord> {
-  const parsed = ResolveSemanticPolicyInputSchema.parse(input);
-  const currentPolicy = await deps.semanticPolicyRepository.loadByProjectId(
-    parsed.projectId,
+  return await withTelemetrySpan(
+    "semantic.policy.read",
+    {
+      attributes: {
+        "semantic.policy.source": "semantic_policy_repository",
+      },
+    },
+    async (span) => {
+      const parsed = ResolveSemanticPolicyInputSchema.parse(input);
+      span.setAttribute("semantic.policy.project_id", parsed.projectId);
+      const currentPolicy = await deps.semanticPolicyRepository.loadByProjectId(
+        parsed.projectId,
+      );
+
+      if (currentPolicy) {
+        span.setAttribute("semantic.policy.created", false);
+        return currentPolicy;
+      }
+
+      const workingSnapshot = await deps.workingSnapshotRepository.load(
+        parsed.projectId,
+      );
+      span.setAttribute("semantic.policy.created", true);
+      span.setAttribute(
+        "semantic.policy.snapshot_diagram_type",
+        workingSnapshot?.snapshot.diagramType ?? "unknown",
+      );
+
+      return deps.semanticPolicyRepository.create({
+        projectId: parsed.projectId,
+        diagramType: workingSnapshot?.snapshot.diagramType,
+        strictEnabled: true,
+        enforceOnServer: true,
+        allowTechOverride: false,
+        requireOverrideReason: true,
+        ...(workingSnapshot?.snapshot.diagramType === "erd"
+          ? {
+              customRulesJson: {
+                erd: normalizeErdPolicyFromCustomRules(undefined),
+              },
+            }
+          : {}),
+        updatedByIdentity: parsed.actorIdentity,
+      });
+    },
   );
-
-  if (currentPolicy) {
-    return currentPolicy;
-  }
-
-  const workingSnapshot = await deps.workingSnapshotRepository.load(parsed.projectId);
-
-  return deps.semanticPolicyRepository.create({
-    projectId: parsed.projectId,
-    diagramType: workingSnapshot?.snapshot.diagramType,
-    strictEnabled: true,
-    enforceOnServer: true,
-    allowTechOverride: false,
-    requireOverrideReason: true,
-    ...(workingSnapshot?.snapshot.diagramType === "erd"
-      ? {
-          customRulesJson: {
-            erd: normalizeErdPolicyFromCustomRules(undefined),
-          },
-        }
-      : {}),
-    updatedByIdentity: parsed.actorIdentity,
-  });
 }
 
 function buildSemanticAuditResult(input: {

@@ -1,3 +1,4 @@
+import { withTelemetrySpan } from "@/src/lib/telemetry-span";
 import type { WorkingSnapshotRecord } from "./ports";
 import type { WorkingSnapshotRepository } from "./ports";
 import {
@@ -6,7 +7,6 @@ import {
   type SaveWorkingSnapshotInput,
   SaveWorkingSnapshotInputSchema,
 } from "./schemas";
-
 type GraphUseCaseDeps = {
   workingSnapshotRepository: WorkingSnapshotRepository;
 };
@@ -17,8 +17,23 @@ export class LoadWorkingSnapshotUseCase {
   async execute(
     input: LoadWorkingSnapshotInput,
   ): Promise<WorkingSnapshotRecord | null> {
-    const parsed = LoadWorkingSnapshotInputSchema.parse(input);
-    return this.deps.workingSnapshotRepository.load(parsed.projectId);
+    return await withTelemetrySpan(
+      "graph.snapshot.read",
+      {
+        attributes: {
+          "graph.snapshot.source": "working_snapshot_repository",
+        },
+      },
+      async (span) => {
+        const parsed = LoadWorkingSnapshotInputSchema.parse(input);
+        span.setAttribute("graph.snapshot.project_id", parsed.projectId);
+        const snapshot = await this.deps.workingSnapshotRepository.load(
+          parsed.projectId,
+        );
+        span.setAttribute("graph.snapshot.found", Boolean(snapshot));
+        return snapshot;
+      },
+    );
   }
 }
 

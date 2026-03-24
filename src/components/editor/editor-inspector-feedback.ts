@@ -1,18 +1,15 @@
 import { ZodError } from "zod";
-import { translateEditor, type EditorTranslationFn } from "./editor-i18n";
+import {
+  getEditorBaseMessage,
+  translateEditor,
+  type EditorTranslationFn,
+} from "./editor-i18n";
 
 export type InspectorFieldErrors = Partial<
   Record<"label" | "kind" | "dataJson", string>
 >;
 
 type InspectorIssue = ZodError["issues"][number];
-
-const DEFAULT_INSPECTOR_VALIDATION_MESSAGE =
-  "Nao foi possivel validar o formulario.";
-const REVIEW_FIELDS_MESSAGE = "Revise os campos com erro.";
-const JSON_INVALID_MESSAGE = "JSON invalido. Verifique chaves, virgulas e aspas.";
-const KIND_INVALID_MESSAGE = "Tipo invalido.";
-const LABEL_REQUIRED_MESSAGE = "Rotulo e obrigatorio.";
 
 function normalizePathKey(issue: InspectorIssue): keyof InspectorFieldErrors | null {
   const key = issue.path[0];
@@ -56,20 +53,12 @@ function normalizeIssueMessage(
   t?: EditorTranslationFn,
 ): string {
   if (field === "kind") {
-    return translateEditor(
-      t,
-      "inspectorFeedback.invalidKind",
-      KIND_INVALID_MESSAGE,
-    );
+    return translateEditor(t, "inspectorFeedback.invalidKind");
   }
 
   if (field === "dataJson" && isJsonRelatedMessage(issue.message)) {
     if (issue.message.toLowerCase().includes("objeto json")) {
-      return translateEditor(
-        t,
-        "inspectorFeedback.jsonObjectRequired",
-        "Dados devem ser um objeto JSON (chave/valor).",
-      );
+      return translateEditor(t, "inspectorFeedback.jsonObjectRequired");
     }
 
     if (
@@ -79,26 +68,14 @@ function normalizeIssueMessage(
       return issue.message;
     }
 
-    return translateEditor(
-      t,
-      "inspectorFeedback.invalidJson",
-      JSON_INVALID_MESSAGE,
-    );
+    return translateEditor(t, "inspectorFeedback.invalidJson");
   }
 
   if (field === "label" && issue.code === "too_small") {
-    return translateEditor(
-      t,
-      "inspectorFeedback.labelRequired",
-      LABEL_REQUIRED_MESSAGE,
-    );
+    return translateEditor(t, "inspectorFeedback.labelRequired");
   }
 
-  return issue.message || translateEditor(
-    t,
-    "inspectorFeedback.reviewFields",
-    REVIEW_FIELDS_MESSAGE,
-  );
+  return issue.message || translateEditor(t, "inspectorFeedback.reviewFields");
 }
 
 export function extractFriendlyInspectorFieldErrors(
@@ -126,7 +103,7 @@ export function extractFriendlyInspectorFieldErrors(
 
 export function getFriendlyInspectorMessage(
   error: unknown,
-  fallback = DEFAULT_INSPECTOR_VALIDATION_MESSAGE,
+  fallback = getEditorBaseMessage("inspectorFeedback.defaultValidationMessage"),
   t?: EditorTranslationFn,
 ): string {
   if (error instanceof ZodError) {
@@ -142,7 +119,7 @@ export function getFriendlyInspectorMessage(
     }
 
     if (messages.length > 1) {
-      return translateEditor(t, "inspectorFeedback.reviewFields", REVIEW_FIELDS_MESSAGE);
+      return translateEditor(t, "inspectorFeedback.reviewFields");
     }
 
     return translateEditor(
@@ -169,7 +146,7 @@ export function getFriendlyInspectorMessage(
 
 export function getFriendlyInspectorFeedback(
   error: unknown,
-  fallback = DEFAULT_INSPECTOR_VALIDATION_MESSAGE,
+  fallback = getEditorBaseMessage("inspectorFeedback.defaultValidationMessage"),
   t?: EditorTranslationFn,
 ) {
   return {

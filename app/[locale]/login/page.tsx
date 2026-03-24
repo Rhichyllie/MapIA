@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { redirect } from "@/src/i18n/navigation";
 import { LoginForm } from "@/src/components/auth/login-form";
+import { LocaleSwitcher } from "@/src/components/i18n/locale-switcher";
 import { appRoutes } from "@/src/lib/routes";
 import { getServerEnv } from "@/src/lib/env";
 import { getOptionalSession } from "@/src/server/auth/session";
@@ -23,11 +24,14 @@ export default async function LoginPage({ params }: LoginPageProps) {
   return (
     <main className="login-shell">
       <section className="login-card" aria-labelledby="login-title">
-        <div className="stack-sm">
+        <div className="row-actions row-actions-between login-card-header">
           <span className="badge">
             <span className="badge-dot" aria-hidden="true" />
             {t("badge")}
           </span>
+          <LocaleSwitcher showLabel variant="panel" />
+        </div>
+        <div className="stack-sm">
           <h1 id="login-title">{t("title")}</h1>
           <p className="helper">{t("description")}</p>
         </div>

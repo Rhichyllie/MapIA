@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   AssistantDraftSchema,
-  buildDefaultContextForView,
   normalizeLayoutForView,
   type AssistantDraft,
   type InitialView,
@@ -9,7 +8,11 @@ import {
 } from "@/src/modules/creation-assistant/domain";
 import {
   buildInitialDraft,
+  buildLocalizedDefaultContextForView,
+  DEFAULT_INITIAL_DRAFT_LABELS,
   LOCAL_DRAFT_KEY,
+  localizeAssistantDraftDefaults,
+  type CreationAssistantDefaultLabels,
   type CreationAssistantMode,
   type CreationAssistantShellProps,
 } from "../shared";
@@ -49,10 +52,7 @@ export function resolveInitialAssistantState(input: {
   initialSettings?: CreationAssistantShellProps["initialSettings"];
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
-  labels?: {
-    projectName: string;
-    rootName: string;
-  };
+  labels?: CreationAssistantDefaultLabels;
 }) {
   const hydratedInitialDraftState = buildInitialDraft({
     initialProject: input.initialProject,
@@ -76,10 +76,7 @@ export function useCreationAssistantState(input: {
   initialSettings?: CreationAssistantShellProps["initialSettings"];
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
-  labels?: {
-    projectName: string;
-    rootName: string;
-  };
+  labels?: CreationAssistantDefaultLabels;
 }) {
   const initialAssistantState = resolveInitialAssistantState(input);
   const hydratedInitialDraftState = initialAssistantState.hydratedInitialDraftState;
@@ -95,10 +92,15 @@ export function useCreationAssistantState(input: {
     }
 
     const parsed = AssistantDraftSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : hydratedInitialDraftState.draft;
+    return parsed.success
+      ? localizeAssistantDraftDefaults(
+          parsed.data,
+          input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS,
+        )
+      : hydratedInitialDraftState.draft;
   });
-  const [legacyLayoutWarning] = useState<string | null>(
-    hydratedInitialDraftState.layoutWarning,
+  const [legacyLayoutWarningCode] = useState(
+    hydratedInitialDraftState.layoutWarningCode,
   );
   const [stepIndex, setStepIndex] = useState(initialAssistantState.stepState.stepIndex);
   const [unlocked, setUnlocked] = useState(initialAssistantState.stepState.unlocked);
@@ -113,7 +115,11 @@ export function useCreationAssistantState(input: {
     if (nextDraft.initialView === "flow") {
       const baseFlow =
         nextDraft.context.flow ??
-        buildDefaultContextForView("flow", nextDraft.profile).flow;
+        buildLocalizedDefaultContextForView(
+          "flow",
+          nextDraft.profile,
+          input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS,
+        ).flow;
       if (!baseFlow) {
         return nextDraft;
       }
@@ -139,7 +145,11 @@ export function useCreationAssistantState(input: {
     if (nextDraft.initialView === "hierarchy") {
       const baseHierarchy =
         nextDraft.context.hierarchy ??
-        buildDefaultContextForView("hierarchy", nextDraft.profile).hierarchy;
+        buildLocalizedDefaultContextForView(
+          "hierarchy",
+          nextDraft.profile,
+          input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS,
+        ).hierarchy;
       if (!baseHierarchy) {
         return nextDraft;
       }
@@ -181,7 +191,11 @@ export function useCreationAssistantState(input: {
         initialView: nextView,
         layout: normalized.layout,
         context: {
-          ...buildDefaultContextForView(nextView, current.profile),
+          ...buildLocalizedDefaultContextForView(
+            nextView,
+            current.profile,
+            input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS,
+          ),
           ...current.context,
         },
       });
@@ -201,7 +215,7 @@ export function useCreationAssistantState(input: {
     draft,
     setDraft,
     updateDraft,
-    legacyLayoutWarning,
+    legacyLayoutWarningCode,
     stepIndex,
     setStepIndex,
     unlocked,

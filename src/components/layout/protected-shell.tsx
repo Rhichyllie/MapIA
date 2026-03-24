@@ -1,6 +1,7 @@
 import type { Session } from "next-auth";
 import { getTranslations } from "next-intl/server";
 import { SignOutButton } from "@/src/components/auth/sign-out-button";
+import { LocaleSwitcher } from "@/src/components/i18n/locale-switcher";
 import { NavLink } from "@/src/components/layout/nav-link";
 import { ThemeToggle } from "@/src/components/ui/theme-toggle";
 
@@ -26,7 +27,8 @@ export async function ProtectedShell({
             <p>{t("brand.subtitle")}</p>
           </div>
         </div>
-        <div className="row-actions">
+        <div className="top-bar-actions">
+          <LocaleSwitcher />
           <ThemeToggle />
           <span className="badge" aria-label={t("authenticatedUser")}>
             <span className="badge-dot" aria-hidden="true" />

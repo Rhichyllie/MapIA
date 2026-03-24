@@ -4,8 +4,9 @@ import { FormEvent, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
-import { getPathname, useRouter } from "@/src/i18n/navigation";
+import { getPathname } from "@/src/i18n/navigation";
 import { appRoutes } from "@/src/lib/routes";
+import { resolvePostLoginNavigationTarget } from "./login-navigation";
 
 type AuthErrorKey = "credentialsSignin" | "default";
 
@@ -34,7 +35,6 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
   const t = useTranslations("Auth.form");
   const errorT = useTranslations("Auth.errors");
   const locale = useLocale();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl =
     searchParams.get("callbackUrl") ??
@@ -66,8 +66,18 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
     }
 
     setIsSubmitting(false);
-    router.push(result?.url ?? callbackUrl);
-    router.refresh();
+    const nextTarget = resolvePostLoginNavigationTarget({
+      callbackUrl,
+      resultUrl: result?.url,
+      currentOrigin: window.location.origin,
+    });
+
+    if (/^https?:\/\//.test(nextTarget)) {
+      window.location.assign(nextTarget);
+      return;
+    }
+
+    window.location.assign(nextTarget);
   }
 
   return (

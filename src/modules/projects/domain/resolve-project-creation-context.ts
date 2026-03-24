@@ -10,6 +10,7 @@ import {
   resolveInitialViewFromDiagramType,
   resolveRecommendedLayout,
   type InitialView,
+  type LayoutNormalizationWarningCode,
   type LayoutChoice,
   type ProjectProfile,
 } from "@/src/modules/creation-assistant/domain";
@@ -72,7 +73,7 @@ export type ProjectCreationContext = {
     layout: ProjectCreationContextSource;
     contextDefaults: ProjectCreationContextSource;
   };
-  warning?: string;
+  warningCode?: LayoutNormalizationWarningCode;
   decisionTrace: ProjectCreationDecisionTrace;
 };
 
@@ -308,7 +309,9 @@ export function resolveProjectCreationContext(
       contextDefaults: contextDefaultsSource,
     },
     decisionTrace,
-    ...(normalizedLayout.warning ? { warning: normalizedLayout.warning } : {}),
+    ...(normalizedLayout.warningCode
+      ? { warningCode: normalizedLayout.warningCode }
+      : {}),
   };
 }
 

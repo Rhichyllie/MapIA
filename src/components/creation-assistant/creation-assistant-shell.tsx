@@ -47,6 +47,7 @@ export function CreationAssistantShell({
   });
 
   const sourcePreview = useSourcePreview(state.draft);
+  const sourcePreviewCopy = labels.getSourcePreviewCopy(sourcePreview);
   const sourceStatus = useSourceStatus(state.draft, labels);
 
   const draftSync = useCreationDraftSync({
@@ -154,7 +155,7 @@ export function CreationAssistantShell({
               sourceStatusLabel={sourceStatus.sourceStatusLabel}
               sourceStatusSummary={sourceStatus.sourceStatusSummary}
               isConnectLaterSelected={sourceStatus.isConnectLaterSelected}
-              sourcePreview={sourcePreview}
+              sourcePreview={sourcePreviewCopy}
               mode={mode}
               fromProjectId={fromProjectId}
               isBusy={state.isBusy}
@@ -193,7 +194,7 @@ export function CreationAssistantShell({
               sourceStatusSummary={sourceStatus.sourceStatusSummary}
               sourceStatusCode={sourceStatus.sourceLifecycle.sourceStatus}
               recommendedStartStrategy={recipeRuntime.recommendedStartStrategy}
-              legacyLayoutWarning={state.legacyLayoutWarning}
+              legacyLayoutWarningCode={state.legacyLayoutWarningCode}
               enabledAutomationLabels={enabledAutomationLabels}
             />
           ) : null}

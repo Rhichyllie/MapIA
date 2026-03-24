@@ -2,12 +2,21 @@ import { createTranslator, useLocale, useMessages } from "next-intl";
 import {
   getViewCompatibilityRank,
   type AutomationToggles,
+  type CreationAssistantValidationIssueCode,
   type DetailLevel,
   type InitialView,
+  type LayoutNormalizationWarningCode,
   type LayoutChoice,
+  type MessageDescriptor,
   type ProjectProfile,
+  type RecipeStrictValidationIssueCode,
+  type SourceConfigPreview,
+  type SourceLifecycleSummaryCode,
+  type SourcePreviewDetailCode,
+  type SourcePreviewSummaryCode,
   type SourcePrecheckResult,
   type SourceStatus,
+  type StartStrategyRecommendationReason,
   type StartSource,
   type StartStrategy,
   type TemplatePreset,
@@ -229,6 +238,203 @@ const sourceStatusPaths = {
   failed: "labels.sourceStatus.failed",
 } as const satisfies Record<SourceStatus, string>;
 
+const startStrategyRecommendationReasonPaths = {
+  existing_project_previous_source:
+    "labels.startStrategyRecommendationReasons.existing_project_previous_source",
+  data_model_structural_import:
+    "labels.startStrategyRecommendationReasons.data_model_structural_import",
+  data_model_configurable_import:
+    "labels.startStrategyRecommendationReasons.data_model_configurable_import",
+  data_model_preview_hybrid:
+    "labels.startStrategyRecommendationReasons.data_model_preview_hybrid",
+  data_model_template:
+    "labels.startStrategyRecommendationReasons.data_model_template",
+  system_architecture_import:
+    "labels.startStrategyRecommendationReasons.system_architecture_import",
+  system_architecture_hybrid:
+    "labels.startStrategyRecommendationReasons.system_architecture_hybrid",
+  system_architecture_template:
+    "labels.startStrategyRecommendationReasons.system_architecture_template",
+  information_structure_import:
+    "labels.startStrategyRecommendationReasons.information_structure_import",
+  information_structure_hybrid:
+    "labels.startStrategyRecommendationReasons.information_structure_hybrid",
+  information_structure_template:
+    "labels.startStrategyRecommendationReasons.information_structure_template",
+  process_template:
+    "labels.startStrategyRecommendationReasons.process_template",
+  mixed_hybrid: "labels.startStrategyRecommendationReasons.mixed_hybrid",
+  mixed_manual_preview:
+    "labels.startStrategyRecommendationReasons.mixed_manual_preview",
+  mixed_manual_blank:
+    "labels.startStrategyRecommendationReasons.mixed_manual_blank",
+  blank_manual: "labels.startStrategyRecommendationReasons.blank_manual",
+} as const satisfies Record<StartStrategyRecommendationReason, string>;
+
+const layoutWarningPaths = {
+  legacy_layout_normalized_to_auto:
+    "labels.layoutWarnings.legacy_layout_normalized_to_auto",
+} as const satisfies Record<LayoutNormalizationWarningCode, string>;
+
+const strictValidationIssuePaths = {
+  import_source_not_ready: "labels.strictValidationIssues.import_source_not_ready",
+  process_auto_start_end_requires_examples:
+    "labels.strictValidationIssues.process_auto_start_end_requires_examples",
+  sitemap_auto_home_requires_examples:
+    "labels.strictValidationIssues.sitemap_auto_home_requires_examples",
+  hierarchy_root_requires_examples:
+    "labels.strictValidationIssues.hierarchy_root_requires_examples",
+  system_graph_requires_examples:
+    "labels.strictValidationIssues.system_graph_requires_examples",
+} as const satisfies Record<RecipeStrictValidationIssueCode, string>;
+
+type CatalogBackedSourcePreviewDetailCode = Exclude<
+  SourcePreviewDetailCode,
+  "legacy_runtime_text"
+>;
+
+type CatalogBackedSourceLifecycleSummaryCode = Exclude<
+  SourceLifecycleSummaryCode,
+  "legacy_runtime_text"
+>;
+
+const sourcePreviewSummaryPaths = {
+  prisma_preview_schema_required:
+    "labels.sourcePreviewSummary.prisma_preview_schema_required",
+  prisma_preview_models_detected:
+    "labels.sourcePreviewSummary.prisma_preview_models_detected",
+  prisma_preview_ready_without_models:
+    "labels.sourcePreviewSummary.prisma_preview_ready_without_models",
+  relational_preview_connection_string_ready:
+    "labels.sourcePreviewSummary.relational_preview_connection_string_ready",
+  relational_preview_connection_string_required:
+    "labels.sourcePreviewSummary.relational_preview_connection_string_required",
+  relational_preview_fields_ready:
+    "labels.sourcePreviewSummary.relational_preview_fields_ready",
+  relational_preview_fields_required:
+    "labels.sourcePreviewSummary.relational_preview_fields_required",
+  openapi_preview_url_ready:
+    "labels.sourcePreviewSummary.openapi_preview_url_ready",
+  openapi_preview_url_required:
+    "labels.sourcePreviewSummary.openapi_preview_url_required",
+  openapi_preview_spec_required:
+    "labels.sourcePreviewSummary.openapi_preview_spec_required",
+  openapi_preview_recognized:
+    "labels.sourcePreviewSummary.openapi_preview_recognized",
+  graphql_preview_recognized:
+    "labels.sourcePreviewSummary.graphql_preview_recognized",
+  graphql_preview_endpoint_ready:
+    "labels.sourcePreviewSummary.graphql_preview_endpoint_ready",
+  graphql_preview_endpoint_or_schema_required:
+    "labels.sourcePreviewSummary.graphql_preview_endpoint_or_schema_required",
+  csv_preview_text_required:
+    "labels.sourcePreviewSummary.csv_preview_text_required",
+  csv_preview_columns_detected:
+    "labels.sourcePreviewSummary.csv_preview_columns_detected",
+  csv_preview_header_not_recognized:
+    "labels.sourcePreviewSummary.csv_preview_header_not_recognized",
+  json_preview_text_required:
+    "labels.sourcePreviewSummary.json_preview_text_required",
+  json_preview_invalid: "labels.sourcePreviewSummary.json_preview_invalid",
+  json_preview_recognized:
+    "labels.sourcePreviewSummary.json_preview_recognized",
+  spreadsheet_preview_ready:
+    "labels.sourcePreviewSummary.spreadsheet_preview_ready",
+  spreadsheet_preview_text_required:
+    "labels.sourcePreviewSummary.spreadsheet_preview_text_required",
+  generic_preview_ready: "labels.sourcePreviewSummary.generic_preview_ready",
+  generic_preview_text_required:
+    "labels.sourcePreviewSummary.generic_preview_text_required",
+  openapi_document_empty: "labels.validationIssues.openapi_document_empty",
+  openapi_document_parse_failed:
+    "labels.validationIssues.openapi_document_parse_failed",
+  openapi_document_missing_spec_marker:
+    "labels.validationIssues.openapi_document_missing_spec_marker",
+  openapi_document_missing_version:
+    "labels.validationIssues.openapi_document_missing_version",
+  graphql_schema_empty: "labels.validationIssues.graphql_schema_empty",
+  graphql_schema_missing_valid_types:
+    "labels.validationIssues.graphql_schema_missing_valid_types",
+} as const satisfies Record<SourcePreviewSummaryCode, string>;
+
+const sourcePreviewDetailPaths = {
+  openapi_preview_format: "labels.sourcePreviewDetails.openapi_preview_format",
+  openapi_preview_title: "labels.sourcePreviewDetails.openapi_preview_title",
+  graphql_preview_source_sdl:
+    "labels.sourcePreviewDetails.graphql_preview_source_sdl",
+  graphql_preview_source_introspection_json:
+    "labels.sourcePreviewDetails.graphql_preview_source_introspection_json",
+} as const satisfies Record<CatalogBackedSourcePreviewDetailCode, string>;
+
+const sourceLifecycleSummaryPaths = {
+  source_lifecycle_precheck_failed:
+    "labels.sourceLifecycleSummary.source_lifecycle_precheck_failed",
+  source_lifecycle_imported:
+    "labels.sourceLifecycleSummary.source_lifecycle_imported",
+} as const satisfies Record<CatalogBackedSourceLifecycleSummaryCode, string>;
+
+const validationIssuePaths = {
+  setup_initial_root_name_required:
+    "labels.validationIssues.setup_initial_root_name_required",
+  relational_connection_string_invalid:
+    "labels.validationIssues.relational_connection_string_invalid",
+  relational_host_required: "labels.validationIssues.relational_host_required",
+  relational_database_required:
+    "labels.validationIssues.relational_database_required",
+  relational_port_required: "labels.validationIssues.relational_port_required",
+  relational_username_required:
+    "labels.validationIssues.relational_username_required",
+  prisma_schema_required: "labels.validationIssues.prisma_schema_required",
+  openapi_url_required: "labels.validationIssues.openapi_url_required",
+  openapi_url_invalid: "labels.validationIssues.openapi_url_invalid",
+  openapi_spec_required: "labels.validationIssues.openapi_spec_required",
+  graphql_endpoint_or_schema_required:
+    "labels.validationIssues.graphql_endpoint_or_schema_required",
+  graphql_endpoint_invalid:
+    "labels.validationIssues.graphql_endpoint_invalid",
+  generic_text_required: "labels.validationIssues.generic_text_required",
+  generic_json_invalid: "labels.validationIssues.generic_json_invalid",
+  generic_csv_headers_invalid:
+    "labels.validationIssues.generic_csv_headers_invalid",
+  generic_mapping_field_not_found:
+    "labels.validationIssues.generic_mapping_field_not_found",
+  source_config_required_for_import:
+    "labels.validationIssues.source_config_required_for_import",
+  start_source_required_for_source_config:
+    "labels.validationIssues.start_source_required_for_source_config",
+  source_config_kind_mismatch:
+    "labels.validationIssues.source_config_kind_mismatch",
+  template_preset_required:
+    "labels.validationIssues.template_preset_required",
+  template_cannot_use_source:
+    "labels.validationIssues.template_cannot_use_source",
+  template_cannot_use_source_config:
+    "labels.validationIssues.template_cannot_use_source_config",
+  manual_cannot_use_source: "labels.validationIssues.manual_cannot_use_source",
+  manual_cannot_use_template_preset:
+    "labels.validationIssues.manual_cannot_use_template_preset",
+  manual_cannot_use_source_config:
+    "labels.validationIssues.manual_cannot_use_source_config",
+  import_cannot_use_template_preset:
+    "labels.validationIssues.import_cannot_use_template_preset",
+  start_source_incompatible_with_profile:
+    "labels.validationIssues.start_source_incompatible_with_profile",
+  initial_view_incompatible_with_profile:
+    "labels.validationIssues.initial_view_incompatible_with_profile",
+  layout_incompatible_with_initial_view:
+    "labels.validationIssues.layout_incompatible_with_initial_view",
+  openapi_document_empty: "labels.validationIssues.openapi_document_empty",
+  openapi_document_parse_failed:
+    "labels.validationIssues.openapi_document_parse_failed",
+  openapi_document_missing_spec_marker:
+    "labels.validationIssues.openapi_document_missing_spec_marker",
+  openapi_document_missing_version:
+    "labels.validationIssues.openapi_document_missing_version",
+  graphql_schema_empty: "labels.validationIssues.graphql_schema_empty",
+  graphql_schema_missing_valid_types:
+    "labels.validationIssues.graphql_schema_missing_valid_types",
+} as const satisfies Record<CreationAssistantValidationIssueCode, string>;
+
 function toCreateTranslator(locale: AppLocale, messages: CreateMessages) {
   return createTranslator({
     locale,
@@ -247,10 +453,106 @@ export function createCreationAssistantLabels(
 ) {
   const t = toCreateTranslator(locale, messages);
 
+  function hasOwnPath<T extends Record<string, string>>(
+    registry: T,
+    code: string,
+  ): code is Extract<keyof T, string> {
+    return Object.prototype.hasOwnProperty.call(registry, code);
+  }
+
+  function translatePath(path: string, values?: Record<string, string | number>) {
+    return values
+      ? t(path as Parameters<typeof t>[0], values as never)
+      : t(path as Parameters<typeof t>[0]);
+  }
+
+  function resolveMessageCode(
+    code:
+      | RecipeStrictValidationIssueCode
+      | CreationAssistantValidationIssueCode
+      | SourcePreviewSummaryCode
+      | SourceLifecycleSummaryCode
+      | CatalogBackedSourcePreviewDetailCode,
+    values?: Record<string, string | number>,
+  ) {
+    if (code === "legacy_runtime_text") {
+      return typeof values?.text === "string" ? values.text : code;
+    }
+
+    if (hasOwnPath(strictValidationIssuePaths, code)) {
+      return translatePath(strictValidationIssuePaths[code], values);
+    }
+
+    if (hasOwnPath(validationIssuePaths, code)) {
+      return translatePath(validationIssuePaths[code], values);
+    }
+
+    if (hasOwnPath(sourcePreviewSummaryPaths, code)) {
+      return translatePath(sourcePreviewSummaryPaths[code], values);
+    }
+
+    if (hasOwnPath(sourceLifecycleSummaryPaths, code)) {
+      return translatePath(sourceLifecycleSummaryPaths[code], values);
+    }
+
+    if (hasOwnPath(sourcePreviewDetailPaths, code)) {
+      return translatePath(sourcePreviewDetailPaths[code], values);
+    }
+
+    return code;
+  }
+
+  function resolveMessageDescriptor(descriptor: MessageDescriptor) {
+    if (descriptor.code === "legacy_runtime_text") {
+      return typeof descriptor.values?.text === "string"
+        ? descriptor.values.text
+        : "";
+    }
+
+    return resolveMessageCode(
+      descriptor.code as
+        | CreationAssistantValidationIssueCode
+        | RecipeStrictValidationIssueCode
+        | SourcePreviewSummaryCode
+        | SourceLifecycleSummaryCode
+        | CatalogBackedSourcePreviewDetailCode,
+      descriptor.values,
+    );
+  }
+
+  function getSourcePreviewCopy(preview: SourceConfigPreview | null) {
+    if (!preview) {
+      return null;
+    }
+
+    return {
+      status: preview.status,
+      summary: resolveMessageCode(preview.summaryCode, preview.summaryValues),
+      details: preview.details?.map(resolveMessageDescriptor) ?? [],
+      fields: preview.fields ?? [],
+      sample: preview.sample ?? [],
+    };
+  }
+
+  function getSourcePrecheckCopy(precheckResult?: SourcePrecheckResult) {
+    if (!precheckResult) {
+      return null;
+    }
+
+    return {
+      summary: resolveMessageCode(
+        precheckResult.summaryCode as SourcePreviewSummaryCode | SourceLifecycleSummaryCode,
+        precheckResult.summaryValues,
+      ),
+      details: precheckResult.details?.map(resolveMessageDescriptor) ?? [],
+    };
+  }
+
   return {
     defaults: {
       projectName: t("defaults.projectName"),
       rootName: t("defaults.rootName"),
+      hierarchyRootName: t("defaults.hierarchyRootName"),
     },
     shell: {
       modeBadge: {
@@ -453,6 +755,12 @@ export function createCreationAssistantLabels(
       prismaValidationSuccess: t("hooks.prismaValidationSuccess"),
       sourceValidationFallbackError: t("hooks.sourceValidationFallbackError"),
       finishCreationFallbackError: t("hooks.finishCreationFallbackError"),
+      getValidationIssueMessage: (
+        issueCode:
+          | RecipeStrictValidationIssueCode
+          | CreationAssistantValidationIssueCode,
+        values?: Record<string, string | number>,
+      ) => resolveMessageCode(issueCode, values),
     },
     getStep(stepId: StepId) {
       return {
@@ -500,6 +808,16 @@ export function createCreationAssistantLabels(
     getSourceStatusLabel(sourceStatus: SourceStatus) {
       return t(sourceStatusPaths[sourceStatus]);
     },
+    getStartStrategyRecommendationReason(
+      reasonCode: StartStrategyRecommendationReason,
+    ) {
+      return t(startStrategyRecommendationReasonPaths[reasonCode]);
+    },
+    getLayoutWarningMessage(warningCode: LayoutNormalizationWarningCode) {
+      return t(layoutWarningPaths[warningCode]);
+    },
+    getSourcePreviewCopy,
+    getSourcePrecheckCopy,
     getSourceStatusSummary(input: {
       sourceStatus?: SourceStatus;
       precheckResult?: SourcePrecheckResult;
@@ -519,9 +837,10 @@ export function createCreationAssistantLabels(
         return base;
       }
 
+      const resolvedPrecheck = getSourcePrecheckCopy(input.precheckResult);
       return t("labels.sourceStatusSummary.withPrecheck", {
         status: base,
-        summary: input.precheckResult.summary,
+        summary: resolvedPrecheck?.summary ?? base,
       });
     },
     getRankLabel(profile: ProjectProfile, view: InitialView) {
