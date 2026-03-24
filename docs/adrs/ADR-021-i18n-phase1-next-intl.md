@@ -141,6 +141,24 @@ Trade-off:
 5. Validar `loadMessages`, renderizacao e navegacao locale-aware com testes.
 6. Nao criar branch especial no `proxy.ts`; a resolucao deve continuar derivando apenas da config central de locale.
 
+## Boundary final desta trilha
+
+- A copy oficial de UI e metadata vive apenas nos catalogos em `messages/`.
+- A UI resolve texto visivel, metadata, labels de switcher e feedbacks a partir do catalogo oficial.
+- O dominio pode manter apenas valores tecnicos, ids, enums, payloads canonicos e codigos semanticos.
+- A preferencia de idioma e persistida pelo cookie `NEXT_LOCALE`.
+- O locale padrao continua sem prefixo; locais adicionais continuam com prefixo.
+- A trilha de i18n desta fase pode ser considerada fechada enquanto esses contratos continuarem protegidos pelos testes de catalogo, metadata, convergencia e superfícies visiveis.
+
+## Fora do escopo desta trilha
+
+- adicionar um terceiro idioma
+- redesenhar o switcher ou o shell protegido
+- refatorar amplamente o editor shell
+- revisar o design system de forma geral
+- reabrir contratos de dominio fora do i18n
+- transformar problemas de infraestrutura local de E2E em trabalho de i18n
+
 ## Checklist manual
 
 - Acessar `/login` e confirmar `pt-BR` sem prefixo.

@@ -76,6 +76,26 @@ describe("i18n convergence proof", () => {
     expect(helperSource).toContain("resolveLocaleSwitcherOptions");
   });
 
+  it("keeps the visible switcher mounted only in the deliberate shell entry points", () => {
+    const loginSource = readRepoFile("app/[locale]/login/page.tsx");
+    const protectedShellSource = readRepoFile(
+      "src/components/layout/protected-shell.tsx",
+    );
+    const dashboardSource = readRepoFile(
+      "src/components/dashboard/dashboard-projects-panel.tsx",
+    );
+    const createShellSource = readRepoFile(
+      "src/components/creation-assistant/creation-assistant-shell.tsx",
+    );
+    const editorShellSource = readRepoFile("src/components/editor/editor-shell.tsx");
+
+    expect(loginSource).toContain("<LocaleSwitcher");
+    expect(protectedShellSource).toContain("<LocaleSwitcher");
+    expect(dashboardSource).not.toContain("LocaleSwitcher");
+    expect(createShellSource).not.toContain("LocaleSwitcher");
+    expect(editorShellSource).not.toContain("LocaleSwitcher");
+  });
+
   it("keeps recipe and editor personas technical, without UI label payloads", () => {
     const recipeRuntime = resolveRecipeRuntime({
       profile: "process",

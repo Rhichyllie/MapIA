@@ -6,6 +6,7 @@ import {
   getAllCatalogIntegrityDiffs,
   messageCatalogs,
 } from "./catalog-integrity";
+import { routing } from "./routing";
 
 describe("catalog integrity", () => {
   it("keeps every locale structurally aligned with the base catalog", () => {
@@ -30,7 +31,7 @@ describe("catalog integrity", () => {
       );
       expect(catalog.Editor).toBeTruthy();
       expect(catalog.Create).toBeTruthy();
-      expect(locale).toMatch(/pt-BR|en-US/);
+      expect(routing.locales).toContain(locale as (typeof routing.locales)[number]);
       expect(expectedCatalogPaths.every((path) => {
         const value = path.split(".").reduce<unknown>((current, segment) => {
           if (!current || typeof current !== "object" || Array.isArray(current)) {
