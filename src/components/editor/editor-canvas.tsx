@@ -14,9 +14,9 @@ import type { Connection } from "@xyflow/react";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import type { EditorTranslationFn } from "./editor-i18n";
 import type { RFEdge, RFNode } from "./editor-graph-mappers";
+import { resolveEditorDiagramMode } from "./diagram-modes";
 import {
   computeParallelEdgeMeta,
-  resolveDiagramRenderer,
 } from "./diagram-renderers";
 import { getEdgeKindLabel, getNodeKindLabel } from "./presentation/kinds";
 import { useEditorTranslations } from "./use-editor-translations";
@@ -31,10 +31,10 @@ export function EditorCanvas({
   template = "graph",
 }: EditorCanvasProps) {
   const t = useEditorTranslations() as unknown as EditorTranslationFn;
-  const renderer = resolveDiagramRenderer({
+  const renderer = resolveEditorDiagramMode({
     diagramType,
     template,
-  });
+  }).renderer;
   const initialNodes = useMemo<RFNode[]>(
     () => [
       {
