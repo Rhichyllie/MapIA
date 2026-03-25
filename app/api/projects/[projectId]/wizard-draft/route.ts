@@ -6,16 +6,18 @@ import {
 } from "@/src/server/app/api-response";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
-import { SaveWizardDraftInputSchema } from "@/src/modules/wizard/domain";
+import {
+  buildAssistantDraftFromLegacyWizard,
+  buildLegacyWizardDraftViewModel,
+  SaveLegacyWizardDraftInputSchema,
+} from "@/src/modules/creation-assistant/application/legacy-wizard-alias";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
 });
 
-const SaveWizardDraftRequestSchema = SaveWizardDraftInputSchema.omit({
-  projectId: true,
-});
-
+// Legacy alias kept only to translate deprecated /wizard clients onto the
+// canonical Creation Assistant draft model.
 export async function PUT(
   request: Request,
   context: { params: Promise<{ projectId: string }> },
@@ -28,22 +30,34 @@ export async function PUT(
     }
 
     const params = ParamsSchema.parse(await context.params);
-    const body = SaveWizardDraftRequestSchema.parse(await request.json());
-    const { projects, wizard } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
+    const body = SaveLegacyWizardDraftInputSchema.parse(await request.json());
+    const { projects, creationAssistant } = createServerUseCases();
+    const project = await projects.getOwnedProject.execute({
       ownerIdentity: auth.identity,
       projectId: params.projectId,
     });
-
-    const draft = await wizard.saveDraft.execute({
-      projectId: params.projectId,
-      currentStep: body.currentStep,
+    const assistantDraft = buildAssistantDraftFromLegacyWizard({
+      project: {
+        name: project.name,
+        description: project.description,
+        template: project.template,
+      },
       payload: body.payload,
-      status: body.status,
+    });
+    await creationAssistant.saveProjectCreationDraft.execute({
+      ownerIdentity: auth.identity,
+      projectId: params.projectId,
+      draft: assistantDraft,
     });
 
-    return apiSuccessResponse({ draft });
+    return apiSuccessResponse({
+      draft: buildLegacyWizardDraftViewModel({
+        currentStep: body.currentStep,
+        payload: body.payload,
+        status: body.status,
+      }),
+      compatibilityAlias: true,
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }

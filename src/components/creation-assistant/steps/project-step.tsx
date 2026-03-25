@@ -14,6 +14,7 @@ export function ProjectStep({ draft, setDraft, labels }: ProjectStepProps) {
         <label htmlFor="assistant-project-name">{labels.projectStep.projectNameLabel}</label>
         <input
           id="assistant-project-name"
+          data-testid="creation-assistant-project-name-input"
           value={draft.projectName}
           onChange={(event) =>
             setDraft((current) => ({
@@ -30,6 +31,7 @@ export function ProjectStep({ draft, setDraft, labels }: ProjectStepProps) {
         <textarea
           id="assistant-project-objective"
           rows={3}
+          data-testid="creation-assistant-project-objective-input"
           value={draft.projectObjective ?? ""}
           onChange={(event) =>
             setDraft((current) => ({

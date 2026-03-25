@@ -137,6 +137,7 @@ export function OriginStep({
                 : labels.getStartStrategy(strategy).description
             }
             selected={draft.startStrategy === strategy}
+            dataTestId={`creation-assistant-start-strategy-${strategy}`}
             onSelect={() => {
               const allowedSources = getAllowedStartSourcesForProfile(draft.profile);
               const allowedTemplates = getAllowedTemplatePresetsForProfile(draft.profile);
@@ -189,6 +190,7 @@ export function OriginStep({
               title={labels.getTemplatePresetLabel(preset)}
               description={labels.originStep.templatePresetDescription}
               selected={draft.templatePreset === preset}
+              dataTestId={`creation-assistant-template-${preset}`}
               onSelect={() =>
                 setDraft((current) => ({
                   ...current,
@@ -209,6 +211,7 @@ export function OriginStep({
                 title={labels.getStartSourceLabel(source)}
                 description={labels.originStep.sourceDescription}
                 selected={draft.startSource === source}
+                dataTestId={`creation-assistant-start-source-${source}`}
                 onSelect={() =>
                   setDraft((current) => ({
                     ...current,

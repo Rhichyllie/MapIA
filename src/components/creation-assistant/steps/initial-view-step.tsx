@@ -33,6 +33,7 @@ export function InitialViewStep({
               title={labels.getInitialView(view).label}
               description={labels.getInitialView(view).description}
               selected={draft.initialView === view}
+              dataTestId={`creation-assistant-view-${view}`}
               onSelect={() => selectInitialView(view)}
             />
           ))}
@@ -47,6 +48,7 @@ export function InitialViewStep({
               title={`${labels.getInitialView(view).label} (${labels.getRankLabel(draft.profile, view)})`}
               description={labels.getInitialView(view).description}
               selected={draft.initialView === view}
+              dataTestId={`creation-assistant-view-${view}`}
               onSelect={() => selectInitialView(view)}
             />
           ))}

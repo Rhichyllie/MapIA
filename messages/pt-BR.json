@@ -104,9 +104,9 @@
   "Dashboard": {
     "page": {
       "title": "Area de trabalho",
-      "description": "Gerencie projetos e avance do assistente para o editor com contexto preservado.",
-      "projectListTitle": "Projetos",
-      "projectListDescription": "{count} projeto(s) na visualizacao atual."
+      "description": "Navegue por uma colecao de projetos real, refine quando precisar e siga para o editor ou para o Assistente de criacao sem congestionamento.",
+      "projectListTitle": "Colecao de projetos",
+      "projectListDescription": "{count} projeto(s) na colecao atual."
     },
     "stats": {
       "projects": "Projetos",
@@ -114,10 +114,12 @@
       "pending": "Snapshot pendente"
     },
     "emptyStates": {
+      "noneCreatedEyebrow": "Colecao vazia",
       "noneCreatedTitle": "Nenhum projeto criado ainda",
-      "noneCreatedDescription": "Crie seu primeiro projeto para iniciar o fluxo workspace -> Assistente de criacao -> Editor.",
+      "noneCreatedDescription": "Crie seu primeiro projeto no Assistente de criacao para iniciar a colecao do workspace.",
+      "noneFilteredEyebrow": "Nenhum resultado",
       "noneFilteredTitle": "Nenhum projeto encontrado",
-      "noneFilteredDescription": "Ajuste busca, filtros ou ordenacao para encontrar projetos."
+      "noneFilteredDescription": "Ajuste busca, filtros ou ordenacao para reduzir a colecao e encontrar o projeto certo."
     },
     "filters": {
       "searchLabel": "Buscar",
@@ -129,10 +131,14 @@
       "templateLabelOperational": "Modelo",
       "templateLabelTechnical": "Template legado",
       "snapshotLabel": "Status de snapshot",
+      "updatedLabel": "Atualizacao recente",
       "sortLabel": "Ordenar por",
       "allOption": "Todos",
       "generatedOption": "Gerado",
       "pendingOption": "Pendente",
+      "updatedTodayOption": "Hoje",
+      "updatedLast7DaysOption": "Ultimos 7 dias",
+      "updatedLast30DaysOption": "Ultimos 30 dias",
       "sortNameAsc": "Nome (A-Z)",
       "sortUpdatedDesc": "Atualizado (mais recente)",
       "sortCreatedDesc": "Criado (mais recente)",
@@ -141,7 +147,34 @@
       "workspaceModeAriaLabel": "Modo do workspace",
       "clearFiltersButton": "Limpar filtros",
       "newProjectButton": "Novo projeto",
+      "newProjectHelper": "Abre o Assistente de criacao em /create.",
+      "refineButton": "Refinar colecao",
+      "preferencesButton": "Preferencias",
+      "filtersPanelTitle": "Refinamento da colecao",
+      "filtersPanelDescription": "Busca continua principal. Modelo, diagrama, status, recencia e ordenacao ficam aqui para refinar sem poluir a tela.",
+      "preferencesPanelTitle": "Preferencias de visualizacao",
+      "preferencesPanelDescription": "A lista e o modo principal. O grid segue disponivel como apoio secundario.",
+      "listDefaultHelper": "Lista como modo principal para leitura e operacao.",
+      "densityHelper": "Ajuste o respiro sem mudar a estrutura da colecao.",
+      "workspaceModeHelper": "Troque a linguagem entre leitura operacional e legado tecnico.",
+      "activeRefinementsLabel": "{count} ativo(s)",
       "counterLabel": "Exibindo {filteredCount} de {totalCount} projetos"
+    },
+    "collection": {
+      "summaryLabel": "{total} projetos · {generated} com mapa inicial · {pending} pendentes",
+      "rangeLabel": "Mostrando {rangeStart}-{rangeEnd} de {totalCount}",
+      "pageLabel": "Pagina {currentPage} de {pageCount}",
+      "rangeCaption": "Faixa atual",
+      "pageCaption": "Navegacao",
+      "pageSizeLabel": "Itens por pagina",
+      "pageSizeAriaLabel": "Selecionar quantidade de itens por pagina",
+      "jumpLabel": "Ir para pagina",
+      "jumpAriaLabel": "Ir direto para uma pagina da colecao",
+      "pageButtonAriaLabel": "Ir para pagina {page}",
+      "ellipsisLabel": "Mais paginas",
+      "navigationAriaLabel": "Navegacao da colecao",
+      "previousPage": "Anterior",
+      "nextPage": "Proxima"
     },
     "viewMode": {
       "grid": "Grid",
@@ -159,11 +192,25 @@
       "fallbackDescription": "Sem finalidade informada",
       "updatedAtLabel": "Atualizado em {date}",
       "updatedFallback": "—",
-      "open": "Abrir",
-      "openAssistant": "Abrir Assistente",
+      "open": "Abrir no editor",
+      "openAssistant": "Assistente de criacao",
       "openEditor": "Abrir Editor",
       "viewVersions": "Ver versoes",
       "copyTechnicalId": "Copiar ID tecnico",
+      "secondaryActionsLabel": "Mais",
+      "openSurfaceHint": "Resumo principal",
+      "facts": {
+        "template": "Modelo",
+        "diagram": "Diagrama",
+        "status": "Status",
+        "updated": "Atualizacao"
+      },
+      "statusReady": "Pronto",
+      "statusReadyHint": "Mapa inicial disponivel para continuar no editor.",
+      "statusPending": "Pendente",
+      "statusPendingHint": "Finalize a configuracao inicial no assistente.",
+      "updatedHint": "Ultima atividade registrada",
+      "updatedUnknownHint": "Sem registro recente",
       "moreActionsAriaLabel": "Mais acoes para {projectName}",
       "listAriaLabel": "Lista de projetos",
       "headers": {
@@ -191,10 +238,6 @@
       "cancelButton": "Cancelar"
     },
     "diagramTypes": {
-      "wizard": {
-        "label": "Decidir no Assistente",
-        "description": "Defina o tipo durante o fluxo guiado de criacao."
-      },
       "tree": {
         "label": "Hierarquia",
         "description": "Estruturas com niveis e relacao pai-filho."

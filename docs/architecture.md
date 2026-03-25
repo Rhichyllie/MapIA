@@ -4,11 +4,16 @@
 
 Estabelecer base modular para evolucao incremental do MapIA sem acoplar UI, importadores e persistencia ao formato bruto das fontes externas.
 
+## Estado atual
+
+- O fluxo oficial de criacao e o `Creation Assistant` em `/create`.
+- Referencias a `Wizard` neste documento representam contexto historico de fases anteriores ou pontos que ainda precisam de arquivamento.
+
 ## Principios adotados
 
 - Modelo canonico unico de grafo (`Node`, `Edge`, `ExternalRef`, `GraphSnapshot`, `ViewportState`) para todas as views.
 - Separacao de camadas: `domain` (regras/contratos), `application` (casos de uso/orquestracao), `infrastructure` (Prisma, auth, importadores).
-- UI (Wizard/Editor) consome contratos de aplicacao e nunca payloads brutos de importadores.
+- UI (`Creation Assistant`/Editor) consome contratos de aplicacao e nunca payloads brutos de importadores.
 - Validacao com Zod em contratos de dominio e inputs de auth (Fase 0).
 - Leitura/escrita de snapshot no boundary do Prisma passa por `GraphSnapshotSchema.parse(...)`.
 

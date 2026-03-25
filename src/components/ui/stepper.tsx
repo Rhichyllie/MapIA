@@ -13,13 +13,18 @@ type StepperItem = {
 type StepperProps = {
   items: StepperItem[];
   ariaLabel: string;
+  dataTestId?: string;
 };
 
-export function Stepper({ items, ariaLabel }: StepperProps) {
+export function Stepper({ items, ariaLabel, dataTestId }: StepperProps) {
   const t = useTranslations("Common.stepper");
 
   return (
-    <ol className="stepper-list" aria-label={ariaLabel}>
+    <ol
+      className="stepper-list"
+      aria-label={ariaLabel}
+      data-testid={dataTestId}
+    >
       {items.map((step) => (
         <li
           key={step.id}

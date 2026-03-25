@@ -209,175 +209,202 @@ async function runActionAndWaitForSaveCycle({
   return statusHistory;
 }
 
-async function waitForDashboardCreateFormReady(page: Page) {
+async function ensureDashboardLoaded(page: Page) {
   if (!page.url().includes("/dashboard")) {
     await page.goto("/dashboard");
   }
 
   await expect(page.getByTestId("workspace-toolbar")).toBeVisible();
-  const newProjectButton = page.getByTestId("new-project-button");
-  const newProjectDrawer = page.getByTestId("new-project-drawer");
+  await expect(page.getByTestId("new-project-button")).toBeVisible();
+}
 
-  await expect(newProjectButton).toBeVisible();
+async function getWorkspaceIdFromDashboard(page: Page) {
+  await ensureDashboardLoaded(page);
+  const workspaceId = await page
+    .getByTestId("workspace-toolbar")
+    .getAttribute("data-workspace-id");
 
-  let drawerVisible = false;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await newProjectButton.click();
-    try {
-      await expect(newProjectDrawer).toBeVisible({ timeout: 3_000 });
-      drawerVisible = true;
-      break;
-    } catch (error) {
-      if (attempt === 2) {
-        throw error;
-      }
-    }
+  if (!workspaceId) {
+    throw new Error("Workspace toolbar is missing the workspace id attribute.");
   }
 
-  expect(drawerVisible).toBe(true);
-  await expect(page.getByTestId("dashboard-create-project-form")).toBeVisible();
-  // Intentional fixed wait: Next.js dev mode can render client markup before
-  // React event handlers hydrate. This is the only fixed delay kept in the spec.
-  await page.waitForTimeout(DASHBOARD_HYDRATION_SETTLE_MS);
+  return workspaceId;
+}
+
+async function createProjectViaWorkspaceApi(
+  page: Page,
+  input: {
+    name: string;
+    template?: "graph" | "sitemap" | "flowchart" | "erd";
+  },
+) {
+  const workspaceId = await getWorkspaceIdFromDashboard(page);
+  const response = await page.request.post("/api/projects", {
+    data: {
+      workspaceId,
+      name: input.name,
+      description: "Projeto criado via automacao do workspace",
+      template: input.template ?? "graph",
+    },
+  });
+
+  await assertApiResponseOk(response, "workspace create project via api");
+
+  const payload = (await response.json()) as {
+    data?: {
+      project?: {
+        id?: string;
+      };
+    };
+  };
+  const projectId = payload.data?.project?.id;
+
+  if (!projectId) {
+    throw new Error("Workspace create project API did not return a project id.");
+  }
+
+  return projectId;
 }
 
 async function createProjectFromDashboard(
   page: Page,
   prefix = "E2E Editor",
   options?: {
-    openWizard?: boolean;
+    openAssistant?: boolean;
     template?: "graph" | "sitemap" | "flowchart" | "erd";
   },
 ) {
   const project = buildProjectIdentity(prefix);
-
-  await waitForDashboardCreateFormReady(page);
-
-  const nameInput = page.getByTestId("dashboard-project-name-input");
-  await nameInput.fill(project.name);
-  await expect(nameInput).toHaveValue(project.name);
-
-  if (options?.template) {
-    await page
-      .getByTestId("dashboard-project-template-select")
-      .selectOption(options.template);
-  }
-
-  await waitForApiResponse({
-    page,
-    method: "POST",
-    pathIncludes: "/api/projects",
-    context: "dashboard create project",
-    action: () => page.getByTestId("dashboard-create-project-button").click(),
+  const projectId = await createProjectViaWorkspaceApi(page, {
+    name: project.name,
+    template: options?.template,
   });
 
-  const projectCard = page
-    .getByTestId("dashboard-project-list")
-    .locator('[data-testid^="dashboard-project-card-"]')
-    .filter({ hasText: project.name })
-    .first();
+  await page.goto("/dashboard");
+  await page.getByTestId("workspace-search").fill(project.name);
+  // Intentional fixed wait: Next.js dev mode can render client markup before
+  // React event handlers hydrate. This is the only fixed delay kept in the spec.
+  await page.waitForTimeout(DASHBOARD_HYDRATION_SETTLE_MS);
+
+  const projectCard = page.getByTestId(`dashboard-project-card-${projectId}`);
   await expect(projectCard).toBeVisible({ timeout: 30_000 });
 
-  const wizardLink = projectCard.locator('a[data-testid^="dashboard-open-wizard-"]');
-  const wizardHref = await wizardLink.getAttribute("href");
-  if (!wizardHref) {
-    throw new Error("Dashboard project card is missing the wizard link href.");
-  }
-
-  const projectId = new URL(wizardHref, "http://localhost").searchParams.get(
-    "projectId",
-  );
-  if (!projectId) {
-    throw new Error("Could not resolve projectId from the dashboard wizard link.");
-  }
-
-  if (options?.openWizard === false) {
+  if (options?.openAssistant === false) {
     return { id: projectId, name: project.name } satisfies CreatedProject;
   }
 
-  const actionsTrigger = projectCard.locator("summary").first();
-  if ((await actionsTrigger.count()) > 0) {
-    await actionsTrigger.click();
-  }
-  await wizardLink.click();
-  await expect(page).toHaveURL(new RegExp(`/wizard\\?projectId=${projectId}`));
+  await page.goto(`/create?fromProjectId=${projectId}`);
+  await expect(page).toHaveURL(new RegExp(`/create\\?fromProjectId=${projectId}`));
 
   return { id: projectId, name: project.name } satisfies CreatedProject;
 }
 
-async function completeWizardAndOpenEditor(
+function resolveAssistantScenario(
+  diagramType: "tree" | "flow" | "mindmap",
+) {
+  if (diagramType === "tree") {
+    return {
+      profile: "information-structure",
+      initialView: "hierarchy",
+    } as const;
+  }
+
+  if (diagramType === "flow") {
+    return {
+      profile: "process",
+      initialView: "flow",
+    } as const;
+  }
+
+  return {
+    profile: "blank",
+    initialView: "mindmap",
+  } as const;
+}
+
+async function completeCreationAssistantAndOpenEditor(
   page: Page,
   projectId: string,
   options?: { diagramType?: "tree" | "flow" | "mindmap" },
 ) {
   const diagramType = options?.diagramType ?? "tree";
+  const scenario = resolveAssistantScenario(diagramType);
 
-  await expect(page.getByTestId("wizard-stepper")).toBeVisible();
-  await expect(page.getByTestId("wizard-current-panel")).toContainText(
-    "1. Tipo de diagrama",
+  await expect(page.getByTestId("creation-assistant-shell")).toBeVisible();
+  await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+    "data-step-id",
+    "project",
   );
-  await page.getByTestId(`wizard-diagram-type-${diagramType}`).click();
   await waitForApiResponse({
     page,
     method: "PUT",
-    pathIncludes: "/wizard-draft",
-    context: "wizard next (tipo)",
-    action: () => page.getByTestId("wizard-next-button").click(),
+    pathIncludes: "/creation-draft",
+    context: "assistant next (project)",
+    action: () => page.getByTestId("creation-assistant-continue-button").click(),
   });
 
-  await expect(page.getByTestId("wizard-current-panel")).toContainText(
-    "2. Origem dos dados",
+  await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+    "data-step-id",
+    "scope",
   );
-  await page.getByTestId("wizard-data-source-select").selectOption("manual");
+  await page.getByTestId(`creation-assistant-profile-${scenario.profile}`).click();
   await waitForApiResponse({
     page,
     method: "PUT",
-    pathIncludes: "/wizard-draft",
-    context: "wizard next (origem)",
-    action: () => page.getByTestId("wizard-next-button").click(),
+    pathIncludes: "/creation-draft",
+    context: "assistant next (scope)",
+    action: () => page.getByTestId("creation-assistant-continue-button").click(),
   });
 
-  await expect(page.getByTestId("wizard-current-panel")).toContainText(
-    "3. Configuracao",
+  await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+    "data-step-id",
+    "origin",
   );
-  await expect(page.getByTestId("wizard-config-name-input")).not.toHaveValue("");
+  await page.getByTestId("creation-assistant-start-strategy-manual").click();
   await waitForApiResponse({
     page,
     method: "PUT",
-    pathIncludes: "/wizard-draft",
-    context: "wizard next (configuracao)",
-    action: () => page.getByTestId("wizard-next-button").click(),
+    pathIncludes: "/creation-draft",
+    context: "assistant next (origin)",
+    action: () => page.getByTestId("creation-assistant-continue-button").click(),
   });
 
-  await expect(page.getByTestId("wizard-current-panel")).toContainText("4. Revisao");
+  await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+    "data-step-id",
+    "view",
+  );
+  await page.getByTestId(`creation-assistant-view-${scenario.initialView}`).click();
   await waitForApiResponse({
     page,
     method: "PUT",
-    pathIncludes: "/wizard-draft",
-    context: "wizard next (revisao)",
-    action: () => page.getByTestId("wizard-next-button").click(),
+    pathIncludes: "/creation-draft",
+    context: "assistant next (view)",
+    action: () => page.getByTestId("creation-assistant-continue-button").click(),
   });
 
-  await expect(page.getByTestId("wizard-current-panel")).toContainText(
-    "5. Gerar e abrir editor",
+  await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+    "data-step-id",
+    "adjustments",
   );
-  const saveDraftBeforeGeneratePromise = waitForApiResponse({
+  await waitForApiResponse({
     page,
     method: "PUT",
-    pathIncludes: "/wizard-draft",
-    context: "wizard save draft before generate",
+    pathIncludes: "/creation-draft",
+    context: "assistant next (adjustments)",
+    action: () => page.getByTestId("creation-assistant-continue-button").click(),
   });
-  const generateSnapshotPromise = waitForApiResponse({
+
+  await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+    "data-step-id",
+    "review",
+  );
+  await waitForApiResponse({
     page,
     method: "POST",
-    pathIncludes: "/wizard-generate",
-    context: "wizard generate snapshot",
+    pathIncludes: "/creation-apply",
+    context: "assistant finish creation",
+    action: () => page.getByTestId("creation-assistant-finish-button").click(),
   });
-  await page.getByTestId("wizard-generate-button").click();
-  await saveDraftBeforeGeneratePromise;
-  await generateSnapshotPromise;
-  await expect(page.getByTestId("wizard-open-editor-button")).toBeVisible();
-  await page.getByTestId("wizard-open-editor-button").click();
 
   await expect(page).toHaveURL(new RegExp(`/editor\\?projectId=${projectId}`), {
     timeout: 30_000,
@@ -896,7 +923,7 @@ async function createProjectAndOpenEditor(
   const project = await createProjectFromDashboard(page, prefix, {
     template: options?.template,
   });
-  await completeWizardAndOpenEditor(page, project.id, {
+  await completeCreationAssistantAndOpenEditor(page, project.id, {
     diagramType: options?.diagramType,
   });
   await waitForEditorReady(page);
@@ -950,71 +977,79 @@ async function createFlowProjectViaAssistantAndOpenEditor(
 }
 
 test.describe("Editor E2E (Fase 3A)", () => {
-  test("Fase 5.4 Workspace: cria projeto via drawer e mostra na lista", async ({
+  test("Fase 3.1 Workspace: CTA principal abre /create e nao existe drawer residual", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createProjectFromDashboard(
-      page,
-      "E2E Workspace Drawer",
-      { openWizard: false },
-    );
-
+    await ensureDashboardLoaded(page);
     await expect(page.getByTestId("new-project-drawer")).toHaveCount(0);
-    await expect(page.getByTestId(`dashboard-project-card-${project.id}`)).toBeVisible();
-    await expect(page.getByTestId(`dashboard-project-card-${project.id}`)).toHaveClass(
-      /is-highlighted/,
-    );
+    await expect(page.getByTestId("dashboard-create-project-form")).toHaveCount(0);
+    await page.getByTestId("new-project-button").click();
+    await expect(page).toHaveURL(/\/create(?:\?|$)/);
   });
 
-  test("Fase 5.5 Workspace: alterna Grid/Lista + Densidade com persistencia", async ({
+  test("Fase 3.1 Workspace: lista e o modo padrao e preferencias ficam secundarias", async ({
     authenticatedPage: page,
   }) => {
-    await createProjectFromDashboard(page, "E2E Workspace Persist", {
-      openWizard: false,
+    const projectId = await createProjectViaWorkspaceApi(page, {
+      name: `E2E Workspace Persist ${Date.now()}`,
     });
+    await page.goto("/dashboard");
 
     const projectList = page.getByTestId("dashboard-project-list");
 
-    await page.getByRole("button", { name: "Grid" }).click();
+    await expect(projectList).toHaveAttribute("data-view", "list");
+    await expect(page.getByTestId("new-project-drawer")).toHaveCount(0);
+    await expect(page.getByTestId("workspace-preferences-panel")).toHaveCount(0);
+
+    await page.getByTestId("workspace-toggle-preferences").click();
+    await expect(page.getByTestId("workspace-preferences-panel")).toBeVisible();
+
+    await page.getByTestId("workspace-view-grid").click();
     await expect(projectList).toHaveAttribute("data-view", "grid");
 
-    await page.getByRole("button", { name: "Confortavel" }).click();
+    await page.getByTestId("workspace-density-comfortable").click();
     await expect(projectList).toHaveAttribute("data-density", "comfortable");
 
-    await page.getByRole("button", { name: "Tecnico" }).click();
+    await page.getByTestId("workspace-mode-technical").click();
     await expect(page.getByTestId("workspace-mode-technical")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
+
+    await expect(page.getByTestId(`dashboard-project-card-${projectId}`)).toBeVisible();
 
     await page.reload();
     await expect(projectList).toHaveAttribute("data-view", "grid");
     await expect(projectList).toHaveAttribute("data-density", "comfortable");
+    await page.getByTestId("workspace-toggle-preferences").click();
     await expect(page.getByTestId("workspace-mode-technical")).toHaveAttribute(
       "aria-pressed",
       "true",
     );
   });
 
-  test("Fase 5.4 Workspace: search + filter + sort na toolbar", async ({
+  test("Fase 3.1 Workspace: busca, filtros e ordenacao funcionam com a navegacao secundarizada", async ({
     authenticatedPage: page,
   }) => {
     const marker = Date.now();
-    const alphaProject = await createProjectFromDashboard(
-      page,
-      `E2E Workspace ${marker} Alpha`,
-      { openWizard: false },
-    );
-    const zuluProject = await createProjectFromDashboard(
-      page,
-      `E2E Workspace ${marker} Zulu`,
-      { openWizard: false },
-    );
+    const alphaName = `E2E Workspace ${marker} Alpha`;
+    const zuluName = `E2E Workspace ${marker} Zulu`;
+    const alphaProjectId = await createProjectViaWorkspaceApi(page, {
+      name: alphaName,
+    });
+    const zuluProjectId = await createProjectViaWorkspaceApi(page, {
+      name: zuluName,
+    });
+
+    await page.goto("/dashboard");
 
     await page.getByTestId("workspace-search").fill(`E2E Workspace ${marker}`);
-    await expect(page.getByTestId(`dashboard-project-card-${alphaProject.id}`)).toBeVisible();
-    await expect(page.getByTestId(`dashboard-project-card-${zuluProject.id}`)).toBeVisible();
+    await expect(page.getByTestId(`dashboard-project-card-${alphaProjectId}`)).toBeVisible();
+    await expect(page.getByTestId(`dashboard-project-card-${zuluProjectId}`)).toBeVisible();
 
+    await expect(page.getByTestId("workspace-filters-panel")).toHaveCount(0);
+    await page.getByTestId("workspace-toggle-filters").click();
+    await expect(page.getByTestId("workspace-filters-panel")).toBeVisible();
     await page.getByTestId("workspace-filter-snapshot").selectOption("pending");
     await page.getByTestId("workspace-filter-diagram").selectOption("undefined");
     await page.getByTestId("workspace-sort").selectOption("name-asc");
@@ -1027,6 +1062,125 @@ test.describe("Editor E2E (Fase 3A)", () => {
 
     await page.getByTestId("workspace-clear-filters").click();
     await expect(page.getByTestId("workspace-search")).toHaveValue("");
+  });
+
+  test("Fase 3.1 Workspace: volume maior nao renderiza tudo na primeira pagina", async ({
+    authenticatedPage: page,
+  }) => {
+    const marker = Date.now();
+
+    for (let index = 0; index < 26; index += 1) {
+      await createProjectViaWorkspaceApi(page, {
+        name: `E2E Volume ${marker} ${String(index).padStart(2, "0")}`,
+      });
+    }
+
+    await page.goto("/dashboard");
+    await page.getByTestId("workspace-search").fill(`E2E Volume ${marker}`);
+
+    const cards = page
+      .getByTestId("dashboard-project-list")
+      .locator('[data-testid^="dashboard-project-card-"]');
+
+    await expect(cards).toHaveCount(25);
+    await expect(page.getByTestId("workspace-collection-page")).toHaveText(/1.*2/);
+
+    await page.getByTestId("workspace-page-button-2").click();
+    await expect(page.getByTestId("workspace-collection-page")).toHaveText(/2.*2/);
+    await expect(cards).toHaveCount(1);
+  });
+
+  test("Fase 3.2 Workspace: lista prioriza o editor e preserva acoes secundarias", async ({
+    authenticatedPage: page,
+  }) => {
+    const projectName = `E2E List Hierarchy ${Date.now()}`;
+    const projectId = await createProjectViaWorkspaceApi(page, {
+      name: projectName,
+    });
+
+    await page.goto("/dashboard");
+    await page.getByTestId("workspace-search").fill(projectName);
+
+    await expect(
+      page.getByTestId(`dashboard-project-primary-link-${projectId}`),
+    ).toBeVisible();
+    await expect(page.getByTestId(`dashboard-open-editor-${projectId}`)).toBeVisible();
+    await expect(
+      page.getByTestId(`dashboard-project-facts-${projectId}`),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId(`dashboard-project-secondary-actions-${projectId}`),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId(`dashboard-copy-technical-id-${projectId}`),
+    ).toHaveCount(0);
+
+    await page.getByTestId("workspace-toggle-preferences").click();
+    await page.getByTestId("workspace-mode-technical").click();
+
+    await expect(
+      page.getByTestId(`dashboard-copy-technical-id-${projectId}`),
+    ).toHaveCount(1);
+  });
+
+  test("Fase 3.2 Workspace: empty state filtrado continua claro na lista", async ({
+    authenticatedPage: page,
+  }) => {
+    const projectName = `E2E Empty State ${Date.now()}`;
+    await createProjectViaWorkspaceApi(page, {
+      name: projectName,
+    });
+
+    await page.goto("/dashboard");
+    await page.getByTestId("workspace-search").fill("projeto inexistente 3.2");
+
+    await expect(page.getByTestId("dashboard-empty-filtered-projects")).toBeVisible();
+    await expect(page.getByTestId("dashboard-empty-clear-filters")).toBeVisible();
+  });
+
+  test("Fase 3.2.1 Workspace: filtros uteis, paginacao numerada e page size funcionam juntos", async ({
+    authenticatedPage: page,
+  }) => {
+    const marker = Date.now();
+
+    for (let index = 0; index < 52; index += 1) {
+      await createProjectViaWorkspaceApi(page, {
+        name: `E2E Controls ${marker} ${String(index).padStart(2, "0")}`,
+        template: index % 2 === 0 ? "graph" : "erd",
+      });
+    }
+
+    await page.goto("/dashboard");
+    await page.getByTestId("workspace-search").fill(`E2E Controls ${marker}`);
+    await page.getByTestId("workspace-toggle-filters").click();
+    await page.getByTestId("workspace-filter-template").selectOption("graph");
+    await page.getByTestId("workspace-filter-updated").selectOption("today");
+
+    const cards = page
+      .getByTestId("dashboard-project-list")
+      .locator('[data-testid^="dashboard-project-card-"]');
+
+    await expect(cards).toHaveCount(25);
+    await expect(page.getByTestId("workspace-page-button-2")).toBeVisible();
+    await expect(page.getByTestId("workspace-page-jump")).toBeVisible();
+
+    await page.getByTestId("workspace-page-jump").selectOption("2");
+    await expect(page.getByTestId("workspace-collection-page")).toHaveText(/2.*2/);
+    await expect(cards).toHaveCount(1);
+
+    await page.getByTestId("workspace-page-size").selectOption("50");
+    await expect(page.getByTestId("workspace-page-size")).toHaveValue("50");
+    await expect(page.getByTestId("workspace-collection-page")).toHaveText(/1.*1/);
+    await expect(cards).toHaveCount(26);
+
+    await page.reload();
+    await page.getByTestId("workspace-search").fill(`E2E Controls ${marker}`);
+    await page.getByTestId("workspace-toggle-filters").click();
+    await page.getByTestId("workspace-filter-template").selectOption("graph");
+    await page.getByTestId("workspace-filter-updated").selectOption("today");
+
+    await expect(page.getByTestId("workspace-page-size")).toHaveValue("50");
+    await expect(cards).toHaveCount(26);
   });
 
   test("Fase 5.4 Editor: focus mode colapsa paineis e mantém canvas operável", async ({
@@ -1469,10 +1623,7 @@ model Post {
   test("Fase 5.8 Flow: adicionar proxima etapa posiciona a direita e conecta flows-to", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createFlowProjectViaAssistantAndOpenEditor(
-      page,
-      "E2E Flow Diferenca",
-    );
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Diferenca");
 
     await setInspectorMode(page, "technical");
     const sourceNodeId = await resolveVisibleFlowSourceNodeId(page);
@@ -1828,10 +1979,7 @@ model Post {
   test("Fase 5.8 Roles Flow: badge de projeto nao aparece como Etapa e QuickAdd mostra papeis", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createFlowProjectViaAssistantAndOpenEditor(
-      page,
-      "E2E Flow Roles",
-    );
+    await createFlowProjectViaAssistantAndOpenEditor(page, "E2E Flow Roles");
 
     await page.getByTestId("add-node-button").click();
     await expect(page.getByTestId("add-node-dialog")).toBeVisible();
@@ -2423,7 +2571,7 @@ model Post {
       .toMatch(/1:1|1:N|N:N/);
   });
 
-  test("fluxo principal Dashboard -> Wizard -> Editor com persistencia", async ({
+  test("fluxo principal Dashboard -> Assistente de Criacao -> Editor com persistencia", async ({
     authenticatedPage: page,
   }) => {
     const project = await createProjectAndOpenEditor(page, "E2E Editor Flow");
@@ -2542,7 +2690,7 @@ model Post {
     );
   });
 
-  test("Fase 5.3: canvas aplica renderer tree no fluxo Wizard -> Editor", async ({
+  test("Fase 5.3: canvas aplica renderer tree no fluxo Assistente de Criacao -> Editor", async ({
     authenticatedPage: page,
   }) => {
     const project = await createProjectAndOpenEditor(page, "E2E Renderer Tree");
@@ -2582,94 +2730,147 @@ model Post {
       .toBeGreaterThan(0);
   });
 
-  test("Fase 5.1.2: wizard persiste no raiz e bloqueia reaplicacao de layout no editor", async ({
+  test("Fase 5.1.2: assistente persiste raiz inicial e bloqueia reaplicacao de layout no editor", async ({
     authenticatedPage: page,
   }) => {
-    const project = await createProjectFromDashboard(page, "E2E Wizard Policy");
-
-    await expect(page.getByTestId("wizard-stepper")).toBeVisible();
-    await expect(page.getByTestId("wizard-current-panel")).toContainText(
-      "1. Tipo de diagrama",
+    const project = await createProjectFromDashboard(
+      page,
+      "E2E Assistant Policy",
     );
-    await page.getByTestId("wizard-diagram-type-tree").click();
+
+    await expect(page.getByTestId("creation-assistant-shell")).toBeVisible();
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "project",
+    );
     await waitForApiResponse({
       page,
       method: "PUT",
-      pathIncludes: "/wizard-draft",
-      context: "wizard next (tipo) for policy scenario",
-      action: () => page.getByTestId("wizard-next-button").click(),
+      pathIncludes: "/creation-draft",
+      context: "assistant next (project) for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
     });
 
-    await expect(page.getByTestId("wizard-current-panel")).toContainText(
-      "2. Origem dos dados",
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "scope",
     );
-    await page.getByTestId("wizard-data-source-select").selectOption("manual");
-    await waitForApiResponse({
-      page,
-      method: "PUT",
-      pathIncludes: "/wizard-draft",
-      context: "wizard next (origem) for policy scenario",
-      action: () => page.getByTestId("wizard-next-button").click(),
-    });
-
-    await expect(page.getByTestId("wizard-current-panel")).toContainText("3. Configuracao");
-    await expect(page.getByTestId("wizard-config-generate-root-checkbox")).toBeChecked();
     await page
-      .getByTestId("wizard-config-root-node-name-input")
-      .fill("Arquitetura Geral");
-    await page.getByTestId("wizard-config-allow-relayout-checkbox").uncheck();
+      .getByTestId("creation-assistant-profile-information-structure")
+      .click();
     await waitForApiResponse({
       page,
       method: "PUT",
-      pathIncludes: "/wizard-draft",
-      context: "wizard save config draft for policy scenario",
-      action: () => page.getByTestId("wizard-save-draft-button").click(),
+      pathIncludes: "/creation-draft",
+      context: "assistant next (scope) for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
+    });
+
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "origin",
+    );
+    await page.getByTestId("creation-assistant-start-strategy-manual").click();
+    await waitForApiResponse({
+      page,
+      method: "PUT",
+      pathIncludes: "/creation-draft",
+      context: "assistant next (origin) for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
+    });
+
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "view",
+    );
+    await page.getByTestId("creation-assistant-view-hierarchy").click();
+    await waitForApiResponse({
+      page,
+      method: "PUT",
+      pathIncludes: "/creation-draft",
+      context: "assistant next (view) for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
+    });
+
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "adjustments",
+    );
+    await page.getByTestId("creation-assistant-toggle-advanced-structure").click();
+    await expect(
+      page.getByTestId("creation-assistant-create-initial-root-checkbox"),
+    ).toBeChecked();
+    await page
+      .getByTestId("creation-assistant-initial-root-name-input")
+      .fill("Arquitetura Geral");
+    await page
+      .getByTestId("creation-assistant-automation-autoOrganizeOnCreate-checkbox")
+      .uncheck();
+    await waitForApiResponse({
+      page,
+      method: "PUT",
+      pathIncludes: "/creation-draft",
+      context: "assistant save adjustments draft for policy scenario",
+      action: () =>
+        page.getByTestId("creation-assistant-save-draft-button").click(),
     });
 
     await page.reload();
-    await expect(page.getByTestId("wizard-current-panel")).toContainText("3. Configuracao");
-    await expect(page.getByTestId("wizard-config-root-node-name-input")).toHaveValue(
-      "Arquitetura Geral",
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "scope",
     );
-    await expect(page.getByTestId("wizard-config-allow-relayout-checkbox")).not.toBeChecked();
+    await waitForApiResponse({
+      page,
+      method: "PUT",
+      pathIncludes: "/creation-draft",
+      context: "assistant next (scope) after reload for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
+    });
+    await waitForApiResponse({
+      page,
+      method: "PUT",
+      pathIncludes: "/creation-draft",
+      context: "assistant next (origin) after reload for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
+    });
+    await waitForApiResponse({
+      page,
+      method: "PUT",
+      pathIncludes: "/creation-draft",
+      context: "assistant next (view) after reload for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
+    });
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "adjustments",
+    );
+    await expect(
+      page.getByTestId("creation-assistant-initial-root-name-input"),
+    ).toHaveValue("Arquitetura Geral");
+    await expect(
+      page.getByTestId("creation-assistant-automation-autoOrganizeOnCreate-checkbox"),
+    ).not.toBeChecked();
 
     await waitForApiResponse({
       page,
       method: "PUT",
-      pathIncludes: "/wizard-draft",
-      context: "wizard next (revisao) for policy scenario",
-      action: () => page.getByTestId("wizard-next-button").click(),
+      pathIncludes: "/creation-draft",
+      context: "assistant next (review) for policy scenario",
+      action: () => page.getByTestId("creation-assistant-continue-button").click(),
     });
-    await expect(page.getByTestId("wizard-current-panel")).toContainText("4. Revisao");
-
-    await waitForApiResponse({
-      page,
-      method: "PUT",
-      pathIncludes: "/wizard-draft",
-      context: "wizard next (gerar) for policy scenario",
-      action: () => page.getByTestId("wizard-next-button").click(),
-    });
-    await expect(page.getByTestId("wizard-current-panel")).toContainText(
-      "5. Gerar e abrir editor",
+    await expect(page.getByTestId("creation-assistant-current-panel")).toHaveAttribute(
+      "data-step-id",
+      "review",
     );
 
-    const saveDraftBeforeGeneratePromise = waitForApiResponse({
-      page,
-      method: "PUT",
-      pathIncludes: "/wizard-draft",
-      context: "wizard save draft before generate for policy scenario",
-    });
-    const generateSnapshotPromise = waitForApiResponse({
+    await waitForApiResponse({
       page,
       method: "POST",
-      pathIncludes: "/wizard-generate",
-      context: "wizard generate snapshot for policy scenario",
+      pathIncludes: "/creation-apply",
+      context: "assistant finish creation for policy scenario",
+      action: () => page.getByTestId("creation-assistant-finish-button").click(),
     });
-    await page.getByTestId("wizard-generate-button").click();
-    await saveDraftBeforeGeneratePromise;
-    await generateSnapshotPromise;
-    await expect(page.getByTestId("wizard-open-editor-button")).toBeVisible();
-    await page.getByTestId("wizard-open-editor-button").click();
 
     await expect(page).toHaveURL(new RegExp(`/editor\\?projectId=${project.id}`), {
       timeout: 30_000,
@@ -2679,7 +2880,7 @@ model Post {
     await expect(page.getByTestId("layout-policy-badge")).toContainText(
       "Layout bloqueado",
     );
-    await expect(page.getByTestId("layout-policy-open-wizard-link")).toBeVisible();
+    await expect(page.getByTestId("layout-policy-open-assistant-link")).toBeVisible();
 
     const persistedSnapshot = await loadEditorSnapshot(page, project.id);
     expect(

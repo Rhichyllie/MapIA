@@ -4,6 +4,11 @@
 
 Este documento é a fonte única para fases e subfases do produto MapIA.
 
+## Estado atual
+
+- O fluxo oficial de criacao e o `Creation Assistant`.
+- Menções a `Wizard` abaixo representam marcos historicos do roadmap, nao o estado ativo do produto.
+
 ## Macro fases (0..6)
 
 1. Fase 0: arquitetura base, autenticação dev e contratos canônicos.

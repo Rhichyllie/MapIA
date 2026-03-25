@@ -104,6 +104,7 @@ export function CreationAssistantShell({
 
       <Stepper
         ariaLabel={labels.shell.progressAriaLabel}
+        dataTestId="creation-assistant-stepper"
         items={steps.map((step, index) => ({
           id: step.id,
           index: index + 1,
@@ -122,7 +123,11 @@ export function CreationAssistantShell({
         }))}
       />
 
-      <section className="panel">
+      <section
+        className="panel"
+        data-testid="creation-assistant-current-panel"
+        data-step-id={currentStep.id}
+      >
         <header className="panel-header">
           <div>
             <h3>{currentStep.title}</h3>
@@ -201,8 +206,16 @@ export function CreationAssistantShell({
         </div>
       </section>
 
-      {state.error ? <div className="error-box">{state.error}</div> : null}
-      {state.success ? <div className="success-box">{state.success}</div> : null}
+      {state.error ? (
+        <div className="error-box" data-testid="creation-assistant-error">
+          {state.error}
+        </div>
+      ) : null}
+      {state.success ? (
+        <div className="success-box" data-testid="creation-assistant-success">
+          {state.success}
+        </div>
+      ) : null}
 
       <nav className="step-nav">
         <button
@@ -210,6 +223,7 @@ export function CreationAssistantShell({
           type="button"
           onClick={() => state.setStepIndex((current) => Math.max(0, current - 1))}
           disabled={state.stepIndex === 0 || state.isBusy}
+          data-testid="creation-assistant-back-button"
         >
           {labels.shell.back}
         </button>
@@ -218,6 +232,7 @@ export function CreationAssistantShell({
           type="button"
           onClick={draftSync.saveDraft}
           disabled={state.isBusy}
+          data-testid="creation-assistant-save-draft-button"
         >
           {labels.shell.saveDraft}
         </button>
@@ -227,6 +242,7 @@ export function CreationAssistantShell({
             type="button"
             onClick={draftSync.moveNext}
             disabled={state.isBusy}
+            data-testid="creation-assistant-continue-button"
           >
             {labels.shell.continue}
           </button>
@@ -236,6 +252,7 @@ export function CreationAssistantShell({
             type="button"
             onClick={draftSync.finishCreation}
             disabled={state.isBusy}
+            data-testid="creation-assistant-finish-button"
           >
             {mode === "new" ? labels.shell.finishNew : labels.shell.finishExisting}
           </button>

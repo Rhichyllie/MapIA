@@ -11,6 +11,8 @@ const ParamsSchema = z.object({
   projectId: z.string().uuid(),
 });
 
+// Legacy alias kept only to translate deprecated /wizard clients onto the
+// canonical Creation Assistant apply flow.
 export async function POST(
   _request: Request,
   context: { params: Promise<{ projectId: string }> },
@@ -23,14 +25,19 @@ export async function POST(
     }
 
     const params = ParamsSchema.parse(await context.params);
-    const { wizard } = createServerUseCases();
-
-    const result = await wizard.generateInitialSnapshot.execute({
+    const { creationAssistant } = createServerUseCases();
+    const result = await creationAssistant.applyProjectCreation.execute({
+      ownerIdentity: auth.identity,
       projectId: params.projectId,
-      actorIdentity: auth.identity,
+      createInitialMap: true,
     });
 
-    return apiSuccessResponse(result);
+    return apiSuccessResponse({
+      projectId: result.projectId,
+      redirectUrl: result.redirectUrl,
+      initialSnapshot: result.initialSnapshot ?? null,
+      compatibilityAlias: true,
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }

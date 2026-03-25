@@ -1,25 +1,32 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "@/src/i18n/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "@/src/i18n/navigation";
 import { EmptyState } from "@/src/components/ui/empty-state";
 import { PageHeader } from "@/src/components/ui/page-header";
 import { useDashboardCopy } from "./dashboard-copy";
-import { NewProjectDrawer } from "./new-project-drawer";
 import { ProjectsGrid } from "./projects-grid";
 import { ProjectsList } from "./projects-list";
 import { WorkspaceToolbar } from "./workspace-toolbar";
 import {
-  CARD_HIGHLIGHT_MS,
+  DEFAULT_WORKSPACE_COLLECTION_PAGE_SIZE,
+  DEFAULT_WORKSPACE_DENSITY,
+  DEFAULT_WORKSPACE_MODE,
+  DEFAULT_WORKSPACE_VIEW_MODE,
   SEARCH_DEBOUNCE_MS,
+  WORKSPACE_COLLECTION_PAGE_SIZE_OPTIONS,
+  buildWorkspacePaginationItems,
+  buildCreationAssistantHref,
   filterAndSortProjects,
+  paginateProjects,
+  sanitizeWorkspaceCollectionPageSize,
   type DashboardProject,
   type DashboardWorkspace,
   type DiagramFilter,
-  type InitialDiagramChoice,
   type SnapshotFilter,
   type SortOption,
   type TemplateFilter,
+  type UpdatedAtFilter,
   type WorkspaceDensity,
   type WorkspaceMode,
   type WorkspaceViewMode,
@@ -30,9 +37,10 @@ type DashboardProjectsPanelProps = {
   projects: DashboardProject[];
 };
 
-const WORKSPACE_VIEW_STORAGE_KEY_PREFIX = "mapia-workspace-view";
-const WORKSPACE_DENSITY_STORAGE_KEY_PREFIX = "mapia-workspace-density";
-const WORKSPACE_MODE_STORAGE_KEY_PREFIX = "mapia-workspace-mode";
+const WORKSPACE_VIEW_STORAGE_KEY_PREFIX = "mapia-workspace-view-v2";
+const WORKSPACE_DENSITY_STORAGE_KEY_PREFIX = "mapia-workspace-density-v2";
+const WORKSPACE_MODE_STORAGE_KEY_PREFIX = "mapia-workspace-mode-v2";
+const WORKSPACE_PAGE_SIZE_STORAGE_KEY_PREFIX = "mapia-workspace-page-size-v1";
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -48,27 +56,6 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
   }, [delayMs, value]);
 
   return debouncedValue;
-}
-
-function validateProjectName(
-  name: string,
-  copy: ReturnType<typeof useDashboardCopy>,
-) {
-  const trimmed = name.trim();
-
-  if (!trimmed) {
-    return copy.messages.nameRequired;
-  }
-
-  if (trimmed.length < 3) {
-    return copy.messages.nameTooShort;
-  }
-
-  if (trimmed.length > 120) {
-    return copy.messages.nameTooLong;
-  }
-
-  return null;
 }
 
 async function copyTextToClipboard(text: string) {
@@ -93,37 +80,34 @@ export function DashboardProjectsPanel({
   projects,
 }: DashboardProjectsPanelProps) {
   const copy = useDashboardCopy();
-  const router = useRouter();
-  const drawerNameInputRef = useRef<HTMLInputElement | null>(null);
-  const newProjectButtonRef = useRef<HTMLButtonElement | null>(null);
-  const wasDrawerOpenRef = useRef(false);
   const workspaceViewStorageKey = `${WORKSPACE_VIEW_STORAGE_KEY_PREFIX}:${workspace.id}`;
-  const workspaceDensityStorageKey = `${WORKSPACE_DENSITY_STORAGE_KEY_PREFIX}:${workspace.id}`;
+  const workspaceDensityStorageKey =
+    `${WORKSPACE_DENSITY_STORAGE_KEY_PREFIX}:${workspace.id}`;
   const workspaceModeStorageKey = `${WORKSPACE_MODE_STORAGE_KEY_PREFIX}:${workspace.id}`;
+  const workspacePageSizeStorageKey =
+    `${WORKSPACE_PAGE_SIZE_STORAGE_KEY_PREFIX}:${workspace.id}`;
 
   const [searchTerm, setSearchTerm] = useState("");
   const [diagramFilter, setDiagramFilter] = useState<DiagramFilter>("all");
   const [templateFilter, setTemplateFilter] = useState<TemplateFilter>("all");
   const [snapshotFilter, setSnapshotFilter] = useState<SnapshotFilter>("all");
+  const [updatedFilter, setUpdatedFilter] = useState<UpdatedAtFilter>("all");
   const [sortOption, setSortOption] = useState<SortOption>("updated-desc");
-  const [viewMode, setViewMode] = useState<WorkspaceViewMode>("list");
-  const [density, setDensity] = useState<WorkspaceDensity>("compact");
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("operational");
-  const [hasHydratedPreferences, setHasHydratedPreferences] = useState(false);
-
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [initialDiagramType, setInitialDiagramType] =
-    useState<InitialDiagramChoice>("wizard");
-  const [template, setTemplate] = useState<DashboardProject["template"]>("graph");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null);
-  const [recentlyCreatedProjectId, setRecentlyCreatedProjectId] = useState<string | null>(
-    null,
+  const [viewMode, setViewMode] = useState<WorkspaceViewMode>(
+    DEFAULT_WORKSPACE_VIEW_MODE,
   );
-  const [highlightedProjectId, setHighlightedProjectId] = useState<string | null>(null);
+  const [density, setDensity] = useState<WorkspaceDensity>(
+    DEFAULT_WORKSPACE_DENSITY,
+  );
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(
+    DEFAULT_WORKSPACE_MODE,
+  );
+  const [pageSize, setPageSize] = useState(DEFAULT_WORKSPACE_COLLECTION_PAGE_SIZE);
+  const [hasHydratedPreferences, setHasHydratedPreferences] = useState(false);
+  const [workspaceMessage, setWorkspaceMessage] = useState<string | null>(null);
+  const [isFiltersPanelOpen, setIsFiltersPanelOpen] = useState(false);
+  const [isPreferencesPanelOpen, setIsPreferencesPanelOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const debouncedSearchTerm = useDebouncedValue(searchTerm, SEARCH_DEBOUNCE_MS);
 
@@ -147,14 +131,23 @@ export function DashboardProjectsPanel({
       if (storedMode === "operational" || storedMode === "technical") {
         setWorkspaceMode(storedMode);
       }
+
+      const storedPageSize = window.localStorage.getItem(workspacePageSizeStorageKey);
+      setPageSize(sanitizeWorkspaceCollectionPageSize(storedPageSize));
     } catch {
-      setViewMode("list");
-      setDensity("compact");
-      setWorkspaceMode("operational");
+      setViewMode(DEFAULT_WORKSPACE_VIEW_MODE);
+      setDensity(DEFAULT_WORKSPACE_DENSITY);
+      setWorkspaceMode(DEFAULT_WORKSPACE_MODE);
+      setPageSize(DEFAULT_WORKSPACE_COLLECTION_PAGE_SIZE);
     } finally {
       setHasHydratedPreferences(true);
     }
-  }, [workspaceDensityStorageKey, workspaceModeStorageKey, workspaceViewStorageKey]);
+  }, [
+    workspaceDensityStorageKey,
+    workspaceModeStorageKey,
+    workspacePageSizeStorageKey,
+    workspaceViewStorageKey,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !hasHydratedPreferences) {
@@ -165,73 +158,37 @@ export function DashboardProjectsPanel({
       window.localStorage.setItem(workspaceViewStorageKey, viewMode);
       window.localStorage.setItem(workspaceDensityStorageKey, density);
       window.localStorage.setItem(workspaceModeStorageKey, workspaceMode);
+      window.localStorage.setItem(workspacePageSizeStorageKey, String(pageSize));
     } catch {
       // Ignora indisponibilidade do localStorage.
     }
   }, [
     density,
     hasHydratedPreferences,
+    pageSize,
     viewMode,
     workspaceDensityStorageKey,
     workspaceMode,
     workspaceModeStorageKey,
+    workspacePageSizeStorageKey,
     workspaceViewStorageKey,
   ]);
 
-  useEffect(() => {
-    if (isDrawerOpen) {
-      wasDrawerOpenRef.current = true;
-      return;
-    }
-
-    if (!isDrawerOpen && wasDrawerOpenRef.current) {
-      wasDrawerOpenRef.current = false;
-      newProjectButtonRef.current?.focus();
-    }
-  }, [isDrawerOpen]);
-
-  useEffect(() => {
-    if (!recentlyCreatedProjectId) {
-      return;
-    }
-
-    const createdProjectExists = projects.some(
-      (project) => project.id === recentlyCreatedProjectId,
-    );
-
-    if (!createdProjectExists) {
-      return;
-    }
-
-    setRecentlyCreatedProjectId(null);
-    setHighlightedProjectId(recentlyCreatedProjectId);
-
-    const projectCard = document.querySelector<HTMLElement>(
-      `[data-project-id="${recentlyCreatedProjectId}"]`,
-    );
-    projectCard?.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    const timer = window.setTimeout(() => {
-      setHighlightedProjectId((current) =>
-        current === recentlyCreatedProjectId ? null : current,
-      );
-    }, CARD_HIGHLIGHT_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [projects, recentlyCreatedProjectId]);
-
   const filteredProjects = useMemo(
     () =>
-      filterAndSortProjects(projects, {
-        searchTerm: debouncedSearchTerm,
-        diagramFilter,
-        templateFilter,
-        snapshotFilter,
-        sortOption,
-        workspaceMode,
-      }, copy),
+      filterAndSortProjects(
+        projects,
+        {
+          searchTerm: debouncedSearchTerm,
+          diagramFilter,
+          templateFilter,
+          snapshotFilter,
+          updatedFilter,
+          sortOption,
+          workspaceMode,
+        },
+        copy,
+      ),
     [
       copy,
       debouncedSearchTerm,
@@ -240,6 +197,7 @@ export function DashboardProjectsPanel({
       snapshotFilter,
       sortOption,
       templateFilter,
+      updatedFilter,
       workspaceMode,
     ],
   );
@@ -249,7 +207,57 @@ export function DashboardProjectsPanel({
     diagramFilter !== "all" ||
     templateFilter !== "all" ||
     snapshotFilter !== "all" ||
+    updatedFilter !== "all" ||
     sortOption !== "updated-desc";
+  const activeRefinementCount =
+    Number(diagramFilter !== "all") +
+    Number(templateFilter !== "all") +
+    Number(snapshotFilter !== "all") +
+    Number(updatedFilter !== "all") +
+    Number(sortOption !== "updated-desc");
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    debouncedSearchTerm,
+    diagramFilter,
+    updatedFilter,
+    snapshotFilter,
+    sortOption,
+    templateFilter,
+    viewMode,
+    workspaceMode,
+  ]);
+
+  useEffect(() => {
+    if (activeRefinementCount > 0) {
+      setIsFiltersPanelOpen(true);
+    }
+  }, [activeRefinementCount]);
+
+  const paginatedProjects = useMemo(
+    () => paginateProjects(filteredProjects, { page: currentPage, pageSize }),
+    [currentPage, filteredProjects, pageSize],
+  );
+  const paginationItems = useMemo(
+    () =>
+      buildWorkspacePaginationItems({
+        currentPage: paginatedProjects.currentPage,
+        pageCount: paginatedProjects.pageCount,
+      }),
+    [paginatedProjects.currentPage, paginatedProjects.pageCount],
+  );
+  const pageJumpOptions = useMemo(
+    () =>
+      Array.from({ length: paginatedProjects.pageCount }, (_, index) => index + 1),
+    [paginatedProjects.pageCount],
+  );
+
+  useEffect(() => {
+    if (currentPage !== paginatedProjects.currentPage) {
+      setCurrentPage(paginatedProjects.currentPage);
+    }
+  }, [currentPage, paginatedProjects.currentPage]);
 
   const workspaceStats = useMemo(() => {
     const withGeneratedSnapshot = projects.filter(
@@ -263,23 +271,6 @@ export function DashboardProjectsPanel({
     };
   }, [projects]);
 
-  function closeDrawerAndResetForm() {
-    setIsDrawerOpen(false);
-    setName("");
-    setDescription("");
-    setInitialDiagramType("wizard");
-    setTemplate("graph");
-    setErrorMessage(null);
-  }
-
-  function clearFilters() {
-    setSearchTerm("");
-    setDiagramFilter("all");
-    setTemplateFilter("all");
-    setSnapshotFilter("all");
-    setSortOption("updated-desc");
-  }
-
   async function handleCopyTechnicalId(project: DashboardProject) {
     try {
       await copyTextToClipboard(project.id);
@@ -289,58 +280,19 @@ export function DashboardProjectsPanel({
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedName = name.trim();
-    const trimmedDescription = description.trim();
-    const validationError = validateProjectName(trimmedName, copy);
+  function clearFilters() {
+    setSearchTerm("");
+    setDiagramFilter("all");
+    setTemplateFilter("all");
+    setSnapshotFilter("all");
+    setUpdatedFilter("all");
+    setSortOption("updated-desc");
+  }
 
-    if (validationError) {
-      setErrorMessage(validationError);
-      return;
-    }
-
-    setIsSubmitting(true);
-    setErrorMessage(null);
-
-    try {
-      const response = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: workspace.id,
-          name: trimmedName,
-          description: trimmedDescription,
-          template,
-        }),
-      });
-
-      const payload = (await response.json()) as {
-        data?: {
-          project?: {
-            id?: string;
-            name?: string;
-          };
-        };
-        message?: string;
-      };
-
-      if (!response.ok) {
-        setErrorMessage(payload.message ?? copy.messages.createError);
-        return;
-      }
-
-      setWorkspaceMessage(
-        copy.getCreateSuccessMessage(payload.data?.project?.name ?? trimmedName),
-      );
-      setRecentlyCreatedProjectId(payload.data?.project?.id ?? null);
-      closeDrawerAndResetForm();
-      router.refresh();
-    } catch {
-      setErrorMessage(copy.messages.networkError);
-    } finally {
-      setIsSubmitting(false);
-    }
+  function handlePageSizeChange(nextValue: string) {
+    const nextPageSize = sanitizeWorkspaceCollectionPageSize(nextValue);
+    setPageSize(nextPageSize);
+    setCurrentPage(1);
   }
 
   return (
@@ -358,22 +310,8 @@ export function DashboardProjectsPanel({
         />
 
         <div className="panel-body stack-sm">
-          <div className="grid-tiles workspace-stats-grid">
-            <div className="tile">
-              <h3>{copy.stats.projects}</h3>
-              <p>{workspaceStats.total}</p>
-            </div>
-            <div className="tile">
-              <h3>{copy.stats.generated}</h3>
-              <p>{workspaceStats.generated}</p>
-            </div>
-            <div className="tile">
-              <h3>{copy.stats.pending}</h3>
-              <p>{workspaceStats.pending}</p>
-            </div>
-          </div>
-
           <WorkspaceToolbar
+            workspaceId={workspace.id}
             searchTerm={searchTerm}
             onSearchTermChange={setSearchTerm}
             onClearSearch={() => setSearchTerm("")}
@@ -383,6 +321,8 @@ export function DashboardProjectsPanel({
             onTemplateFilterChange={setTemplateFilter}
             snapshotFilter={snapshotFilter}
             onSnapshotFilterChange={setSnapshotFilter}
+            updatedFilter={updatedFilter}
+            onUpdatedFilterChange={setUpdatedFilter}
             sortOption={sortOption}
             onSortOptionChange={setSortOption}
             viewMode={viewMode}
@@ -393,14 +333,19 @@ export function DashboardProjectsPanel({
             onWorkspaceModeChange={setWorkspaceMode}
             onClearFilters={clearFilters}
             hasActiveFilters={hasActiveFilters}
-            onOpenNewProject={() => {
-              setWorkspaceMessage(null);
-              setErrorMessage(null);
-              router.push("/create");
-            }}
-            newProjectButtonRef={newProjectButtonRef}
+            activeRefinementCount={activeRefinementCount}
+            isFiltersPanelOpen={isFiltersPanelOpen}
+            onToggleFiltersPanel={() =>
+              setIsFiltersPanelOpen((current) => !current)
+            }
+            isPreferencesPanelOpen={isPreferencesPanelOpen}
+            onTogglePreferencesPanel={() =>
+              setIsPreferencesPanelOpen((current) => !current)
+            }
+            newProjectHref={buildCreationAssistantHref()}
             filteredCount={filteredProjects.length}
             totalCount={projects.length}
+            collectionSummary={copy.getCollectionSummaryLabel(workspaceStats)}
             workspaceMessage={workspaceMessage}
             copy={copy}
           />
@@ -412,62 +357,206 @@ export function DashboardProjectsPanel({
           title={copy.page.projectListTitle}
           description={copy.getProjectListDescription(filteredProjects.length)}
         />
-        <div className="panel-body">
+
+        <div className="panel-body stack-sm">
           {filteredProjects.length === 0 ? (
             projects.length === 0 ? (
               <EmptyState
+                eyebrow={copy.emptyStates.noneCreatedEyebrow}
                 title={copy.emptyStates.noneCreatedTitle}
                 description={copy.emptyStates.noneCreatedDescription}
+                actions={
+                  <Link
+                    className="btn btn-primary"
+                    href={buildCreationAssistantHref()}
+                    data-testid="dashboard-empty-create-project"
+                  >
+                    {copy.filters.newProjectButton}
+                  </Link>
+                }
+                className="workspace-empty-state"
                 dataTestId="dashboard-empty-projects"
               />
             ) : (
               <EmptyState
+                eyebrow={copy.emptyStates.noneFilteredEyebrow}
                 title={copy.emptyStates.noneFilteredTitle}
                 description={copy.emptyStates.noneFilteredDescription}
+                actions={
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={clearFilters}
+                    data-testid="dashboard-empty-clear-filters"
+                  >
+                    {copy.filters.clearFiltersButton}
+                  </button>
+                }
+                className="workspace-empty-state"
                 dataTestId="dashboard-empty-filtered-projects"
               />
             )
-          ) : viewMode === "grid" ? (
-            <ProjectsGrid
-              projects={filteredProjects}
-              density={density}
-              workspaceMode={workspaceMode}
-              highlightedProjectId={highlightedProjectId}
-              onCopyTechnicalId={handleCopyTechnicalId}
-              copy={copy}
-            />
           ) : (
-            <ProjectsList
-              projects={filteredProjects}
-              density={density}
-              workspaceMode={workspaceMode}
-              highlightedProjectId={highlightedProjectId}
-              onOpenProject={(projectId) => router.push(`/editor?projectId=${projectId}`)}
-              onCopyTechnicalId={handleCopyTechnicalId}
-              copy={copy}
-            />
+            <>
+              {viewMode === "grid" ? (
+                <ProjectsGrid
+                  projects={paginatedProjects.projects}
+                  density={density}
+                  workspaceMode={workspaceMode}
+                  onCopyTechnicalId={handleCopyTechnicalId}
+                  copy={copy}
+                />
+              ) : (
+                <ProjectsList
+                  projects={paginatedProjects.projects}
+                  density={density}
+                  workspaceMode={workspaceMode}
+                  onCopyTechnicalId={handleCopyTechnicalId}
+                  copy={copy}
+                />
+              )}
+
+              <div
+                className="workspace-collection-footer"
+                data-testid="workspace-collection-footer"
+              >
+                <div className="workspace-collection-footer-copy">
+                  <div className="workspace-collection-footer-item">
+                    <span className="workspace-collection-footer-label">
+                      {copy.collection.rangeCaption}
+                    </span>
+                    <span className="helper" data-testid="workspace-collection-range">
+                      {copy.getCollectionRangeLabel(
+                        paginatedProjects.rangeStart,
+                        paginatedProjects.rangeEnd,
+                        filteredProjects.length,
+                      )}
+                    </span>
+                  </div>
+                  <div className="workspace-collection-footer-item">
+                    <span className="workspace-collection-footer-label">
+                      {copy.collection.pageCaption}
+                    </span>
+                    <span className="helper" data-testid="workspace-collection-page">
+                      {copy.getCollectionPageLabel(
+                        paginatedProjects.currentPage,
+                        paginatedProjects.pageCount,
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="workspace-collection-footer-controls">
+                  <div className="field workspace-collection-select-field">
+                    <label htmlFor="workspace-page-size">
+                      {copy.collection.pageSizeLabel}
+                    </label>
+                    <select
+                      id="workspace-page-size"
+                      value={String(pageSize)}
+                      onChange={(event) => handlePageSizeChange(event.target.value)}
+                      aria-label={copy.collection.pageSizeAriaLabel}
+                      data-testid="workspace-page-size"
+                    >
+                      {WORKSPACE_COLLECTION_PAGE_SIZE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <nav
+                    className="workspace-collection-pagination"
+                    aria-label={copy.collection.navigationAriaLabel}
+                    data-testid="workspace-collection-pagination"
+                  >
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() =>
+                        setCurrentPage((page) => Math.max(1, page - 1))
+                      }
+                      disabled={paginatedProjects.currentPage <= 1}
+                      data-testid="workspace-prev-page"
+                    >
+                      {copy.collection.previousPage}
+                    </button>
+
+                    {paginationItems.map((item) =>
+                      item.type === "ellipsis" ? (
+                        <span
+                          key={item.key}
+                          className="workspace-collection-pagination-ellipsis"
+                          aria-label={copy.collection.ellipsisLabel}
+                          data-testid={`workspace-pagination-${item.key}`}
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={item.page}
+                          className={`btn workspace-page-button ${
+                            item.isCurrent ? "btn-primary" : ""
+                          }`}
+                          type="button"
+                          aria-current={item.isCurrent ? "page" : undefined}
+                          aria-label={copy.getCollectionPageButtonAriaLabel(
+                            item.page,
+                          )}
+                          onClick={() => setCurrentPage(item.page)}
+                          data-testid={`workspace-page-button-${item.page}`}
+                        >
+                          {item.page}
+                        </button>
+                      ),
+                    )}
+
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() =>
+                        setCurrentPage((page) =>
+                          Math.min(paginatedProjects.pageCount, page + 1),
+                        )
+                      }
+                      disabled={
+                        paginatedProjects.currentPage >= paginatedProjects.pageCount
+                      }
+                      data-testid="workspace-next-page"
+                    >
+                      {copy.collection.nextPage}
+                    </button>
+                  </nav>
+
+                  {paginatedProjects.pageCount > 1 ? (
+                    <div className="field workspace-collection-select-field">
+                      <label htmlFor="workspace-page-jump">
+                        {copy.collection.jumpLabel}
+                      </label>
+                      <select
+                        id="workspace-page-jump"
+                        value={String(paginatedProjects.currentPage)}
+                        onChange={(event) =>
+                          setCurrentPage(Number.parseInt(event.target.value, 10))
+                        }
+                        aria-label={copy.collection.jumpAriaLabel}
+                        data-testid="workspace-page-jump"
+                      >
+                        {pageJumpOptions.map((page) => (
+                          <option key={page} value={page}>
+                            {page}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
           )}
         </div>
       </section>
-
-      <NewProjectDrawer
-        isOpen={isDrawerOpen}
-        isSubmitting={isSubmitting}
-        name={name}
-        description={description}
-        initialDiagramType={initialDiagramType}
-        template={template}
-        workspaceMode={workspaceMode}
-        errorMessage={errorMessage}
-        nameInputRef={drawerNameInputRef}
-        onClose={closeDrawerAndResetForm}
-        onSubmit={handleSubmit}
-        onNameChange={setName}
-        onDescriptionChange={setDescription}
-        onInitialDiagramTypeChange={setInitialDiagramType}
-        onTemplateChange={setTemplate}
-        copy={copy}
-      />
     </>
   );
 }

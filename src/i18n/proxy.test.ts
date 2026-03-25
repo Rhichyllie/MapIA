@@ -51,13 +51,13 @@ describe("i18n proxy helpers", () => {
     const redirectUrl = buildProtectedLoginRedirect({
       requestUrl: "https://mapia.local/en-US/dashboard",
       resolvedPathname: "/en-US/dashboard",
-      requestPathname: "/en-US/wizard",
-      requestSearch: "?projectId=abc",
+      requestPathname: "/en-US/create",
+      requestSearch: "?fromProjectId=abc",
     });
 
     expect(redirectUrl.pathname).toBe("/en-US/login");
     expect(redirectUrl.searchParams.get("callbackUrl")).toBe(
-      "/en-US/wizard?projectId=abc",
+      "/en-US/create?fromProjectId=abc",
     );
   });
 });

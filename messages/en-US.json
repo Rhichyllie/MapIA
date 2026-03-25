@@ -104,9 +104,9 @@
   "Dashboard": {
     "page": {
       "title": "Workspace",
-      "description": "Manage projects and move from the assistant to the editor with context preserved.",
-      "projectListTitle": "Projects",
-      "projectListDescription": "{count} project(s) in the current view."
+      "description": "Navigate a real project collection, refine it when needed, and move into the editor or the creation assistant without overcrowding the workspace.",
+      "projectListTitle": "Project collection",
+      "projectListDescription": "{count} project(s) in the current collection."
     },
     "stats": {
       "projects": "Projects",
@@ -114,10 +114,12 @@
       "pending": "Pending snapshot"
     },
     "emptyStates": {
+      "noneCreatedEyebrow": "Empty collection",
       "noneCreatedTitle": "No projects created yet",
-      "noneCreatedDescription": "Create your first project to start the workspace -> creation assistant -> editor flow.",
+      "noneCreatedDescription": "Create your first project in the creation assistant to start the workspace collection.",
+      "noneFilteredEyebrow": "No matches",
       "noneFilteredTitle": "No projects found",
-      "noneFilteredDescription": "Adjust search, filters or sorting to find projects."
+      "noneFilteredDescription": "Adjust search, filters or sorting to narrow the collection and find the right project."
     },
     "filters": {
       "searchLabel": "Search",
@@ -129,10 +131,14 @@
       "templateLabelOperational": "Model",
       "templateLabelTechnical": "Legacy template",
       "snapshotLabel": "Snapshot status",
+      "updatedLabel": "Recent activity",
       "sortLabel": "Sort by",
       "allOption": "All",
       "generatedOption": "Generated",
       "pendingOption": "Pending",
+      "updatedTodayOption": "Today",
+      "updatedLast7DaysOption": "Last 7 days",
+      "updatedLast30DaysOption": "Last 30 days",
       "sortNameAsc": "Name (A-Z)",
       "sortUpdatedDesc": "Updated (most recent)",
       "sortCreatedDesc": "Created (most recent)",
@@ -141,7 +147,34 @@
       "workspaceModeAriaLabel": "Workspace mode",
       "clearFiltersButton": "Clear filters",
       "newProjectButton": "New project",
+      "newProjectHelper": "Opens the creation assistant at /create.",
+      "refineButton": "Refine collection",
+      "preferencesButton": "Preferences",
+      "filtersPanelTitle": "Collection refinement",
+      "filtersPanelDescription": "Search stays primary. Model, diagram, status, recency and sorting live here so the main surface stays focused.",
+      "preferencesPanelTitle": "View preferences",
+      "preferencesPanelDescription": "List is the primary mode. Grid remains available as a secondary support view.",
+      "listDefaultHelper": "List is the default mode for real reading and operation.",
+      "densityHelper": "Adjust spacing without changing the collection structure.",
+      "workspaceModeHelper": "Switch the collection language between operational reading and technical legacy labels.",
+      "activeRefinementsLabel": "{count} active",
       "counterLabel": "Showing {filteredCount} of {totalCount} projects"
+    },
+    "collection": {
+      "summaryLabel": "{total} projects · {generated} with an initial map · {pending} pending",
+      "rangeLabel": "Showing {rangeStart}-{rangeEnd} of {totalCount}",
+      "pageLabel": "Page {currentPage} of {pageCount}",
+      "rangeCaption": "Current range",
+      "pageCaption": "Navigation",
+      "pageSizeLabel": "Items per page",
+      "pageSizeAriaLabel": "Select the number of items per page",
+      "jumpLabel": "Jump to page",
+      "jumpAriaLabel": "Jump directly to a collection page",
+      "pageButtonAriaLabel": "Go to page {page}",
+      "ellipsisLabel": "More pages",
+      "navigationAriaLabel": "Collection navigation",
+      "previousPage": "Previous",
+      "nextPage": "Next"
     },
     "viewMode": {
       "grid": "Grid",
@@ -159,11 +192,25 @@
       "fallbackDescription": "No objective provided",
       "updatedAtLabel": "Updated on {date}",
       "updatedFallback": "—",
-      "open": "Open",
-      "openAssistant": "Open assistant",
+      "open": "Open in editor",
+      "openAssistant": "Creation assistant",
       "openEditor": "Open editor",
       "viewVersions": "View versions",
       "copyTechnicalId": "Copy technical ID",
+      "secondaryActionsLabel": "More",
+      "openSurfaceHint": "Primary summary",
+      "facts": {
+        "template": "Model",
+        "diagram": "Diagram",
+        "status": "Status",
+        "updated": "Updated"
+      },
+      "statusReady": "Ready",
+      "statusReadyHint": "Initial map is available for editor work.",
+      "statusPending": "Pending",
+      "statusPendingHint": "Finish the initial setup in the assistant.",
+      "updatedHint": "Latest recorded activity",
+      "updatedUnknownHint": "No recent activity recorded",
       "moreActionsAriaLabel": "More actions for {projectName}",
       "listAriaLabel": "Project list",
       "headers": {
@@ -191,10 +238,6 @@
       "cancelButton": "Cancel"
     },
     "diagramTypes": {
-      "wizard": {
-        "label": "Decide in assistant",
-        "description": "Choose the type during the guided creation flow."
-      },
       "tree": {
         "label": "Hierarchy",
         "description": "Structures with levels and parent-child relationships."

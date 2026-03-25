@@ -6,7 +6,6 @@ import type { AppMessages } from "@/src/i18n/messages";
 import type { AppLocale } from "@/src/i18n/routing";
 import type {
   DashboardProject,
-  InitialDiagramChoice,
   WorkspaceMode,
 } from "./workspace-projects";
 
@@ -18,17 +17,12 @@ export type DashboardCopy = {
   stats: DashboardMessages["stats"];
   emptyStates: DashboardMessages["emptyStates"];
   filters: DashboardMessages["filters"];
+  collection: DashboardMessages["collection"];
   viewMode: DashboardMessages["viewMode"];
   density: DashboardMessages["density"];
   workspaceMode: DashboardMessages["workspaceMode"];
   project: DashboardMessages["project"];
-  createDrawer: DashboardMessages["createDrawer"];
   messages: DashboardMessages["messages"];
-  diagramTypeOptions: Array<{
-    value: InitialDiagramChoice;
-    label: string;
-    description: string;
-  }>;
   legacyTemplateOptions: Array<{
     value: DashboardProject["template"];
     operationalLabel: string;
@@ -44,12 +38,32 @@ export type DashboardCopy = {
   ) => string;
   getTemplateDescription: (template: DashboardProject["template"]) => string;
   getSnapshotStatusLabel: (hasInitialSnapshot: boolean) => string;
+  getProjectStatusMeta: (hasInitialSnapshot: boolean) => {
+    label: string;
+    hint: string;
+  };
   getProjectUpdatedLabel: (date: string | undefined) => string;
+  getProjectUpdatedMeta: (date: string | undefined) => {
+    label: string;
+    hint: string;
+  };
   getCounterLabel: (filteredCount: number, totalCount: number) => string;
   getProjectListDescription: (count: number) => string;
+  getCollectionSummaryLabel: (input: {
+    total: number;
+    generated: number;
+    pending: number;
+  }) => string;
+  getCollectionRangeLabel: (
+    rangeStart: number,
+    rangeEnd: number,
+    totalCount: number,
+  ) => string;
+  getCollectionPageLabel: (currentPage: number, pageCount: number) => string;
+  getCollectionPageButtonAriaLabel: (page: number) => string;
+  getActiveRefinementsLabel: (count: number) => string;
   getMoreActionsAriaLabel: (projectName: string) => string;
   getCopiedTechnicalIdMessage: (id: string) => string;
-  getCreateSuccessMessage: (projectName: string) => string;
 };
 
 const templateValues = ["graph", "sitemap", "flowchart", "erd"] as const;
@@ -59,6 +73,14 @@ function replaceValue(template: string, values: Record<string, string | number>)
     (message, [key, value]) => message.replaceAll(`{${key}}`, String(value)),
     template,
   );
+}
+
+function formatProjectDate(locale: AppLocale, timestamp: number) {
+  return new Intl.DateTimeFormat(locale, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(timestamp));
 }
 
 export function createDashboardCopy(
@@ -78,34 +100,12 @@ export function createDashboardCopy(
     stats: messages.stats,
     emptyStates: messages.emptyStates,
     filters: messages.filters,
+    collection: messages.collection,
     viewMode: messages.viewMode,
     density: messages.density,
     workspaceMode: messages.workspaceMode,
     project: messages.project,
-    createDrawer: messages.createDrawer,
     messages: messages.messages,
-    diagramTypeOptions: [
-      {
-        value: "wizard",
-        label: messages.diagramTypes.wizard.label,
-        description: messages.diagramTypes.wizard.description,
-      },
-      {
-        value: "tree",
-        label: messages.diagramTypes.tree.label,
-        description: messages.diagramTypes.tree.description,
-      },
-      {
-        value: "flow",
-        label: messages.diagramTypes.flow.label,
-        description: messages.diagramTypes.flow.description,
-      },
-      {
-        value: "mindmap",
-        label: messages.diagramTypes.mindmap.label,
-        description: messages.diagramTypes.mindmap.description,
-      },
-    ],
     legacyTemplateOptions: templates,
     getDiagramTypeLabel(diagramType) {
       if (diagramType === "tree") {
@@ -138,8 +138,19 @@ export function createDashboardCopy(
     },
     getSnapshotStatusLabel(hasInitialSnapshot) {
       return hasInitialSnapshot
-        ? messages.snapshotStatus.generated
-        : messages.snapshotStatus.pending;
+        ? messages.project.statusReady
+        : messages.project.statusPending;
+    },
+    getProjectStatusMeta(hasInitialSnapshot) {
+      return hasInitialSnapshot
+        ? {
+            label: messages.project.statusReady,
+            hint: messages.project.statusReadyHint,
+          }
+        : {
+            label: messages.project.statusPending,
+            hint: messages.project.statusPendingHint,
+          };
     },
     getProjectUpdatedLabel(dateInput) {
       if (!dateInput) {
@@ -151,8 +162,28 @@ export function createDashboardCopy(
         return messages.project.updatedFallback;
       }
 
-      const date = new Date(timestamp).toLocaleDateString(locale);
-      return replaceValue(messages.project.updatedAtLabel, { date });
+      return formatProjectDate(locale, timestamp);
+    },
+    getProjectUpdatedMeta(dateInput) {
+      if (!dateInput) {
+        return {
+          label: messages.project.updatedFallback,
+          hint: messages.project.updatedUnknownHint,
+        };
+      }
+
+      const timestamp = Date.parse(dateInput);
+      if (Number.isNaN(timestamp)) {
+        return {
+          label: messages.project.updatedFallback,
+          hint: messages.project.updatedUnknownHint,
+        };
+      }
+
+      return {
+        label: formatProjectDate(locale, timestamp),
+        hint: messages.project.updatedHint,
+      };
     },
     getCounterLabel(filteredCount, totalCount) {
       return replaceValue(messages.filters.counterLabel, {
@@ -163,6 +194,30 @@ export function createDashboardCopy(
     getProjectListDescription(count) {
       return replaceValue(messages.page.projectListDescription, { count });
     },
+    getCollectionSummaryLabel(input) {
+      return replaceValue(messages.collection.summaryLabel, input);
+    },
+    getCollectionRangeLabel(rangeStart, rangeEnd, totalCount) {
+      return replaceValue(messages.collection.rangeLabel, {
+        rangeStart,
+        rangeEnd,
+        totalCount,
+      });
+    },
+    getCollectionPageLabel(currentPage, pageCount) {
+      return replaceValue(messages.collection.pageLabel, {
+        currentPage,
+        pageCount,
+      });
+    },
+    getCollectionPageButtonAriaLabel(page) {
+      return replaceValue(messages.collection.pageButtonAriaLabel, {
+        page,
+      });
+    },
+    getActiveRefinementsLabel(count) {
+      return replaceValue(messages.filters.activeRefinementsLabel, { count });
+    },
     getMoreActionsAriaLabel(projectName) {
       return replaceValue(messages.project.moreActionsAriaLabel, {
         projectName,
@@ -170,9 +225,6 @@ export function createDashboardCopy(
     },
     getCopiedTechnicalIdMessage(id) {
       return replaceValue(messages.messages.copyTechnicalIdSuccess, { id });
-    },
-    getCreateSuccessMessage(projectName) {
-      return replaceValue(messages.messages.createSuccess, { projectName });
     },
   };
 }

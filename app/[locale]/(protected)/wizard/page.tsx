@@ -1,7 +1,7 @@
 import { redirect } from "@/src/i18n/navigation";
 import { appRoutes } from "@/src/lib/routes";
 
-type WizardPageProps = {
+type LegacyCreationAliasPageProps = {
   params: Promise<{ locale: (typeof import("@/src/i18n/routing").routing.locales)[number] }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
@@ -14,10 +14,12 @@ function getStringParam(
   return Array.isArray(value) ? value[0] : value;
 }
 
-export default async function WizardPage({
+// Legacy route alias preserved only to forward stale /wizard links to the
+// canonical Creation Assistant entrypoint.
+export default async function LegacyCreationAliasPage({
   params,
   searchParams,
-}: WizardPageProps) {
+}: LegacyCreationAliasPageProps) {
   const { locale } = await params;
   const resolvedSearchParams = await searchParams;
   const projectId = getStringParam(resolvedSearchParams, "projectId");

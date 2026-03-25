@@ -103,7 +103,7 @@ export function EditorMetadataPanel({
           <Link
             className="btn btn-link"
             href={`/create?fromProjectId=${project.id}`}
-            data-testid="layout-policy-open-wizard-link"
+            data-testid="layout-policy-open-assistant-link"
           >
             {editorT("shell.metadata.changeInAssistant")}
           </Link>

@@ -53,7 +53,7 @@ describe("editor-query-service", () => {
         JSON.stringify({
           error: "WORKING_SNAPSHOT_NOT_FOUND",
           message:
-            "Snapshot de trabalho nao encontrado. Gere o snapshot inicial pelo wizard.",
+            "Snapshot de trabalho nao encontrado. Gere o mapa inicial pelo Assistente de Criacao.",
         }),
         {
           status: 404,
@@ -118,7 +118,7 @@ describe("editor-query-service", () => {
         JSON.stringify({
           error: "WORKING_SNAPSHOT_NOT_FOUND",
           message:
-            "Snapshot de trabalho nao encontrado. Gere o snapshot inicial pelo wizard.",
+            "Snapshot de trabalho nao encontrado. Gere o mapa inicial pelo Assistente de Criacao.",
         }),
         {
           status: 404,
@@ -313,7 +313,7 @@ describe("editor-query-service", () => {
         JSON.stringify({
           error: "WORKING_SNAPSHOT_NOT_FOUND",
           message:
-            "Snapshot de trabalho nao encontrado. Gere o snapshot inicial pelo wizard.",
+            "Snapshot de trabalho nao encontrado. Gere o mapa inicial pelo Assistente de Criacao.",
         }),
         {
           status: 404,

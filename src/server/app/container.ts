@@ -19,12 +19,6 @@ import {
 } from "@/src/modules/workspaces/application";
 import { PrismaWorkspaceRepository } from "@/src/modules/workspaces/infrastructure";
 import {
-  GenerateInitialSnapshotFromWizardUseCase,
-  GetOrCreateWizardDraftUseCase,
-  SaveWizardDraftUseCase,
-} from "@/src/modules/wizard/application";
-import { PrismaWizardDraftRepository } from "@/src/modules/wizard/infrastructure";
-import {
   LoadWorkingSnapshotUseCase,
   SaveWorkingSnapshotUseCase,
 } from "@/src/modules/graph/application";
@@ -94,9 +88,6 @@ function getOrCreateImportingTelemetryCollectorProvider() {
 export function createServerRepositories() {
   const workspaceRepository = new PrismaWorkspaceRepository(prisma.workspace);
   const projectRepository = new PrismaProjectRepository(prisma.project);
-  const wizardDraftRepository = new PrismaWizardDraftRepository(
-    prisma.wizardDraft,
-  );
   const projectCreationStateRepository = new PrismaProjectCreationStateRepository(
     prisma.projectCreationSettings,
     prisma.projectCreationDraft,
@@ -125,7 +116,6 @@ export function createServerRepositories() {
   return {
     workspaceRepository,
     projectRepository,
-    wizardDraftRepository,
     projectCreationStateRepository,
     workingSnapshotRepository,
     snapshotVersionRepository,
@@ -225,26 +215,6 @@ export function createServerUseCases() {
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
         projectCreationStateRepository: repositories.projectCreationStateRepository,
-      }),
-    },
-    wizard: {
-      getOrCreateDraft: new GetOrCreateWizardDraftUseCase({
-        wizardDraftRepository: repositories.wizardDraftRepository,
-        projectRepository: repositories.projectRepository,
-        workspaceRepository: repositories.workspaceRepository,
-        workingSnapshotRepository: repositories.workingSnapshotRepository,
-      }),
-      saveDraft: new SaveWizardDraftUseCase({
-        wizardDraftRepository: repositories.wizardDraftRepository,
-        projectRepository: repositories.projectRepository,
-        workspaceRepository: repositories.workspaceRepository,
-        workingSnapshotRepository: repositories.workingSnapshotRepository,
-      }),
-      generateInitialSnapshot: new GenerateInitialSnapshotFromWizardUseCase({
-        wizardDraftRepository: repositories.wizardDraftRepository,
-        projectRepository: repositories.projectRepository,
-        workspaceRepository: repositories.workspaceRepository,
-        workingSnapshotRepository: repositories.workingSnapshotRepository,
       }),
     },
     editor: {

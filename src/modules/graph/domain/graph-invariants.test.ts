@@ -132,7 +132,7 @@ describe("validateGraphSnapshotInvariants", () => {
     });
   });
 
-  it("accepts and normalizes optional wizard layout policy metadata", () => {
+  it("accepts and normalizes creation assistant layout policy metadata", () => {
     const base = createBaseSnapshot();
     const snapshot = validateGraphSnapshotInvariants({
       ...base,

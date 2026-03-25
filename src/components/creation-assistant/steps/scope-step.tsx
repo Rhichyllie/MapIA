@@ -32,6 +32,7 @@ export function ScopeStep({
           title={labels.getProjectProfile(profile).title}
           description={labels.getProjectProfile(profile).description}
           selected={draft.profile === profile}
+          dataTestId={`creation-assistant-profile-${profile}`}
           onSelect={() => {
             const nextViews = getRecommendedViewsForProfile(profile);
             const compatible =

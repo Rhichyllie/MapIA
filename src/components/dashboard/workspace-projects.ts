@@ -22,22 +22,47 @@ export type DashboardProject = {
   snapshotVersionCount: number;
 };
 
-export type InitialDiagramChoice = "wizard" | "tree" | "flow" | "mindmap";
 export type DiagramFilter = "all" | "tree" | "flow" | "mindmap" | "undefined";
 export type SnapshotFilter = "all" | "pending" | "generated";
+export type UpdatedAtFilter =
+  | "all"
+  | "today"
+  | "last-7-days"
+  | "last-30-days";
 export type SortOption = "name-asc" | "updated-desc" | "created-desc";
 export type WorkspaceViewMode = "grid" | "list";
 export type WorkspaceDensity = "compact" | "comfortable";
 export type WorkspaceMode = "operational" | "technical";
 export type TemplateFilter = "all" | DashboardProject["template"];
+export type WorkspaceCollectionPageSize = 25 | 50 | 100;
+export type WorkspaceCollectionPage = {
+  currentPage: number;
+  pageCount: number;
+  pageSize: number;
+  rangeStart: number;
+  rangeEnd: number;
+  projects: DashboardProject[];
+};
+export type WorkspacePaginationItem =
+  | {
+      type: "page";
+      page: number;
+      isCurrent: boolean;
+    }
+  | {
+      type: "ellipsis";
+      key: string;
+    };
 
 export type WorkspaceFilters = {
   searchTerm: string;
   diagramFilter: DiagramFilter;
   templateFilter: TemplateFilter;
   snapshotFilter: SnapshotFilter;
+  updatedFilter: UpdatedAtFilter;
   sortOption: SortOption;
   workspaceMode: WorkspaceMode;
+  referenceTimestamp?: number;
 };
 
 type LegacyTemplateOption = {
@@ -45,7 +70,12 @@ type LegacyTemplateOption = {
 };
 
 export const SEARCH_DEBOUNCE_MS = 250;
-export const CARD_HIGHLIGHT_MS = 4_000;
+export const DEFAULT_WORKSPACE_VIEW_MODE: WorkspaceViewMode = "list";
+export const DEFAULT_WORKSPACE_DENSITY: WorkspaceDensity = "compact";
+export const DEFAULT_WORKSPACE_MODE: WorkspaceMode = "operational";
+export const WORKSPACE_COLLECTION_PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+export const DEFAULT_WORKSPACE_COLLECTION_PAGE_SIZE: WorkspaceCollectionPageSize =
+  WORKSPACE_COLLECTION_PAGE_SIZE_OPTIONS[0];
 
 export const legacyTemplateOptions: LegacyTemplateOption[] = [
   { value: "graph" },
@@ -67,7 +97,7 @@ export function buildCreationAssistantHref(projectId?: string) {
   return query.length > 0 ? `/create?${query}` : "/create";
 }
 
-export function buildWizardHref(projectId: string, _initialDiagramType: InitialDiagramChoice) {
+export function buildProjectAssistantHref(projectId: string) {
   return buildCreationAssistantHref(projectId);
 }
 
@@ -86,6 +116,44 @@ export function parseDateToTimestamp(dateInput: string | undefined) {
 
   const timestamp = Date.parse(dateInput);
   return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+export function getProjectActivityTimestamp(project: DashboardProject) {
+  return (
+    parseDateToTimestamp(project.updatedAt) ??
+    parseDateToTimestamp(project.createdAt)
+  );
+}
+
+function isProjectWithinUpdatedFilter(
+  project: DashboardProject,
+  updatedFilter: UpdatedAtFilter,
+  referenceTimestamp = Date.now(),
+) {
+  if (updatedFilter === "all") {
+    return true;
+  }
+
+  const activityTimestamp = getProjectActivityTimestamp(project);
+  if (activityTimestamp === null) {
+    return false;
+  }
+
+  if (updatedFilter === "today") {
+    const referenceDate = new Date(referenceTimestamp);
+    referenceDate.setHours(0, 0, 0, 0);
+    return activityTimestamp >= referenceDate.getTime();
+  }
+
+  if (updatedFilter === "last-7-days") {
+    return activityTimestamp >= referenceTimestamp - 7 * 24 * 60 * 60 * 1000;
+  }
+
+  if (updatedFilter === "last-30-days") {
+    return activityTimestamp >= referenceTimestamp - 30 * 24 * 60 * 60 * 1000;
+  }
+
+  return true;
 }
 
 function buildSearchIndex(
@@ -111,6 +179,7 @@ export function filterAndSortProjects(
   copy: DashboardCopy,
 ) {
   const normalizedSearchTerm = filters.searchTerm.trim().toLowerCase();
+  const referenceTimestamp = filters.referenceTimestamp ?? Date.now();
   const filtered = projects.filter((project) => {
     if (normalizedSearchTerm.length > 0) {
       const searchableText = buildSearchIndex(project, filters.workspaceMode, copy);
@@ -147,6 +216,16 @@ export function filterAndSortProjects(
     }
 
     if (filters.snapshotFilter === "pending" && project.hasInitialSnapshot) {
+      return false;
+    }
+
+    if (
+      !isProjectWithinUpdatedFilter(
+        project,
+        filters.updatedFilter,
+        referenceTimestamp,
+      )
+    ) {
       return false;
     }
 
@@ -196,4 +275,134 @@ export function filterAndSortProjects(
   });
 
   return filtered;
+}
+
+export function sanitizeWorkspaceCollectionPageSize(
+  value: number | string | null | undefined,
+) {
+  const parsedValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseInt(value, 10)
+        : Number.NaN;
+
+  return WORKSPACE_COLLECTION_PAGE_SIZE_OPTIONS.includes(
+    parsedValue as WorkspaceCollectionPageSize,
+  )
+    ? (parsedValue as WorkspaceCollectionPageSize)
+    : DEFAULT_WORKSPACE_COLLECTION_PAGE_SIZE;
+}
+
+export function buildWorkspacePaginationItems(input: {
+  currentPage: number;
+  pageCount: number;
+  siblingCount?: number;
+  boundaryCount?: number;
+}): WorkspacePaginationItem[] {
+  const pageCount = Math.max(1, Math.trunc(input.pageCount));
+  const currentPage = Math.min(
+    Math.max(1, Math.trunc(input.currentPage)),
+    pageCount,
+  );
+  const siblingCount = Math.max(0, Math.trunc(input.siblingCount ?? 1));
+  const boundaryCount = Math.max(1, Math.trunc(input.boundaryCount ?? 1));
+  const pages = new Set<number>();
+
+  for (let page = 1; page <= Math.min(boundaryCount, pageCount); page += 1) {
+    pages.add(page);
+  }
+
+  for (
+    let page = Math.max(1, pageCount - boundaryCount + 1);
+    page <= pageCount;
+    page += 1
+  ) {
+    pages.add(page);
+  }
+
+  for (
+    let page = Math.max(1, currentPage - siblingCount);
+    page <= Math.min(pageCount, currentPage + siblingCount);
+    page += 1
+  ) {
+    pages.add(page);
+  }
+
+  if (currentPage <= boundaryCount + siblingCount + 2) {
+    for (
+      let page = 1;
+      page <= Math.min(pageCount, boundaryCount + siblingCount * 2 + 3);
+      page += 1
+    ) {
+      pages.add(page);
+    }
+  }
+
+  if (currentPage >= pageCount - boundaryCount - siblingCount - 1) {
+    for (
+      let page = Math.max(1, pageCount - (boundaryCount + siblingCount * 2 + 2));
+      page <= pageCount;
+      page += 1
+    ) {
+      pages.add(page);
+    }
+  }
+
+  const sortedPages = [...pages].sort((pageA, pageB) => pageA - pageB);
+  const items: WorkspacePaginationItem[] = [];
+
+  sortedPages.forEach((page, index) => {
+    const previousPage = sortedPages[index - 1];
+    if (previousPage && page - previousPage > 1) {
+      items.push({
+        type: "ellipsis",
+        key: `ellipsis-${previousPage}-${page}`,
+      });
+    }
+
+    items.push({
+      type: "page",
+      page,
+      isCurrent: page === currentPage,
+    });
+  });
+
+  return items;
+}
+
+export function paginateProjects(
+  projects: DashboardProject[],
+  input: {
+    page: number;
+    pageSize: number;
+  },
+): WorkspaceCollectionPage {
+  const totalProjects = projects.length;
+  const safePageSize = Math.max(1, Math.trunc(input.pageSize));
+  const pageCount = Math.max(1, Math.ceil(totalProjects / safePageSize));
+  const currentPage = Math.min(Math.max(1, Math.trunc(input.page)), pageCount);
+
+  if (totalProjects === 0) {
+    return {
+      currentPage: 1,
+      pageCount: 1,
+      pageSize: safePageSize,
+      rangeStart: 0,
+      rangeEnd: 0,
+      projects: [],
+    };
+  }
+
+  const startIndex = (currentPage - 1) * safePageSize;
+  const endIndex = Math.min(startIndex + safePageSize, totalProjects);
+
+  return {
+    currentPage,
+    pageCount,
+    pageSize: safePageSize,
+    rangeStart: startIndex + 1,
+    rangeEnd: endIndex,
+    projects: projects.slice(startIndex, endIndex),
+  };
 }

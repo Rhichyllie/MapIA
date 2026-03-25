@@ -63,7 +63,7 @@ async function loadWorkingSnapshotOrThrow(
 
   if (!workingSnapshot) {
     throw new AppError(
-      "Snapshot de trabalho nao encontrado. Gere o snapshot inicial pelo wizard.",
+      "Snapshot de trabalho nao encontrado. Gere o mapa inicial pelo Assistente de Criacao.",
       {
         code: "WORKING_SNAPSHOT_NOT_FOUND",
         status: 404,

@@ -104,7 +104,10 @@ export async function ensureLoggedIn(page: Page, credentials: DevCredentials) {
     await page.getByTestId("login-email-input").fill(credentials.email);
     await page.getByTestId("login-password-input").fill(credentials.password);
     await page.getByTestId("login-submit-button").click();
-    await page.waitForURL(/\/dashboard/, { timeout: 60_000 });
+    await page.waitForURL(/\/dashboard/, {
+      timeout: 60_000,
+      waitUntil: "domcontentloaded",
+    });
   }
 
   try {

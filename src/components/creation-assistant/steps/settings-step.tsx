@@ -45,6 +45,7 @@ export function SettingsStep({
         <label className="checkbox-row">
           <input
             type="checkbox"
+            data-testid="creation-assistant-create-examples-checkbox"
             checked={draft.context.setup?.createExamples ?? true}
             onChange={(event) =>
               setDraft((current) => ({
@@ -80,6 +81,7 @@ export function SettingsStep({
           <input
             id="adjust-setup-count"
             type="range"
+            data-testid="creation-assistant-suggested-block-count-input"
             min={1}
             max={12}
             value={draft.context.setup?.suggestedBlockCount ?? 3}
@@ -119,6 +121,7 @@ export function SettingsStep({
             className="btn"
             type="button"
             onClick={() => setShowAdvancedStructure((current) => !current)}
+            data-testid="creation-assistant-toggle-advanced-structure"
           >
             {showAdvancedStructure
               ? labels.settingsStep.hideAdvanced
@@ -130,6 +133,7 @@ export function SettingsStep({
             <label className="checkbox-row">
               <input
                 type="checkbox"
+                data-testid="creation-assistant-create-initial-root-checkbox"
                 checked={draft.context.setup?.createInitialRoot ?? false}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -166,6 +170,7 @@ export function SettingsStep({
                 </label>
                 <input
                   id="adjust-setup-root-name"
+                  data-testid="creation-assistant-initial-root-name-input"
                   value={draft.context.setup.initialRootName ?? ""}
                   onChange={(event) =>
                     setDraft((current) => ({
@@ -210,6 +215,7 @@ export function SettingsStep({
                 title={labels.getLayoutChoiceLabel(layout)}
                 description={labels.settingsStep.recommendedLayoutDescription}
                 selected={draft.layout === layout}
+                dataTestId={`creation-assistant-layout-${layout}`}
                 onSelect={() => selectLayout(layout as LayoutChoice)}
               />
             ))}
@@ -221,6 +227,7 @@ export function SettingsStep({
               className="btn"
               type="button"
               onClick={() => setShowAdvancedLayouts((current) => !current)}
+              data-testid="creation-assistant-toggle-advanced-layouts"
             >
               {showAdvancedLayouts
                 ? labels.settingsStep.hideAdvanced
@@ -234,6 +241,7 @@ export function SettingsStep({
                     title={labels.getLayoutChoiceLabel(layout)}
                     description={labels.settingsStep.advancedLayoutDescription}
                     selected={draft.layout === layout}
+                    dataTestId={`creation-assistant-layout-${layout}`}
                     onSelect={() => selectLayout(layout as LayoutChoice)}
                   />
                 ))}
@@ -252,6 +260,7 @@ export function SettingsStep({
               title={labels.getDetailLevelLabel(level as DetailLevel)}
               description={labels.settingsStep.detailLevelDescription}
               selected={draft.detailLevel === level}
+              dataTestId={`creation-assistant-detail-level-${level}`}
               onSelect={() =>
                 setDraft((current) => ({
                   ...current,
@@ -270,6 +279,7 @@ export function SettingsStep({
             <label key={key} className="checkbox-row">
               <input
                 type="checkbox"
+                data-testid={`creation-assistant-automation-${key}-checkbox`}
                 checked={draft.automation[key as keyof typeof draft.automation]}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -454,6 +464,7 @@ export function SettingsStep({
             <label className="checkbox-row">
               <input
                 type="checkbox"
+                data-testid="creation-assistant-flow-auto-start-end-checkbox"
                 checked={draft.context.flow.autoCreateStartEnd}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -475,6 +486,7 @@ export function SettingsStep({
             <label className="checkbox-row">
               <input
                 type="checkbox"
+                data-testid="creation-assistant-flow-allow-decisions-checkbox"
                 checked={draft.context.flow.allowDecisions}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -499,6 +511,7 @@ export function SettingsStep({
               </label>
               <select
                 id="adjust-flow-direction"
+                data-testid="creation-assistant-flow-direction-select"
                 value={draft.context.flow.direction}
                 onChange={(event) =>
                   setDraft((current) => ({
@@ -523,6 +536,7 @@ export function SettingsStep({
             <label className="checkbox-row">
               <input
                 type="checkbox"
+                data-testid="creation-assistant-flow-allow-multiple-outputs-checkbox"
                 checked={draft.context.flow.allowMultipleOutputs}
                 onChange={(event) =>
                   setDraft((current) => ({
