@@ -1,10 +1,9 @@
 "use client";
-
-import Link from "next/link";
 import { useLocale } from "next-intl";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -43,39 +42,23 @@ import { resolveEditorPersona } from "@/src/modules/editor/domain";
 import {
   hasEditorDiagramCapability,
   resolveEditorDiagramMode,
-  type EditorDiagramContextualInsertMode,
-  type EditorDiagramNodeRelationsView,
   type EditorDiagramProcessInspectorStrategy,
-  type EditorDiagramSelectionQuickAction,
 } from "./diagram-modes";
+import { resolveEditorDiagramInspectorAdapter } from "./diagram-modes/inspector-adapters";
 import {
   computeParallelEdgeMeta,
 } from "./diagram-renderers";
-import { FlowSelectionHud } from "./flow-interactions/flow-selection-hud";
 import {
   type DiagramLayoutType,
 } from "./diagram-renderers/layout/diagram-layout";
 import {
-  applyEditorCommandLocally,
-  applyEditorCommandsLocally,
-  applyEditorCommandRemotely,
   EditorRemoteError,
 } from "./editor-command-service";
 import {
-  createDebouncedTask,
-  createEditorSaveRequestTracker,
-} from "./editor-autosave-helpers";
-import {
   createInitialEditorAutosaveState,
-  markEditorDirty,
-  markEditorSaveError,
-  markEditorSaveSuccess,
-  markEditorSaving,
-  type EditorAutosaveState,
 } from "./editor-autosave-state";
 import {
   getFriendlyInspectorFeedback,
-  type InspectorFieldErrors,
 } from "./editor-inspector-feedback";
 import {
   buildUpdateEdgeCommandFromInspectorForm,
@@ -86,14 +69,8 @@ import {
 } from "./editor-inspector-schemas";
 import {
   createOperationalNodeDraft,
-  getFriendlyEdgeKindDescription,
-  getFriendlyEdgeKindLabel,
-  getFriendlyNodeKindDescription,
-  getFriendlyNodeKindLabel,
   mergeOperationalNodePayload,
   normalizeTagsInput,
-  type InspectorMode,
-  type OperationalNodeDraft,
 } from "./editor-inspector-personas";
 import { resolveInspectorSelectionState } from "./inspector-selection-state";
 import { CanvasToolbar } from "./canvas-toolbar";
@@ -101,7 +78,6 @@ import { CommandPalette } from "./command-palette";
 import { filterNodeQuickFindOptions } from "./editor-quick-find";
 import {
   type ContextualDiagramType,
-  getEdgeKindDescriptionForDiagram,
   getEdgeKindLabel,
   getEdgeKindLabelForDiagram,
   getEdgeKindPresentation,
@@ -115,12 +91,6 @@ import {
   resolveProcessNodeRole,
   type ProcessRelationsViewModel,
 } from "./presentation/process-semantics";
-import {
-  ProcessOperationalEdgeInspector,
-} from "./process-inspector/process-operational-edge-inspector";
-import {
-  ProcessOperationalNodeInspector,
-} from "./process-inspector/process-operational-node-inspector";
 import {
   fromCanonicalSnapshotToFlowState,
   toCanonicalSnapshotFromFlowState,
@@ -152,35 +122,16 @@ import {
   type ErdRelationRef,
 } from "@/src/modules/erd/domain";
 import {
-  createEdgeForEditor,
-  createSnapshotVersionForEditor,
   exportErdPreviewForEditor,
   EditorQueryError,
   importPrismaSchemaForEditor,
-  listSnapshotVersionsForEditor,
   loadSemanticPolicyForEditor,
-  loadSnapshotVersionDetailForEditor,
-  loadSnapshotVersionDiffForEditor,
   loadWorkingSnapshotForEditor,
-  runSemanticAuditForEditor,
-  validateSemanticDraftForEditor,
-  restoreSnapshotVersionForEditor,
-  saveWorkingSnapshotForEditor,
-  updateEdgeForEditor,
-  updateNodeForEditor,
   updateSemanticPolicyForEditor,
-  type ErdExportPreviewPayload,
-  type SemanticAuditPayload,
   type SemanticPolicyPayload,
   type EditorPrismaSchemaImportSummary,
-  type EditorSnapshotVersionDiff,
-  type EditorSnapshotVersionSummary,
 } from "./editor-query-service";
 import { usePendingChangesGuard } from "./use-pending-changes-guard";
-import {
-  buildVersionDiffSummary,
-  type VersionDiffSummaryResult,
-} from "./versions/diff-summary";
 import { ConnectionAssistant } from "./semantics/connection-assistant";
 import { RepairDialog } from "./semantics/repair-dialog";
 import { translateEditor, type EditorTranslationFn } from "./editor-i18n";
@@ -195,15 +146,33 @@ import {
   type RepairPlan,
   type SemanticViolation,
 } from "./semantics/semantics";
-
-const AUTOSAVE_DELAY_MS = 1000;
-const DEFAULT_SNAPSHOT_LABEL = "fase1-working-v1";
-const VERSION_NAMES_STORAGE_KEY_PREFIX = "mapia.editor.version-names";
-const EDITOR_PANELS_STORAGE_KEY_PREFIX = "mapia-editor-panels";
-const EDITOR_FOCUS_STORAGE_KEY_PREFIX = "mapia-editor-focus";
-const INSPECTOR_MODE_STORAGE_KEY = "mapia-inspector-mode";
-const INSPECTOR_SECTIONS_STORAGE_KEY_PREFIX = "mapia-inspector-sections";
-const MAPIA_CLIPBOARD_MIME = "application/x-mapia-fragment+json";
+import {
+  type AddNodeDraft,
+  type ContextualInsertMode,
+  type ErdFieldDraftState,
+  type InspectorNodeRelationsView,
+  type SemanticIssueLike,
+  type SelectionHudQuickAction,
+} from "./shell/editor-shell-types";
+import { useEditorCanvasUiController } from "./shell/use-editor-canvas-ui-controller";
+import { useEditorClipboardController } from "./shell/use-editor-clipboard-controller";
+import { useEditorCommandController } from "./shell/use-editor-command-controller";
+import { useEditorErdController } from "./shell/use-editor-erd-controller";
+import { useEditorInspectorController } from "./shell/use-editor-inspector-controller";
+import { useEditorPersistenceController } from "./shell/use-editor-persistence-controller";
+import { useEditorSelectionController } from "./shell/use-editor-selection-controller";
+import { useEditorSemanticController } from "./shell/use-editor-semantic-controller";
+import { useEditorVersionsController } from "./shell/use-editor-versions-controller";
+import { EditorShellTopBar } from "./shell/editor-shell-top-bar";
+import { EditorSelectionHudSurface } from "./shell/editor-selection-hud-surface";
+import { EditorSemanticAuditPanel } from "./shell/editor-semantic-audit-panel";
+import { EditorInspectorFrame } from "./shell/editor-inspector-frame";
+import { EditorInspectorEmptyState } from "./shell/editor-inspector-empty-state";
+import {
+  EditorMetadataPanel,
+  EditorPrismaImportPanel,
+  EditorVersionsPanel,
+} from "./shell/editor-shell-panels";
 
 type EditorProjectViewModel = {
   id: string;
@@ -220,160 +189,6 @@ type EditorShellProps = {
   initialRevision: number;
 };
 
-type PendingEditorCommand = {
-  localVersion: number;
-  command: EditorCommand;
-};
-
-type VersionCreateFeedback =
-  | { kind: "success" | "error"; message: string }
-  | null;
-type VersionActionFeedback =
-  | { kind: "success" | "error"; message: string }
-  | null;
-type VersionDiffFeedback =
-  | { kind: "info" | "error"; message: string }
-  | null;
-type PrismaSchemaImportFeedback =
-  | { kind: "success" | "error"; message: string }
-  | null;
-type ErdExportFeedback =
-  | { kind: "success" | "error" | "info"; message: string }
-  | null;
-
-type OperationalEdgeDraft = {
-  label: string;
-  kind: EdgeInspectorDraft["kind"];
-};
-
-type AddNodeDraft = {
-  kind: NodeKind;
-  diagramRole?: DiagramRole;
-  title: string;
-  description: string;
-  tagsText: string;
-};
-
-type SelectionHudQuickAction = EditorDiagramSelectionQuickAction;
-
-type InspectorNodeRelationsView = EditorDiagramNodeRelationsView;
-
-type ContextualInsertMode = EditorDiagramContextualInsertMode;
-
-type ClipboardAddNodeCommand = Extract<EditorCommand, { type: "addNode" }>;
-type ClipboardAddEdgeCommand = Extract<EditorCommand, { type: "addEdge" }>;
-
-type ClipboardCommandsDraft = {
-  nodeCommands: ClipboardAddNodeCommand[];
-  edgeCommands: ClipboardAddEdgeCommand[];
-  skippedEdges: number;
-  firstInsertedNodeId?: string;
-};
-
-type PendingConnectionAssistantState = {
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourceLabel: string;
-  targetLabel: string;
-  attemptedEdgeKind: EdgeKind;
-  allowedEdgeKinds: EdgeKind[];
-  recommendedEdgeKind?: EdgeKind;
-  message: string;
-  details?: string;
-};
-
-type PendingErdQuickRelateState = {
-  sourceNodeId: string;
-  targetNodeId: string;
-  sourceLabel: string;
-  targetLabel: string;
-  style: {
-    left: string;
-    top: string;
-  };
-};
-
-type PendingNodeRepairState = {
-  command: Extract<EditorCommand, { type: "updateNode" }>;
-  repairPlan: RepairPlan;
-  violations: SemanticViolation[];
-};
-
-type PendingSemanticOverrideState = {
-  title: string;
-  message: string;
-  requireReason: boolean;
-  onConfirm: (reason: string) => Promise<void>;
-};
-
-type SemanticIssueLike = {
-  id: string;
-  code: string;
-  severity: "error" | "warning" | "info" | "suggestion";
-  message: string;
-  explanation?: string;
-  details?: string;
-  suggestedFixes?: unknown;
-  targetType: "graph" | "node" | "edge";
-  targetId?: string;
-};
-
-type MapiaClipboardFragment = {
-  version: 1;
-  sourceProjectId: string;
-  nodes: Array<{
-    id: string;
-    kind: NodeKind;
-    label: string;
-    position: { x: number; y: number };
-    data: Record<string, unknown>;
-  }>;
-  edges: Array<{
-    id: string;
-    sourceNodeId: string;
-    targetNodeId: string;
-    kind: EdgeKind;
-    label?: string;
-    data: Record<string, unknown>;
-  }>;
-};
-
-type ErdFieldDraftState = {
-  name: string;
-  type: string;
-};
-
-type EditorPanelState = {
-  metadata: boolean;
-  prismaImport: boolean;
-  versions: boolean;
-};
-
-type InspectorSectionState = {
-  general: boolean;
-  details: boolean;
-  relations: boolean;
-  advanced: boolean;
-};
-
-const DEFAULT_EDITOR_PANEL_STATE: EditorPanelState = {
-  metadata: true,
-  prismaImport: true,
-  versions: true,
-};
-
-const DEFAULT_INSPECTOR_SECTION_STATE: InspectorSectionState = {
-  general: true,
-  details: true,
-  relations: true,
-  advanced: false,
-};
-
-const DEFAULT_ADD_NODE_OFFSET = {
-  x: 220,
-  y: 64,
-};
-
 function formatErrorMessage(error: unknown, fallback: string) {
   if (error instanceof EditorQueryError || error instanceof EditorRemoteError) {
     const payloadMessage = error.payload?.message?.trim();
@@ -385,76 +200,6 @@ function formatErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
-}
-
-function formatVersionCreatedAtLabel(createdAt: string, locale: string) {
-  const parsed = new Date(createdAt);
-
-  if (Number.isNaN(parsed.getTime())) {
-    return createdAt;
-  }
-
-  return parsed.toLocaleString(locale);
-}
-
-function formatVersionOriginLabel(
-  origin: EditorSnapshotVersionSummary["origin"],
-  t?: EditorTranslationFn,
-) {
-  if (origin === "manual") {
-    return translateEditor(t, "shell.versions.origin.manual");
-  }
-
-  return origin;
-}
-
-function buildVersionDiffFeedbackMessage(
-  diff: EditorSnapshotVersionDiff,
-  t?: EditorTranslationFn,
-) {
-  if (!diff.hasChanges) {
-    return translateEditor(t, "shell.versions.diff.noChanges");
-  }
-
-  const parts: string[] = [];
-
-  if (diff.nodesAdded.length > 0) {
-    parts.push(translateEditor(t, "shell.versions.diff.nodesAdded", {
-      count: diff.nodesAdded.length,
-    }));
-  }
-  if (diff.nodesRemoved.length > 0) {
-    parts.push(translateEditor(t, "shell.versions.diff.nodesRemoved", {
-      count: diff.nodesRemoved.length,
-    }));
-  }
-  if (diff.nodesChanged.length > 0) {
-    parts.push(translateEditor(t, "shell.versions.diff.nodesChanged", {
-      count: diff.nodesChanged.length,
-    }));
-  }
-  if (diff.edgesAdded.length > 0) {
-    parts.push(translateEditor(t, "shell.versions.diff.edgesAdded", {
-      count: diff.edgesAdded.length,
-    }));
-  }
-  if (diff.edgesRemoved.length > 0) {
-    parts.push(translateEditor(t, "shell.versions.diff.edgesRemoved", {
-      count: diff.edgesRemoved.length,
-    }));
-  }
-  if (diff.edgesChanged.length > 0) {
-    parts.push(translateEditor(t, "shell.versions.diff.edgesChanged", {
-      count: diff.edgesChanged.length,
-    }));
-  }
-  if (diff.viewportChanged) {
-    parts.push(translateEditor(t, "shell.versions.diff.viewportChanged"));
-  }
-
-  return translateEditor(t, "shell.versions.diff.summary", {
-    parts: parts.join("; "),
-  });
 }
 
 function buildPrismaSchemaImportFeedbackMessage(
@@ -510,22 +255,6 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   }
 
   return value as Record<string, unknown>;
-}
-
-function readBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
-}
-
-function isClipboardPartialEdgePasteEnabled(
-  policy: SemanticPolicyPayload | null | undefined,
-) {
-  const customRules = readRecord(policy?.customRulesJson);
-  const clipboardRules = readRecord(customRules?.clipboard);
-
-  return (
-    readBoolean(clipboardRules?.allowPasteWithoutInvalidEdges) === true ||
-    readBoolean(clipboardRules?.allowPartialEdgePaste) === true
-  );
 }
 
 function toErdPolicyConfig(
@@ -754,134 +483,6 @@ function createEdgeInspectorDraft(edge: RFEdge): EdgeInspectorDraft {
   };
 }
 
-function getNodeSelectionSyncKey(node: RFNode | null) {
-  if (!node) {
-    return null;
-  }
-
-  return `${node.id}:${node.data.label}:${node.data.kind}:${JSON.stringify(node.data.payload)}`;
-}
-
-function getEdgeSelectionSyncKey(edge: RFEdge | null) {
-  if (!edge) {
-    return null;
-  }
-
-  return `${edge.id}:${edge.label ? String(edge.label) : ""}:${edge.data?.kind ?? "flows-to"}:${JSON.stringify(edge.data?.payload ?? {})}`;
-}
-
-function areNodeDraftValuesEqual(node: RFNode | null, draft: NodeInspectorDraft | null) {
-  if (!node || !draft) {
-    return false;
-  }
-
-  return (
-    node.data.label === draft.label &&
-    node.data.kind === draft.kind &&
-    formatInspectorJson(node.data.payload) === draft.dataJson
-  );
-}
-
-function areEdgeDraftValuesEqual(edge: RFEdge | null, draft: EdgeInspectorDraft | null) {
-  if (!edge || !draft) {
-    return false;
-  }
-
-  return (
-    (edge.label ? String(edge.label) : "") === draft.label &&
-    (edge.data?.kind ?? "flows-to") === draft.kind &&
-    formatInspectorJson(edge.data?.payload ?? {}) === draft.dataJson
-  );
-}
-
-function sanitizeVersionNameMap(value: unknown) {
-  if (!value || typeof value !== "object") {
-    return {} as Record<string, string>;
-  }
-
-  return Object.entries(value).reduce<Record<string, string>>((acc, entry) => {
-    const [versionId, versionName] = entry;
-    if (typeof versionName !== "string") {
-      return acc;
-    }
-
-    const trimmed = versionName.trim();
-    if (!trimmed) {
-      return acc;
-    }
-
-    acc[versionId] = trimmed.slice(0, 120);
-    return acc;
-  }, {});
-}
-
-function sanitizeEditorPanelState(value: unknown): EditorPanelState {
-  if (!value || typeof value !== "object") {
-    return DEFAULT_EDITOR_PANEL_STATE;
-  }
-
-  const candidate = value as Record<string, unknown>;
-
-  return {
-    metadata:
-      typeof candidate.metadata === "boolean"
-        ? candidate.metadata
-        : DEFAULT_EDITOR_PANEL_STATE.metadata,
-    prismaImport:
-      typeof candidate.prismaImport === "boolean"
-        ? candidate.prismaImport
-        : DEFAULT_EDITOR_PANEL_STATE.prismaImport,
-    versions:
-      typeof candidate.versions === "boolean"
-        ? candidate.versions
-        : DEFAULT_EDITOR_PANEL_STATE.versions,
-  };
-}
-
-function sanitizeInspectorSectionState(value: unknown): InspectorSectionState {
-  if (!value || typeof value !== "object") {
-    return DEFAULT_INSPECTOR_SECTION_STATE;
-  }
-
-  const candidate = value as Record<string, unknown>;
-
-  return {
-    general:
-      typeof candidate.general === "boolean"
-        ? candidate.general
-        : DEFAULT_INSPECTOR_SECTION_STATE.general,
-    details:
-      typeof candidate.details === "boolean"
-        ? candidate.details
-        : DEFAULT_INSPECTOR_SECTION_STATE.details,
-    relations:
-      typeof candidate.relations === "boolean"
-        ? candidate.relations
-        : DEFAULT_INSPECTOR_SECTION_STATE.relations,
-    advanced:
-      typeof candidate.advanced === "boolean"
-        ? candidate.advanced
-        : DEFAULT_INSPECTOR_SECTION_STATE.advanced,
-  };
-}
-
-async function copyTextToClipboard(text: string) {
-  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "true");
-  textarea.style.position = "fixed";
-  textarea.style.left = "-9999px";
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand("copy");
-  textarea.remove();
-}
-
 function isEditableKeyboardTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -893,45 +494,6 @@ function isEditableKeyboardTarget(target: EventTarget | null) {
     tagName === "input" ||
     tagName === "textarea" ||
     tagName === "select"
-  );
-}
-
-function areOperationalNodeDraftValuesEqual(
-  node: RFNode | null,
-  draft: OperationalNodeDraft | null,
-) {
-  if (!node || !draft) {
-    return false;
-  }
-
-  const baseline = createOperationalNodeDraft({
-    label: node.data.label,
-    kind: node.data.kind,
-    payload: node.data.payload,
-  });
-
-  const baselineTags = normalizeTagsInput(baseline.tagsText).join("|");
-  const draftTags = normalizeTagsInput(draft.tagsText).join("|");
-
-  return (
-    baseline.label === draft.label &&
-    baseline.kind === draft.kind &&
-    baseline.description.trim() === draft.description.trim() &&
-    baselineTags === draftTags
-  );
-}
-
-function areOperationalEdgeDraftValuesEqual(
-  edge: RFEdge | null,
-  draft: OperationalEdgeDraft | null,
-) {
-  if (!edge || !draft) {
-    return false;
-  }
-
-  return (
-    (edge.label ? String(edge.label) : "") === draft.label &&
-    (edge.data?.kind ?? "flows-to") === draft.kind
   );
 }
 
@@ -963,92 +525,9 @@ export function EditorShell({
   const [computedMindmapRootNodeId, setComputedMindmapRootNodeId] = useState<
     string | null
   >(initialFlowState.computedRootNodeId ?? null);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
-  const [saveState, setSaveState] = useState<EditorAutosaveState>(
-    createInitialEditorAutosaveState(editorT),
-  );
-  const [pendingCommands, setPendingCommands] = useState<PendingEditorCommand[]>(
-    [],
-  );
   const [querySyncMessage, setQuerySyncMessage] = useState<string | null>(null);
   const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(null);
-  const [isCreatingVersion, setIsCreatingVersion] = useState(false);
-  const [versionCreateFeedback, setVersionCreateFeedback] =
-    useState<VersionCreateFeedback>(null);
-  const [newVersionName, setNewVersionName] = useState("");
-  const [prismaSchemaImportText, setPrismaSchemaImportText] = useState("");
-  const [isImportingPrismaSchema, setIsImportingPrismaSchema] = useState(false);
-  const [prismaSchemaImportFeedback, setPrismaSchemaImportFeedback] =
-    useState<PrismaSchemaImportFeedback>(null);
-  const [isExportingErdPreview, setIsExportingErdPreview] = useState(false);
-  const [erdExportFeedback, setErdExportFeedback] = useState<ErdExportFeedback>(null);
-  const [, setLastErdExportPreview] = useState<ErdExportPreviewPayload | null>(null);
-  const [snapshotVersions, setSnapshotVersions] = useState<
-    EditorSnapshotVersionSummary[]
-  >([]);
-  const [isRefreshingVersionList, setIsRefreshingVersionList] = useState(false);
-  const [versionActionFeedback, setVersionActionFeedback] =
-    useState<VersionActionFeedback>(null);
-  const [versionDiffFeedback, setVersionDiffFeedback] =
-    useState<VersionDiffFeedback>(null);
-  const [versionDiffSummary, setVersionDiffSummary] =
-    useState<VersionDiffSummaryResult | null>(null);
-  const [activeVersionCompareId, setActiveVersionCompareId] = useState<
-    string | null
-  >(null);
-  const [activeVersionRestoreId, setActiveVersionRestoreId] = useState<
-    string | null
-  >(null);
-  const [localVersionNames, setLocalVersionNames] = useState<
-    Record<string, string>
-  >({});
-  const [versionNameDrafts, setVersionNameDrafts] = useState<
-    Record<string, string>
-  >({});
-  const [nodeInspectorDraft, setNodeInspectorDraft] =
-    useState<NodeInspectorDraft | null>(null);
-  const [edgeInspectorDraft, setEdgeInspectorDraft] =
-    useState<EdgeInspectorDraft | null>(null);
-  const [operationalNodeDraft, setOperationalNodeDraft] =
-    useState<OperationalNodeDraft | null>(null);
-  const [operationalEdgeDraft, setOperationalEdgeDraft] =
-    useState<OperationalEdgeDraft | null>(null);
-  const [nodeInspectorErrors, setNodeInspectorErrors] =
-    useState<InspectorFieldErrors>({});
-  const [edgeInspectorErrors, setEdgeInspectorErrors] =
-    useState<InspectorFieldErrors>({});
-  const [nodeInspectorMessage, setNodeInspectorMessage] = useState<string | null>(
-    null,
-  );
-  const [edgeInspectorMessage, setEdgeInspectorMessage] = useState<string | null>(
-    null,
-  );
   const [isRefreshingFromQuery, setIsRefreshingFromQuery] = useState(false);
-  const versionNamesStorageKey = `${VERSION_NAMES_STORAGE_KEY_PREFIX}:${project.id}`;
-  const editorPanelsStorageKey = `${EDITOR_PANELS_STORAGE_KEY_PREFIX}:${project.id}`;
-  const editorFocusStorageKey = `${EDITOR_FOCUS_STORAGE_KEY_PREFIX}:${project.id}`;
-  const inspectorSectionsStorageKey = `${INSPECTOR_SECTIONS_STORAGE_KEY_PREFIX}:${project.id}`;
-  const canImportPrismaSchema = prismaSchemaImportText.trim().length > 0;
-  const hasPendingChangesGuard =
-    pendingCommands.length > 0 || saveState.isDirty || saveState.status === "saving";
-  const [panelState, setPanelState] = useState<EditorPanelState>(
-    DEFAULT_EDITOR_PANEL_STATE,
-  );
-  const [isCanvasFocusMode, setIsCanvasFocusMode] = useState(false);
-  const [isFocusInspectorCollapsed, setIsFocusInspectorCollapsed] = useState(false);
-  const [inspectorMode, setInspectorMode] = useState<InspectorMode>("operational");
-  const [hasHydratedEditorPreferences, setHasHydratedEditorPreferences] =
-    useState(false);
-  const [hasHydratedInspectorMode, setHasHydratedInspectorMode] = useState(false);
-  const [inspectorSections, setInspectorSections] = useState<InspectorSectionState>(
-    DEFAULT_INSPECTOR_SECTION_STATE,
-  );
-  const [hasHydratedInspectorSections, setHasHydratedInspectorSections] =
-    useState(false);
-  const [isQuickFindOpen, setIsQuickFindOpen] = useState(false);
-  const [quickFindQuery, setQuickFindQuery] = useState("");
-  const [quickFindActiveIndex, setQuickFindActiveIndex] = useState(0);
   const [isAddNodeDialogOpen, setIsAddNodeDialogOpen] = useState(false);
   const [addNodeErrorMessage, setAddNodeErrorMessage] = useState<string | null>(null);
   const [inlineRenameNodeId, setInlineRenameNodeId] = useState<string | null>(null);
@@ -1065,57 +544,288 @@ export function EditorShell({
     tagsText: "",
   });
   const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<string[]>([]);
-  const [pendingConnectionAssistant, setPendingConnectionAssistant] =
-    useState<PendingConnectionAssistantState | null>(null);
-  const [pendingErdQuickRelate, setPendingErdQuickRelate] =
-    useState<PendingErdQuickRelateState | null>(null);
-  const [erdFieldDrafts, setErdFieldDrafts] = useState<Record<string, ErdFieldDraftState>>(
-    {},
-  );
-  const [erdPendingFieldFocusId, setErdPendingFieldFocusId] = useState<string | null>(null);
-  const [erdMaterializeDependentSide, setErdMaterializeDependentSide] = useState<
-    "source" | "target"
-  >("target");
-  const [erdMaterializeExistingFieldId, setErdMaterializeExistingFieldId] =
-    useState<string>("__new__");
-  const [erdMaterializeUnique, setErdMaterializeUnique] = useState(false);
-  const [pendingNodeRepair, setPendingNodeRepair] =
-    useState<PendingNodeRepairState | null>(null);
-  const [pendingSemanticOverride, setPendingSemanticOverride] =
-    useState<PendingSemanticOverrideState | null>(null);
-  const [semanticOverrideReason, setSemanticOverrideReason] = useState("");
-  const [isValidationPanelOpen, setIsValidationPanelOpen] = useState(false);
-  const [serverSemanticAudit, setServerSemanticAudit] =
-    useState<SemanticAuditPayload | null>(null);
-  const [semanticPolicy, setSemanticPolicy] = useState<SemanticPolicyPayload | null>(null);
-  const [currentRevision, setCurrentRevision] = useState<number>(initialRevision);
-
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const viewportRef = useRef(viewport);
   const layoutMetadataRef = useRef(layoutMetadata);
-  const pendingCommandsRef = useRef(pendingCommands);
-  const selectedNodeRef = useRef<RFNode | null>(null);
-  const selectedEdgeRef = useRef<RFEdge | null>(null);
-  const localMutationVersionRef = useRef(0);
-  const isSaveInFlightRef = useRef(false);
-  const requestTrackerRef = useRef(createEditorSaveRequestTracker());
-  const saveInFlightRequestIdRef = useRef<number | null>(null);
-  const autosaveFlushRef = useRef<null | (() => Promise<void>)>(null);
-  const autosaveDebouncerRef = useRef(
-    createDebouncedTask(() => {
-      void autosaveFlushRef.current?.();
-    }, AUTOSAVE_DELAY_MS),
-  );
-  const panelStateBeforeFocusRef = useRef<EditorPanelState>(
-    DEFAULT_EDITOR_PANEL_STATE,
-  );
   const canvasRegionRef = useRef<HTMLDivElement | null>(null);
   const reactFlowInstanceRef = useRef<ReactFlowInstance<RFNode, RFEdge> | null>(
     null,
   );
-  const quickFindReturnFocusRef = useRef<HTMLElement | null>(null);
-  const currentRevisionRef = useRef(currentRevision);
+  const syncFromSnapshot = useCallback(
+    (snapshot: Parameters<typeof fromCanonicalSnapshotToFlowState>[0]) => {
+      const next = fromCanonicalSnapshotToFlowState(snapshot);
+      nodesRef.current = next.nodes;
+      edgesRef.current = next.edges;
+      viewportRef.current = next.viewport;
+      layoutMetadataRef.current = next.layoutMetadata;
+      setNodes(next.nodes);
+      setEdges(next.edges);
+      setViewport(next.viewport);
+      setLayoutMetadata(next.layoutMetadata);
+      setHiddenDiagramNodeIds(next.hiddenNodeIds);
+      setComputedMindmapRootNodeId(next.computedRootNodeId ?? null);
+    },
+    [setEdges, setNodes],
+  );
+  const getCurrentSnapshot = useCallback(
+    () =>
+      toCanonicalSnapshotFromFlowState(
+        project.id,
+        nodesRef.current,
+        edgesRef.current,
+        viewportRef.current,
+        layoutMetadataRef.current,
+      ),
+    [project.id],
+  );
+  const {
+    selectedNodeId,
+    setSelectedNodeId,
+    selectedEdgeId,
+    setSelectedEdgeId,
+    selectedNode,
+    selectedEdge,
+    selectItem: selectEditorItem,
+  } = useEditorSelectionController({
+    nodes,
+    edges,
+  });
+  const {
+    panelState,
+    setPanelState,
+    isCanvasFocusMode,
+    setIsCanvasFocusMode,
+    isFocusInspectorCollapsed,
+    setIsFocusInspectorCollapsed,
+    isQuickFindOpen,
+    setIsQuickFindOpen,
+    quickFindQuery,
+    setQuickFindQuery,
+    quickFindActiveIndex,
+    setQuickFindActiveIndex,
+    panelStateBeforeFocusRef,
+    quickFindReturnFocusRef,
+    handleTogglePanel,
+    handleToggleCanvasFocusMode,
+    handleToggleInspectorVisibility,
+    handleOpenQuickFind,
+    handleCloseQuickFind,
+  } = useEditorCanvasUiController({
+    projectId: project.id,
+    canvasRegionRef,
+  });
+  const {
+    inspectorMode,
+    setInspectorMode,
+    inspectorSections,
+    handleToggleInspectorSection,
+    nodeInspectorDraft,
+    setNodeInspectorDraft,
+    edgeInspectorDraft,
+    setEdgeInspectorDraft,
+    operationalNodeDraft,
+    setOperationalNodeDraft,
+    operationalEdgeDraft,
+    setOperationalEdgeDraft,
+    nodeInspectorErrors,
+    setNodeInspectorErrors,
+    edgeInspectorErrors,
+    setEdgeInspectorErrors,
+    nodeInspectorMessage,
+    setNodeInspectorMessage,
+    edgeInspectorMessage,
+    setEdgeInspectorMessage,
+    nodeInspectorDirty,
+    edgeInspectorDirty,
+    nodeInspectorHasErrors,
+    edgeInspectorHasErrors,
+    hasInspectorDirtyDraft,
+    confirmInspectorDraftDiscardIfNeeded,
+  } = useEditorInspectorController({
+    projectId: project.id,
+    selectedNode,
+    selectedEdge,
+    editorT,
+  });
+  const {
+    pendingConnectionAssistant,
+    setPendingConnectionAssistant,
+    pendingNodeRepair,
+    setPendingNodeRepair,
+    pendingSemanticOverride,
+    setPendingSemanticOverride,
+    semanticOverrideReason,
+    setSemanticOverrideReason,
+    isValidationPanelOpen,
+    serverSemanticAudit,
+    setServerSemanticAudit,
+    semanticPolicy,
+    setSemanticPolicy,
+    handleToggleValidationPanel: toggleValidationPanelController,
+    handleCancelConnectionAssistant,
+    handleCancelPendingNodeRepair: dismissPendingNodeRepair,
+    handleCancelSemanticOverride: dismissSemanticOverride,
+  } = useEditorSemanticController({
+    projectId: project.id,
+    inspectorMode,
+    editorT,
+    setQuerySyncMessage,
+    setGlobalErrorMessage,
+  });
+  const selectedErdEntityPayload = useMemo(() => {
+    if (!selectedNode || selectedNode.data.kind !== "entity") {
+      return null;
+    }
+
+    return normalizeErdEntityPayloadFromNode(selectedNode);
+  }, [selectedNode]);
+  const selectedErdRelationPayload = useMemo(() => {
+    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+      return null;
+    }
+
+    return normalizeErdRelationPayloadFromEdge(selectedEdge);
+  }, [selectedEdge]);
+  const selectedErdSourceEntityNode = useMemo(() => {
+    if (!selectedEdge) {
+      return null;
+    }
+
+    const node = nodes.find((candidate) => candidate.id === selectedEdge.source);
+    return node && node.data.kind === "entity" ? node : null;
+  }, [nodes, selectedEdge]);
+  const selectedErdTargetEntityNode = useMemo(() => {
+    if (!selectedEdge) {
+      return null;
+    }
+
+    const node = nodes.find((candidate) => candidate.id === selectedEdge.target);
+    return node && node.data.kind === "entity" ? node : null;
+  }, [nodes, selectedEdge]);
+  const {
+    prismaSchemaImportText,
+    setPrismaSchemaImportText,
+    isImportingPrismaSchema,
+    setIsImportingPrismaSchema,
+    prismaSchemaImportFeedback,
+    setPrismaSchemaImportFeedback,
+    isExportingErdPreview,
+    setIsExportingErdPreview,
+    erdExportFeedback,
+    setErdExportFeedback,
+    setLastErdExportPreview,
+    pendingErdQuickRelate,
+    setPendingErdQuickRelate,
+    erdFieldDrafts,
+    setErdFieldDrafts,
+    setErdPendingFieldFocusId,
+    erdMaterializeDependentSide,
+    setErdMaterializeDependentSide,
+    erdMaterializeExistingFieldId,
+    setErdMaterializeExistingFieldId,
+    erdMaterializeUnique,
+    setErdMaterializeUnique,
+    canImportPrismaSchema,
+  } = useEditorErdController({
+    selectedNode,
+    selectedEdge,
+    selectedErdEntityPayload,
+    selectedErdRelationPayload,
+    selectedErdSourceEntityNode,
+    selectedErdTargetEntityNode,
+  });
+  const {
+    saveState,
+    setSaveState,
+    pendingCommands,
+    pendingCommandsRef,
+    setPendingCommandsState,
+    setCurrentRevision,
+    currentRevisionRef,
+    localMutationVersionRef,
+    isSaveInFlightRef,
+    autosaveDebouncerRef,
+    markDirtyState,
+    applyLocalCommandAndQueue,
+    flushPendingCommands,
+    handleManualSave,
+    resetPendingCommands,
+    resetLocalMutationVersion,
+  } = useEditorPersistenceController({
+    projectId: project.id,
+    initialRevision,
+    editorT,
+    inspectorMode,
+    getCurrentSnapshot,
+    syncFromSnapshot,
+    setNodeInspectorMessage,
+    setEdgeInspectorMessage,
+    clearDerivedRemoteState: () => {
+      setServerSemanticAudit(null);
+      setLastErdExportPreview(null);
+    },
+    setGlobalErrorMessage,
+  });
+  const {
+    ensureQueueFlushedBeforeDirectWrite,
+    createEdgeDirect,
+    updateNodeDirect,
+    updateEdgeDirect,
+  } = useEditorCommandController({
+    projectId: project.id,
+    saveState,
+    pendingCommandsRef,
+    isSaveInFlightRef,
+    currentRevisionRef,
+    flushPendingCommands,
+    syncFromSnapshot,
+    setCurrentRevision,
+  });
+  const {
+    isCreatingVersion,
+    versionCreateFeedback,
+    newVersionName,
+    setNewVersionName,
+    snapshotVersions,
+    isRefreshingVersionList,
+    versionActionFeedback,
+    versionDiffFeedback,
+    versionDiffSummary,
+    setVersionDiffFeedback,
+    setVersionDiffSummary,
+    activeVersionCompareId,
+    activeVersionRestoreId,
+    versionNameDrafts,
+    handleCreateVersion,
+    handleRefreshVersionList,
+    handleVersionNameDraftChange,
+    handleSaveVersionName,
+    handleCompareVersion,
+    handleRestoreVersion,
+    getVersionDisplayName,
+  } = useEditorVersionsController({
+    projectId: project.id,
+    editorT,
+    saveState,
+    pendingCommandsRef,
+    handleManualSave,
+    getCurrentSnapshot,
+    syncFromSnapshot,
+    setCurrentRevision,
+    clearSelection: () => {
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+    },
+    resetPendingCommands,
+    resetLocalMutationVersion,
+    setSaveState,
+    setGlobalErrorMessage,
+    setQuerySyncMessage,
+    cancelAutosave: () => autosaveDebouncerRef.current.cancel(),
+  });
+  const hasPendingChangesGuard =
+    pendingCommands.length > 0 || saveState.isDirty || saveState.status === "saving";
 
   usePendingChangesGuard(hasPendingChangesGuard);
 
@@ -1153,181 +863,26 @@ export function EditorShell({
   }, [viewport]);
 
   useEffect(() => {
-    currentRevisionRef.current = currentRevision;
-  }, [currentRevision]);
-
-  useEffect(() => {
     layoutMetadataRef.current = layoutMetadata;
   }, [layoutMetadata]);
-
-  useEffect(() => {
-    const debouncer = autosaveDebouncerRef.current;
-    return () => {
-      debouncer.cancel();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const rawPanelState = window.localStorage.getItem(editorPanelsStorageKey);
-      const parsedPanelState = rawPanelState
-        ? sanitizeEditorPanelState(JSON.parse(rawPanelState))
-        : DEFAULT_EDITOR_PANEL_STATE;
-      const persistedFocus = window.localStorage.getItem(editorFocusStorageKey) === "true";
-
-      panelStateBeforeFocusRef.current = parsedPanelState;
-      setPanelState(persistedFocus ? {
-        metadata: false,
-        prismaImport: false,
-        versions: false,
-      } : parsedPanelState);
-      setIsCanvasFocusMode(persistedFocus);
-      setIsFocusInspectorCollapsed(persistedFocus);
-    } catch {
-      panelStateBeforeFocusRef.current = DEFAULT_EDITOR_PANEL_STATE;
-      setPanelState(DEFAULT_EDITOR_PANEL_STATE);
-      setIsCanvasFocusMode(false);
-      setIsFocusInspectorCollapsed(false);
-    } finally {
-      setHasHydratedEditorPreferences(true);
-    }
-  }, [editorFocusStorageKey, editorPanelsStorageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !hasHydratedEditorPreferences) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(editorPanelsStorageKey, JSON.stringify(panelState));
-    } catch {
-      // Ignora indisponibilidade de storage local.
-    }
-  }, [editorPanelsStorageKey, hasHydratedEditorPreferences, panelState]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !hasHydratedEditorPreferences) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(editorFocusStorageKey, String(isCanvasFocusMode));
-    } catch {
-      // Ignora indisponibilidade de storage local.
-    }
-  }, [editorFocusStorageKey, hasHydratedEditorPreferences, isCanvasFocusMode]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const persistedMode = window.localStorage.getItem(INSPECTOR_MODE_STORAGE_KEY);
-      if (persistedMode === "technical" || persistedMode === "operational") {
-        setInspectorMode(persistedMode);
-      } else {
-        setInspectorMode("operational");
-      }
-    } catch {
-      setInspectorMode("operational");
-    } finally {
-      setHasHydratedInspectorMode(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !hasHydratedInspectorMode) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(INSPECTOR_MODE_STORAGE_KEY, inspectorMode);
-    } catch {
-      // Ignora indisponibilidade de storage local.
-    }
-  }, [hasHydratedInspectorMode, inspectorMode]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const persisted = window.localStorage.getItem(inspectorSectionsStorageKey);
-      if (!persisted) {
-        setInspectorSections(DEFAULT_INSPECTOR_SECTION_STATE);
-      } else {
-        const parsed = JSON.parse(persisted);
-        setInspectorSections(sanitizeInspectorSectionState(parsed));
-      }
-    } catch {
-      setInspectorSections(DEFAULT_INSPECTOR_SECTION_STATE);
-    } finally {
-      setHasHydratedInspectorSections(true);
-    }
-  }, [inspectorSectionsStorageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !hasHydratedInspectorSections) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(
-        inspectorSectionsStorageKey,
-        JSON.stringify(inspectorSections),
-      );
-    } catch {
-      // Ignora indisponibilidade de storage local.
-    }
-  }, [hasHydratedInspectorSections, inspectorSections, inspectorSectionsStorageKey]);
-
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId) ?? null,
-    [nodes, selectedNodeId],
-  );
-  const selectedEdge = useMemo(
-    () => edges.find((edge) => edge.id === selectedEdgeId) ?? null,
-    [edges, selectedEdgeId],
-  );
 
   useEffect(() => {
     if (selectedNodeId && selectedEdgeId) {
       setSelectedEdgeId(null);
     }
-  }, [selectedEdgeId, selectedNodeId]);
+  }, [selectedEdgeId, selectedNodeId, setSelectedEdgeId]);
 
   useEffect(() => {
     if (selectedNodeId && !selectedNode) {
       setSelectedNodeId(null);
     }
-  }, [selectedNode, selectedNodeId]);
+  }, [selectedNode, selectedNodeId, setSelectedNodeId]);
 
   useEffect(() => {
     if (selectedEdgeId && !selectedEdge) {
       setSelectedEdgeId(null);
     }
-  }, [selectedEdge, selectedEdgeId]);
-
-  const selectedErdEntityPayload = useMemo(() => {
-    if (!selectedNode || selectedNode.data.kind !== "entity") {
-      return null;
-    }
-
-    return normalizeErdEntityPayloadFromNode(selectedNode);
-  }, [selectedNode]);
-  const selectedErdRelationPayload = useMemo(() => {
-    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
-      return null;
-    }
-
-    return normalizeErdRelationPayloadFromEdge(selectedEdge);
-  }, [selectedEdge]);
+  }, [selectedEdge, selectedEdgeId, setSelectedEdgeId]);
   const diagramModeResolution = useMemo(
     () =>
       resolveEditorDiagramMode({
@@ -1352,6 +907,30 @@ export function EditorShell({
     () => toSemanticEngineOptionsFromPolicy(semanticPolicy),
     [semanticPolicy],
   );
+  const {
+    copyTextToClipboard,
+    handleCopySelectionToClipboard,
+    handleCutSelectionToClipboard,
+    handleDuplicateSelection,
+    handlePasteFromClipboard,
+  } = useEditorClipboardController({
+    projectId: project.id,
+    editorT,
+    selectedNode,
+    selectedEdge,
+    nodesRef,
+    getCurrentSnapshot,
+    applyLocalCommandAndQueue,
+    selectItem,
+    handleRemoveSelected,
+    inspectorMode,
+    semanticDiagramType,
+    semanticEngineOptions,
+    semanticPolicy,
+    setSemanticPolicy,
+    setQuerySyncMessage,
+    setGlobalErrorMessage,
+  });
   const hiddenDiagramNodeIdSet = useMemo(
     () => new Set(hiddenDiagramNodeIds),
     [hiddenDiagramNodeIds],
@@ -1396,20 +975,6 @@ export function EditorShell({
     ],
   );
   const displayedSemanticAudit = serverSemanticAudit ?? semanticAudit;
-  const selectedErdSourceEntityNode = useMemo(() => {
-    if (!selectedEdge) {
-      return null;
-    }
-    const node = nodes.find((candidate) => candidate.id === selectedEdge.source);
-    return node && node.data.kind === "entity" ? node : null;
-  }, [nodes, selectedEdge]);
-  const selectedErdTargetEntityNode = useMemo(() => {
-    if (!selectedEdge) {
-      return null;
-    }
-    const node = nodes.find((candidate) => candidate.id === selectedEdge.target);
-    return node && node.data.kind === "entity" ? node : null;
-  }, [nodes, selectedEdge]);
   const selectedErdRelationIssues = useMemo(
     () =>
       selectedEdge
@@ -1566,7 +1131,7 @@ export function EditorShell({
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
     }
-  }, [hiddenCanvasNodeIdSet, selectedNodeId]);
+  }, [hiddenCanvasNodeIdSet, selectedNodeId, setSelectedEdgeId, setSelectedNodeId]);
 
   useEffect(() => {
     if (!selectedEdgeId) {
@@ -1585,7 +1150,13 @@ export function EditorShell({
       setSelectedEdgeId(null);
       setSelectedNodeId(null);
     }
-  }, [edges, hiddenCanvasNodeIdSet, selectedEdgeId]);
+  }, [
+    edges,
+    hiddenCanvasNodeIdSet,
+    selectedEdgeId,
+    setSelectedEdgeId,
+    setSelectedNodeId,
+  ]);
 
   const renderedNodes = useMemo(() => {
     const visibleNodes = nodes.filter(
@@ -1790,15 +1361,18 @@ export function EditorShell({
     });
   }, [
     activeConnectionSourceNodeId,
+    collapsedTreeNodeIdSet,
     computedMindmapRootNodeId,
+    diagramMode.presentation,
+    diagramMode.semantic,
     edges,
+    editorT,
+    hiddenCanvasNodeIdSet,
+    hiddenDiagramNodeIdSet,
     inspectorMode,
     isValidationPanelOpen,
     layoutMetadata.rootNodeName,
     nodes,
-    hiddenCanvasNodeIdSet,
-    hiddenDiagramNodeIdSet,
-    collapsedTreeNodeIdSet,
     renderer,
     selectedNodeId,
     semanticDiagramType,
@@ -1887,695 +1461,8 @@ export function EditorShell({
     [layoutMetadata.diagramType, isReapplyLayoutBlockedByPolicy],
   );
 
-  const selectedNodeSyncKey = useMemo(
-    () => getNodeSelectionSyncKey(selectedNode),
-    [selectedNode],
-  );
-  const selectedEdgeSyncKey = useMemo(
-    () => getEdgeSelectionSyncKey(selectedEdge),
-    [selectedEdge],
-  );
-  useEffect(() => {
-    selectedNodeRef.current = selectedNode;
-  }, [selectedNode]);
-
-  useEffect(() => {
-    selectedEdgeRef.current = selectedEdge;
-  }, [selectedEdge]);
-
-  useEffect(() => {
-    const selectedNodeForInspector = selectedNodeRef.current;
-
-    if (!selectedNodeForInspector) {
-      setNodeInspectorDraft(null);
-      setOperationalNodeDraft(null);
-      setNodeInspectorErrors({});
-      setNodeInspectorMessage(null);
-      return;
-    }
-
-    setNodeInspectorDraft(createNodeInspectorDraft(selectedNodeForInspector));
-    setOperationalNodeDraft(
-      createOperationalNodeDraft({
-        label: selectedNodeForInspector.data.label,
-        kind: selectedNodeForInspector.data.kind,
-        payload: selectedNodeForInspector.data.payload,
-      }, editorT),
-    );
-    setNodeInspectorErrors({});
-    setNodeInspectorMessage(null);
-  }, [selectedNodeSyncKey]);
-
-  useEffect(() => {
-    const selectedEdgeForInspector = selectedEdgeRef.current;
-
-    if (!selectedEdgeForInspector) {
-      setEdgeInspectorDraft(null);
-      setOperationalEdgeDraft(null);
-      setEdgeInspectorErrors({});
-      setEdgeInspectorMessage(null);
-      return;
-    }
-
-    setEdgeInspectorDraft(createEdgeInspectorDraft(selectedEdgeForInspector));
-    setOperationalEdgeDraft({
-      label: selectedEdgeForInspector.label ? String(selectedEdgeForInspector.label) : "",
-      kind: selectedEdgeForInspector.data?.kind ?? "flows-to",
-    });
-    setEdgeInspectorErrors({});
-    setEdgeInspectorMessage(null);
-  }, [selectedEdgeSyncKey]);
-
-  useEffect(() => {
-    if (!selectedErdEntityPayload) {
-      setErdFieldDrafts({});
-      return;
-    }
-
-    const nextDrafts: Record<string, ErdFieldDraftState> = {};
-    for (const field of selectedErdEntityPayload.fields) {
-      nextDrafts[field.id] = {
-        name: field.name,
-        type: field.type,
-      };
-    }
-    setErdFieldDrafts(nextDrafts);
-  }, [selectedErdEntityPayload]);
-
-  useEffect(() => {
-    if (!selectedErdRelationPayload) {
-      setErdMaterializeDependentSide("target");
-      setErdMaterializeExistingFieldId("__new__");
-      setErdMaterializeUnique(false);
-      return;
-    }
-
-    const inferredSide = inferDependentSide({
-      relation: {
-        sourceEntityId: selectedEdge?.source ?? "",
-        targetEntityId: selectedEdge?.target ?? "",
-        payload: selectedErdRelationPayload,
-      },
-      sourceEntity: selectedErdSourceEntityNode
-        ? {
-            id: selectedErdSourceEntityNode.id,
-            kind: "entity",
-            label: selectedErdSourceEntityNode.data.label,
-            payload: normalizeErdEntityPayloadFromNode(selectedErdSourceEntityNode),
-          }
-        : undefined,
-      targetEntity: selectedErdTargetEntityNode
-        ? {
-            id: selectedErdTargetEntityNode.id,
-            kind: "entity",
-            label: selectedErdTargetEntityNode.data.label,
-            payload: normalizeErdEntityPayloadFromNode(selectedErdTargetEntityNode),
-          }
-        : undefined,
-    });
-
-    const side =
-      selectedErdRelationPayload.materialization?.mode === "fk"
-        ? selectedErdRelationPayload.materialization.dependentSide
-        : inferredSide;
-    setErdMaterializeDependentSide(side);
-    setErdMaterializeExistingFieldId("__new__");
-    setErdMaterializeUnique(
-      selectedErdRelationPayload.materialization?.mode === "fk"
-        ? selectedErdRelationPayload.materialization.fk.unique === true
-        : false,
-    );
-  }, [
-    selectedEdge?.source,
-    selectedEdge?.target,
-    selectedErdRelationPayload,
-    selectedErdSourceEntityNode,
-    selectedErdTargetEntityNode,
-  ]);
-
-  useEffect(() => {
-    if (!erdPendingFieldFocusId) {
-      return;
-    }
-
-    const focusId = erdPendingFieldFocusId;
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>(
-        `[data-erd-field-input="${focusId}:name"]`,
-      );
-      input?.focus();
-      input?.select();
-    });
-    setErdPendingFieldFocusId(null);
-  }, [erdPendingFieldFocusId]);
-
-  function syncFromSnapshot(snapshot: Parameters<typeof fromCanonicalSnapshotToFlowState>[0]) {
-    const next = fromCanonicalSnapshotToFlowState(snapshot);
-    nodesRef.current = next.nodes;
-    edgesRef.current = next.edges;
-    viewportRef.current = next.viewport;
-    layoutMetadataRef.current = next.layoutMetadata;
-    setNodes(next.nodes);
-    setEdges(next.edges);
-    setViewport(next.viewport);
-    setLayoutMetadata(next.layoutMetadata);
-    setHiddenDiagramNodeIds(next.hiddenNodeIds);
-    setComputedMindmapRootNodeId(next.computedRootNodeId ?? null);
-  }
-
-  function getCurrentSnapshot() {
-    return toCanonicalSnapshotFromFlowState(
-      project.id,
-      nodesRef.current,
-      edgesRef.current,
-      viewportRef.current,
-      layoutMetadataRef.current,
-    );
-  }
-
-  function setPendingCommandsState(
-    updater:
-      | PendingEditorCommand[]
-      | ((current: PendingEditorCommand[]) => PendingEditorCommand[]),
-  ) {
-    setPendingCommands((current) => {
-      const next = typeof updater === "function" ? updater(current) : updater;
-      pendingCommandsRef.current = next;
-      return next;
-    });
-  }
-
-  function markDirtyState(
-    message = editorT("autosave.pendingChangesQueued"),
-  ) {
-    setSaveState((current) => markEditorDirty(current, message, editorT));
-  }
-
-  function beginSaveRequest() {
-    const requestId = requestTrackerRef.current.issueRequestId();
-    saveInFlightRequestIdRef.current = requestId;
-    isSaveInFlightRef.current = true;
-    return requestId;
-  }
-
-  function finishSaveRequest(requestId: number) {
-    if (saveInFlightRequestIdRef.current !== requestId) {
-      return;
-    }
-
-    saveInFlightRequestIdRef.current = null;
-    isSaveInFlightRef.current = false;
-  }
-
-  function dequeueCommand(localVersion: number) {
-    setPendingCommandsState((current) =>
-      current.filter((entry) => entry.localVersion !== localVersion),
-    );
-  }
-
-  function hasInspectorDraftPendingChanges() {
-    const nodeDirty =
-      inspectorMode === "operational"
-        ? selectedNode !== null &&
-          operationalNodeDraft !== null &&
-          !areOperationalNodeDraftValuesEqual(selectedNode, operationalNodeDraft)
-        : selectedNode !== null &&
-          nodeInspectorDraft !== null &&
-          !areNodeDraftValuesEqual(selectedNode, nodeInspectorDraft);
-    const edgeDirty =
-      inspectorMode === "operational"
-        ? selectedEdge !== null &&
-          operationalEdgeDraft !== null &&
-          !areOperationalEdgeDraftValuesEqual(selectedEdge, operationalEdgeDraft)
-        : selectedEdge !== null &&
-          edgeInspectorDraft !== null &&
-          !areEdgeDraftValuesEqual(selectedEdge, edgeInspectorDraft);
-
-    return nodeDirty || edgeDirty;
-  }
-
-  function confirmInspectorDraftDiscardIfNeeded() {
-    if (!hasInspectorDraftPendingChanges()) {
-      return true;
-    }
-
-    return window.confirm(
-      editorT("shell.inspector.confirmDiscardDraft"),
-    );
-  }
-
   function selectItem(next: { nodeId: string | null; edgeId: string | null }) {
-    if (!confirmInspectorDraftDiscardIfNeeded()) {
-      return;
-    }
-
-    setSelectedNodeId(next.nodeId);
-    setSelectedEdgeId(next.edgeId);
-  }
-
-  function applyLocalCommandAndQueue(
-    command: EditorCommand,
-    successMessage?: string,
-  ): boolean {
-    try {
-      const nextSnapshot = applyEditorCommandLocally(
-        getCurrentSnapshot(),
-        project.id,
-        command,
-      );
-
-      syncFromSnapshot(nextSnapshot);
-      setServerSemanticAudit(null);
-      setLastErdExportPreview(null);
-      setGlobalErrorMessage(null);
-
-      const nextVersion = localMutationVersionRef.current + 1;
-      localMutationVersionRef.current = nextVersion;
-      setPendingCommandsState((current) => [
-        ...current,
-        { localVersion: nextVersion, command },
-      ]);
-      markDirtyState();
-      autosaveDebouncerRef.current.trigger();
-
-      if (successMessage && command.type === "updateNode") {
-        setNodeInspectorMessage(successMessage);
-      }
-
-      if (successMessage && command.type === "updateEdge") {
-        setEdgeInspectorMessage(successMessage);
-      }
-
-      return true;
-    } catch (error) {
-      const message = formatErrorMessage(error, editorT("shell.errors.applyChange"));
-      setGlobalErrorMessage(message);
-
-      if (command.type === "updateNode") {
-        setNodeInspectorMessage(message);
-      }
-
-      if (command.type === "updateEdge") {
-        setEdgeInspectorMessage(message);
-      }
-
-      return false;
-    }
-  }
-
-  async function flushPendingCommands(reason: "autosave" | "manual") {
-    if (isSaveInFlightRef.current) {
-      return;
-    }
-
-    const queue = pendingCommandsRef.current.slice();
-
-    if (queue.length === 0 && reason === "autosave") {
-      return;
-    }
-
-    const requestId = beginSaveRequest();
-    setSaveState((current) =>
-      markEditorSaving(
-        current,
-        reason === "manual"
-          ? editorT("autosave.savingManually")
-          : editorT("autosave.savingChanges"),
-      ),
-    );
-
-    try {
-      let expectedRevision = currentRevisionRef.current;
-
-      for (const entry of queue) {
-        let attempt = 0;
-
-        while (true) {
-          try {
-            const remoteResult = await applyEditorCommandRemotely(
-              project.id,
-              entry.command,
-              {
-                expectedRevision,
-                semanticMode: inspectorMode,
-              },
-            );
-            expectedRevision = remoteResult.newRevision;
-            setCurrentRevision(remoteResult.newRevision);
-            break;
-          } catch (error) {
-            const conflictRevision =
-              error instanceof EditorRemoteError && error.code === "CONFLICT"
-                ? error.payload?.currentRevision
-                : null;
-
-            if (typeof conflictRevision === "number" && attempt === 0) {
-              expectedRevision = conflictRevision;
-              setCurrentRevision(conflictRevision);
-              attempt += 1;
-              continue;
-            }
-
-            throw error;
-          }
-        }
-
-        if (requestTrackerRef.current.isStaleResponse(requestId)) {
-          return;
-        }
-
-        dequeueCommand(entry.localVersion);
-      }
-
-      if (requestTrackerRef.current.isStaleResponse(requestId)) {
-        return;
-      }
-
-      setGlobalErrorMessage(null);
-      if (pendingCommandsRef.current.length === 0) {
-        setSaveState((current) => markEditorSaveSuccess(current, Date.now(), editorT));
-      } else {
-        markDirtyState();
-        autosaveDebouncerRef.current.trigger();
-      }
-    } catch (error) {
-      if (requestTrackerRef.current.isStaleResponse(requestId)) {
-        return;
-      }
-
-      if (error instanceof EditorRemoteError) {
-        if (error.code === "CONFLICT") {
-          const current = error.payload?.currentRevision;
-          if (typeof current === "number") {
-            setCurrentRevision(current);
-          }
-        }
-      }
-
-      const message = formatErrorMessage(
-        error,
-        editorT("shell.errors.saveChanges"),
-      );
-      setSaveState((current) => markEditorSaveError(current, message));
-      setGlobalErrorMessage(message);
-    } finally {
-      finishSaveRequest(requestId);
-    }
-  }
-
-  autosaveFlushRef.current = async () => {
-    await flushPendingCommands("autosave");
-  };
-
-  async function handleManualSave() {
-    if (isSaveInFlightRef.current) {
-      return false;
-    }
-
-    autosaveDebouncerRef.current.cancel();
-
-    if (pendingCommandsRef.current.length > 0) {
-      await flushPendingCommands("manual");
-
-      if (pendingCommandsRef.current.length > 0 || isSaveInFlightRef.current) {
-        return false;
-      }
-    }
-
-    const snapshotLocalVersion = localMutationVersionRef.current;
-    const snapshotToSave = getCurrentSnapshot();
-    const requestId = beginSaveRequest();
-    setSaveState((current) =>
-      markEditorSaving(current, editorT("autosave.savingManually")),
-    );
-    setGlobalErrorMessage(null);
-
-    try {
-      const saveResult = await saveWorkingSnapshotForEditor({
-        projectId: project.id,
-        snapshot: snapshotToSave,
-        label: DEFAULT_SNAPSHOT_LABEL,
-        expectedRevision: currentRevisionRef.current,
-        semanticMode: inspectorMode,
-      });
-      setCurrentRevision(saveResult.newRevision);
-
-      if (requestTrackerRef.current.isStaleResponse(requestId)) {
-        return false;
-      }
-
-      setPendingCommandsState((current) =>
-        current.filter((entry) => entry.localVersion > snapshotLocalVersion),
-      );
-      setGlobalErrorMessage(null);
-
-      if (pendingCommandsRef.current.length === 0) {
-        setSaveState((current) => markEditorSaveSuccess(current, Date.now(), editorT));
-      } else {
-        markDirtyState();
-        autosaveDebouncerRef.current.trigger();
-      }
-
-      return true;
-    } catch (error) {
-      if (requestTrackerRef.current.isStaleResponse(requestId)) {
-        return false;
-      }
-
-      const message = formatErrorMessage(error, editorT("shell.errors.saveSnapshot"));
-      setSaveState((current) => markEditorSaveError(current, message));
-      setGlobalErrorMessage(message);
-      return false;
-    } finally {
-      finishSaveRequest(requestId);
-    }
-  }
-
-  async function handleCreateVersion() {
-    if (isCreatingVersion || saveState.status === "saving") {
-      return;
-    }
-
-    setIsCreatingVersion(true);
-    setVersionCreateFeedback(null);
-    const normalizedVersionName = newVersionName.trim();
-
-    try {
-      if (pendingCommandsRef.current.length > 0 || saveState.isDirty) {
-        const saved = await handleManualSave();
-
-        if (!saved) {
-            throw new Error(
-            editorT("shell.versions.errors.saveBeforeCreate"),
-          );
-        }
-      }
-
-      const result = await createSnapshotVersionForEditor({
-        projectId: project.id,
-        origin: "manual",
-        label: normalizedVersionName || undefined,
-      });
-
-      if (normalizedVersionName) {
-        setLocalVersionNames((current) => ({
-          ...current,
-          [result.snapshotVersion.id]: normalizedVersionName,
-        }));
-        setVersionNameDrafts((current) => ({
-          ...current,
-          [result.snapshotVersion.id]: normalizedVersionName,
-        }));
-      }
-
-      setVersionCreateFeedback({
-        kind: "success",
-        message: result.message,
-      });
-      setNewVersionName("");
-      setVersionActionFeedback(null);
-      setVersionDiffFeedback(null);
-      setVersionDiffSummary(null);
-      void (async () => {
-        try {
-          const versions = await listSnapshotVersionsForEditor(project.id);
-          setSnapshotVersions(versions);
-        } catch {
-          // Mantem feedback principal de criacao; o usuario pode atualizar manualmente.
-        }
-      })();
-    } catch (error) {
-      setVersionCreateFeedback({
-        kind: "error",
-        message: formatErrorMessage(error, editorT("shell.versions.errors.create")),
-      });
-    } finally {
-      setIsCreatingVersion(false);
-    }
-  }
-
-  async function handleRefreshVersionList() {
-    if (isRefreshingVersionList || activeVersionRestoreId !== null) {
-      return;
-    }
-
-    setIsRefreshingVersionList(true);
-    setVersionActionFeedback(null);
-
-    try {
-      const versions = await listSnapshotVersionsForEditor(project.id);
-      setSnapshotVersions(versions);
-      setVersionActionFeedback({
-        kind: "success",
-        message: editorT("shell.versions.refreshSuccess", { count: versions.length }),
-      });
-    } catch (error) {
-      setVersionActionFeedback({
-        kind: "error",
-        message: formatErrorMessage(error, editorT("shell.versions.errors.refresh")),
-      });
-    } finally {
-      setIsRefreshingVersionList(false);
-    }
-  }
-
-  function handleVersionNameDraftChange(versionId: string, value: string) {
-    setVersionNameDrafts((current) => ({
-      ...current,
-      [versionId]: value,
-    }));
-  }
-
-  function handleSaveVersionName(versionId: string) {
-    const normalizedName = (versionNameDrafts[versionId] ?? "").trim();
-
-    setLocalVersionNames((current) => {
-      const next = { ...current };
-
-      if (!normalizedName) {
-        delete next[versionId];
-        return next;
-      }
-
-      next[versionId] = normalizedName.slice(0, 120);
-      return next;
-    });
-
-    setVersionActionFeedback({
-      kind: "success",
-      message: normalizedName
-        ? editorT("shell.versions.localNameSaved")
-        : editorT("shell.versions.localNameRemoved"),
-    });
-  }
-
-  function getVersionDisplayName(version: EditorSnapshotVersionSummary) {
-    return (
-      localVersionNames[version.id] ||
-      version.label?.trim() ||
-      editorT("shell.versions.unnamed")
-    );
-  }
-
-  async function handleCompareVersion(versionId: string) {
-    if (
-      saveState.status === "saving" ||
-      activeVersionRestoreId !== null ||
-      activeVersionCompareId !== null
-    ) {
-      return;
-    }
-
-    setActiveVersionCompareId(versionId);
-    setVersionDiffFeedback(null);
-    setVersionDiffSummary(null);
-
-    try {
-      const [diff, snapshotVersion] = await Promise.all([
-        loadSnapshotVersionDiffForEditor(project.id, versionId),
-        loadSnapshotVersionDetailForEditor(project.id, versionId),
-      ]);
-      const executiveSummary = buildVersionDiffSummary({
-        baseSnapshot: snapshotVersion.snapshot,
-        targetSnapshot: getCurrentSnapshot(),
-        diff,
-        t: editorT,
-      });
-
-      setVersionDiffSummary(executiveSummary);
-      setVersionDiffFeedback({
-        kind: "info",
-        message: buildVersionDiffFeedbackMessage(diff, editorT),
-      });
-      setVersionActionFeedback(null);
-    } catch (error) {
-      setVersionDiffSummary(null);
-      setVersionDiffFeedback({
-        kind: "error",
-        message: formatErrorMessage(error, editorT("shell.versions.errors.compare")),
-      });
-    } finally {
-      setActiveVersionCompareId(null);
-    }
-  }
-
-  async function handleRestoreVersion(version: EditorSnapshotVersionSummary) {
-    if (
-      saveState.status === "saving" ||
-      isCreatingVersion ||
-      activeVersionRestoreId !== null
-    ) {
-      return;
-    }
-
-    const hasLocalPendingChanges =
-      pendingCommandsRef.current.length > 0 || saveState.isDirty;
-    const confirmMessage = hasLocalPendingChanges
-      ? editorT("shell.versions.confirmRestoreDiscard")
-      : editorT("shell.versions.confirmRestore");
-
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    autosaveDebouncerRef.current.cancel();
-    setActiveVersionRestoreId(version.id);
-    setVersionActionFeedback(null);
-    setVersionDiffFeedback(null);
-    setVersionDiffSummary(null);
-
-    try {
-      const result = await restoreSnapshotVersionForEditor({
-        projectId: project.id,
-        versionId: version.id,
-      });
-
-      syncFromSnapshot(result.workingSnapshot.snapshot);
-      setCurrentRevision(result.newRevision);
-      setSelectedNodeId(null);
-      setSelectedEdgeId(null);
-      setPendingCommandsState([]);
-      localMutationVersionRef.current = 0;
-      setSaveState({
-        status: "saved",
-        isDirty: false,
-        message: editorT("shell.versions.restoreSaved"),
-        lastSavedAt: Date.now(),
-      });
-      setGlobalErrorMessage(null);
-      setQuerySyncMessage(editorT("shell.versions.restoreSynced"));
-      setVersionActionFeedback({
-        kind: "success",
-        message: result.message,
-      });
-    } catch (error) {
-      setVersionActionFeedback({
-        kind: "error",
-        message: formatErrorMessage(error, editorT("shell.versions.errors.restore")),
-      });
-    } finally {
-      setActiveVersionRestoreId(null);
-    }
+    selectEditorItem(next, confirmInspectorDraftDiscardIfNeeded);
   }
 
   async function handleImportPrismaSchema() {
@@ -2705,94 +1592,19 @@ export function EditorShell({
     return () => {
       active = false;
     };
-  }, [project.id, setEdges, setNodes]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadVersionsOnMount() {
-      setIsRefreshingVersionList(true);
-
-      try {
-        const versions = await listSnapshotVersionsForEditor(project.id);
-
-        if (!active) {
-          return;
-        }
-
-        setSnapshotVersions(versions);
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-
-        setVersionActionFeedback({
-          kind: "error",
-          message: formatErrorMessage(error, editorT("shell.versions.errors.load")),
-        });
-      } finally {
-        if (active) {
-          setIsRefreshingVersionList(false);
-        }
-      }
-    }
-
-    void loadVersionsOnMount();
-    return () => {
-      active = false;
-    };
-  }, [project.id]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(versionNamesStorageKey);
-      const parsed = raw ? JSON.parse(raw) : {};
-      const sanitized = sanitizeVersionNameMap(parsed);
-      setLocalVersionNames(sanitized);
-      setVersionNameDrafts(sanitized);
-    } catch {
-      setLocalVersionNames({});
-      setVersionNameDrafts({});
-    }
-  }, [versionNamesStorageKey]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(
-        versionNamesStorageKey,
-        JSON.stringify(localVersionNames),
-      );
-    } catch {
-      // Ignora indisponibilidade de storage local.
-    }
-  }, [localVersionNames, versionNamesStorageKey]);
-
-  useEffect(() => {
-    setVersionNameDrafts((current) => {
-      const next = { ...current };
-      let changed = false;
-
-      for (const version of snapshotVersions) {
-        const fallbackLabel =
-          localVersionNames[version.id] ?? version.label?.trim() ?? "";
-
-        if (next[version.id] === undefined) {
-          next[version.id] = fallbackLabel;
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
-  }, [snapshotVersions, localVersionNames]);
+  }, [
+    editorT,
+    localMutationVersionRef,
+    pendingCommandsRef,
+    project.id,
+    setCurrentRevision,
+    setEdges,
+    setNodes,
+    setPendingCommandsState,
+    setSaveState,
+    setSemanticPolicy,
+    syncFromSnapshot,
+  ]);
 
   const saveStatusLabel = useMemo(() => {
     switch (saveState.status) {
@@ -2814,24 +1626,6 @@ export function EditorShell({
   const layoutPolicyLabel = isReapplyLayoutBlockedByPolicy
     ? editorT("shell.layoutPolicy.blocked")
     : editorT("shell.layoutPolicy.allowed");
-  const nodeInspectorDirty =
-    inspectorMode === "operational"
-      ? selectedNode !== null && operationalNodeDraft !== null
-        ? !areOperationalNodeDraftValuesEqual(selectedNode, operationalNodeDraft)
-        : false
-      : selectedNode !== null && nodeInspectorDraft !== null
-        ? !areNodeDraftValuesEqual(selectedNode, nodeInspectorDraft)
-        : false;
-  const edgeInspectorDirty =
-    inspectorMode === "operational"
-      ? selectedEdge !== null && operationalEdgeDraft !== null
-        ? !areOperationalEdgeDraftValuesEqual(selectedEdge, operationalEdgeDraft)
-        : false
-      : selectedEdge !== null && edgeInspectorDraft !== null
-        ? !areEdgeDraftValuesEqual(selectedEdge, edgeInspectorDraft)
-        : false;
-  const nodeInspectorHasErrors = Object.keys(nodeInspectorErrors).length > 0;
-  const edgeInspectorHasErrors = Object.keys(edgeInspectorErrors).length > 0;
   const operationalTagPreview = operationalNodeDraft
     ? normalizeTagsInput(operationalNodeDraft.tagsText)
     : [];
@@ -2984,6 +1778,10 @@ export function EditorShell({
   }, editorT);
   const isProcessDiagram = diagramMode.inspector.kind === "process";
   const isGraphDiagram = Boolean(diagramMode.semantic.graph);
+  const DiagramInspectorAdapter = useMemo(
+    () => resolveEditorDiagramInspectorAdapter(diagramMode.inspector.kind),
+    [diagramMode.inspector.kind],
+  );
   const processInspectorStrategy: EditorDiagramProcessInspectorStrategy | null =
     diagramMode.inspector.kind === "process"
       ? (diagramMode.inspector as EditorDiagramProcessInspectorStrategy)
@@ -3072,24 +1870,6 @@ export function EditorShell({
           defaultBadge: inspectorSelectionState.badgeLabel,
           t: editorT,
         });
-  const operationalNodeTitleLabel = inspectorCopy.nodeTitleLabel;
-  const operationalNodeKindLabel = inspectorCopy.nodeKindLabel;
-  const operationalNodeDescriptionLabel = inspectorCopy.nodeDescriptionLabel;
-  const operationalNodeDescriptionPlaceholder =
-    inspectorCopy.nodeDescriptionPlaceholder;
-  const operationalNodeTagsLabel = inspectorCopy.nodeTagsLabel;
-  const operationalNodeTagsPlaceholder = inspectorCopy.nodeTagsPlaceholder;
-  const operationalNodeTagsHelper = inspectorCopy.nodeTagsHelper;
-  const operationalNodeContextTitle = inspectorCopy.nodeContextTitle;
-  const operationalGeneralSectionTitle = inspectorCopy.generalSectionTitle;
-  const operationalDetailsSectionTitle = inspectorCopy.detailsSectionTitle;
-  const operationalRelationsSectionTitle = inspectorCopy.relationsSectionTitle;
-  const operationalEdgeLabelLabel = inspectorCopy.edgeLabelLabel;
-  const operationalEdgeGeneralSectionTitle =
-    inspectorCopy.edgeGeneralSectionTitle;
-  const operationalEdgeKindLabel = inspectorCopy.edgeKindLabel;
-  const operationalEdgeSourceLabel = inspectorCopy.edgeSourceLabel;
-  const operationalEdgeTargetLabel = inspectorCopy.edgeTargetLabel;
   const graphSelectedNodeKindLabel =
     graphSelectedNodeSemantic
       ? graphSelectedNodeSemantic.kindLabel
@@ -3098,7 +1878,6 @@ export function EditorShell({
     graphSelectedNodeSemantic
       ? graphSelectedNodeSemantic.kindDescription
       : null;
-  const hasInspectorDirtyDraft = nodeInspectorDirty || edgeInspectorDirty;
   const isInspectorVisible = !isFocusInspectorCollapsed;
   const shouldShowMetadataPanel = !isCanvasFocusMode;
   const shouldShowPrismaPanel = !isCanvasFocusMode;
@@ -3203,7 +1982,7 @@ export function EditorShell({
     if (quickFindActiveIndex > quickFindOptions.length - 1) {
       setQuickFindActiveIndex(quickFindOptions.length - 1);
     }
-  }, [quickFindActiveIndex, quickFindOptions.length]);
+  }, [quickFindActiveIndex, quickFindOptions.length, setQuickFindActiveIndex]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -3255,20 +2034,6 @@ export function EditorShell({
     }));
   }, [diagramMode, isAddNodeDialogOpen, personaDefaultNodeKind]);
 
-  function handleTogglePanel(panelKey: keyof EditorPanelState) {
-    setPanelState((current) => ({
-      ...current,
-      [panelKey]: !current[panelKey],
-    }));
-  }
-
-  function handleToggleInspectorSection(sectionKey: keyof InspectorSectionState) {
-    setInspectorSections((current) => ({
-      ...current,
-      [sectionKey]: !current[sectionKey],
-    }));
-  }
-
   function handleZoomIn() {
     reactFlowInstanceRef.current?.zoomIn({ duration: 180 });
   }
@@ -3313,21 +2078,6 @@ export function EditorShell({
     }
 
     handleFitView();
-  }
-
-  function handleOpenQuickFind() {
-    quickFindReturnFocusRef.current = document.activeElement as HTMLElement | null;
-    setQuickFindQuery("");
-    setQuickFindActiveIndex(0);
-    setIsQuickFindOpen(true);
-  }
-
-  function handleCloseQuickFind() {
-    setIsQuickFindOpen(false);
-    setQuickFindQuery("");
-    window.requestAnimationFrame(() => {
-      quickFindReturnFocusRef.current?.focus();
-    });
   }
 
   function handleMoveQuickFindActiveIndex(direction: "next" | "previous") {
@@ -3494,15 +2244,6 @@ export function EditorShell({
     });
   }
 
-  async function ensureQueueFlushedBeforeDirectWrite() {
-    if (pendingCommandsRef.current.length === 0 && !saveState.isDirty) {
-      return true;
-    }
-
-    await flushPendingCommands("manual");
-    return pendingCommandsRef.current.length === 0 && !isSaveInFlightRef.current;
-  }
-
   function openTechnicalOverrideDialog(input: {
     title: string;
     message: string;
@@ -3535,8 +2276,7 @@ export function EditorShell({
     }
 
     try {
-      const result = await createEdgeForEditor({
-        projectId: project.id,
+      const result = await createEdgeDirect({
         edge: {
           id: crypto.randomUUID(),
           sourceNodeId: input.sourceNodeId,
@@ -3545,14 +2285,15 @@ export function EditorShell({
           label: getEdgeKindLabel(input.edgeKind, "operational"),
           data: {},
         },
-        expectedRevision: currentRevisionRef.current,
         semanticMode: inspectorMode,
         allowSemanticOverride: input.allowSemanticOverride,
         overrideReason: input.overrideReason,
       });
+      if (!result.ok) {
+        setGlobalErrorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+        return false;
+      }
 
-      syncFromSnapshot(result.workingSnapshot.snapshot);
-      setCurrentRevision(result.newRevision);
       setPendingConnectionAssistant(null);
       setGlobalErrorMessage(null);
       return true;
@@ -3724,87 +2465,9 @@ export function EditorShell({
       },
     });
   }
-
-  function enterCanvasFocusMode() {
-    if (isCanvasFocusMode) {
-      return;
-    }
-
-    setIsQuickFindOpen(false);
-    panelStateBeforeFocusRef.current = panelState;
-    setPanelState({
-      metadata: false,
-      prismaImport: false,
-      versions: false,
-    });
-    setIsCanvasFocusMode(true);
-    setIsFocusInspectorCollapsed(true);
-    window.requestAnimationFrame(() => {
-      canvasRegionRef.current?.focus();
-    });
-  }
-
-  function exitCanvasFocusMode() {
-    if (!isCanvasFocusMode) {
-      return;
-    }
-
-    setIsQuickFindOpen(false);
-    setIsCanvasFocusMode(false);
-    setPanelState(panelStateBeforeFocusRef.current);
-    setIsFocusInspectorCollapsed(false);
-  }
-
-  function handleToggleCanvasFocusMode() {
-    if (isCanvasFocusMode) {
-      exitCanvasFocusMode();
-      return;
-    }
-
-    enterCanvasFocusMode();
-  }
-
-  function handleToggleInspectorVisibility() {
-    setIsFocusInspectorCollapsed((current) => !current);
-  }
-
-  async function runServerSemanticAudit() {
-    try {
-      const audit = await runSemanticAuditForEditor({
-        projectId: project.id,
-        mode: inspectorMode,
-      });
-      setServerSemanticAudit(audit);
-      setQuerySyncMessage(
-        editorT("shell.messages.auditCompleted", { count: audit.counters.total }),
-      );
-      setGlobalErrorMessage(null);
-      return audit;
-    } catch (error) {
-      setServerSemanticAudit(null);
-      const message = formatErrorMessage(
-        error,
-        editorT("shell.errors.serverSemanticAudit"),
-      );
-      setGlobalErrorMessage(message);
-      return null;
-    }
-  }
-
   async function handleToggleValidationPanel() {
-    const shouldOpen = !isValidationPanelOpen;
-    setIsValidationPanelOpen(shouldOpen);
-
-    if (!shouldOpen) {
-      return;
-    }
-
     setIsFocusInspectorCollapsed(false);
-    await runServerSemanticAudit();
-  }
-
-  function clonePayload(payload: Record<string, unknown>) {
-    return JSON.parse(JSON.stringify(payload ?? {})) as Record<string, unknown>;
+    await toggleValidationPanelController();
   }
 
   function buildLayoutNodesFromFlowNodes(inputNodes: RFNode[] = nodesRef.current) {
@@ -4125,211 +2788,191 @@ export function EditorShell({
     handleCancelInlineRename();
   }
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && pendingConnectionAssistant) {
-        event.preventDefault();
-        setPendingConnectionAssistant(null);
-        return;
+  const handleGlobalKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Escape" && pendingConnectionAssistant) {
+      event.preventDefault();
+      setPendingConnectionAssistant(null);
+      return;
+    }
+
+    if (event.key === "Escape" && pendingErdQuickRelate) {
+      event.preventDefault();
+      setPendingErdQuickRelate(null);
+      return;
+    }
+
+    if (event.key === "Escape" && pendingNodeRepair) {
+      event.preventDefault();
+      setPendingNodeRepair(null);
+      return;
+    }
+
+    if (event.key === "Escape" && pendingSemanticOverride) {
+      event.preventDefault();
+      handleCancelSemanticOverride();
+      return;
+    }
+
+    if (event.key === "Escape" && inlineRenameNodeId) {
+      event.preventDefault();
+      handleCancelInlineRename();
+      return;
+    }
+
+    if (pendingConnectionAssistant || pendingNodeRepair || pendingSemanticOverride) {
+      return;
+    }
+
+    if (event.key === "Escape" && isAddNodeDialogOpen) {
+      event.preventDefault();
+      setIsAddNodeDialogOpen(false);
+      setAddNodeErrorMessage(null);
+      return;
+    }
+
+    const normalizedKey = event.key.toLowerCase();
+    const hasCommandModifier = event.ctrlKey || event.metaKey;
+    const targetIsEditable = isEditableKeyboardTarget(event.target);
+
+    if (
+      hasCommandModifier &&
+      !event.altKey &&
+      normalizedKey === "c" &&
+      !targetIsEditable
+    ) {
+      event.preventDefault();
+      void handleCopySelectionToClipboard().catch(() => {
+        setGlobalErrorMessage(editorT("shell.errors.copySelection"));
+      });
+      return;
+    }
+
+    if (
+      hasCommandModifier &&
+      !event.altKey &&
+      normalizedKey === "v" &&
+      !targetIsEditable
+    ) {
+      event.preventDefault();
+      void handlePasteFromClipboard().catch(() => {
+        setGlobalErrorMessage(editorT("shell.errors.pasteSelection"));
+      });
+      return;
+    }
+
+    if (
+      hasCommandModifier &&
+      !event.altKey &&
+      normalizedKey === "x" &&
+      !targetIsEditable
+    ) {
+      event.preventDefault();
+      void handleCutSelectionToClipboard().catch(() => {
+        setGlobalErrorMessage(editorT("shell.errors.cutSelection"));
+      });
+      return;
+    }
+
+    if (
+      hasCommandModifier &&
+      !event.altKey &&
+      normalizedKey === "d" &&
+      !targetIsEditable
+    ) {
+      event.preventDefault();
+      void handleDuplicateSelection().catch(() => {
+        setGlobalErrorMessage(editorT("shell.errors.duplicateSelection"));
+      });
+      return;
+    }
+
+    if (
+      (event.key === "Delete" || event.key === "Backspace") &&
+      !hasCommandModifier &&
+      !event.altKey &&
+      !targetIsEditable
+    ) {
+      event.preventDefault();
+      if (selectedNodeId || selectedEdgeId) {
+        handleRemoveSelected();
       }
+      return;
+    }
 
-      if (event.key === "Escape" && pendingErdQuickRelate) {
-        event.preventDefault();
-        setPendingErdQuickRelate(null);
-        return;
-      }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      quickFindReturnFocusRef.current = document.activeElement as HTMLElement | null;
+      setQuickFindQuery("");
+      setQuickFindActiveIndex(0);
+      setIsQuickFindOpen(true);
+      return;
+    }
 
-      if (event.key === "Escape" && pendingNodeRepair) {
-        event.preventDefault();
-        setPendingNodeRepair(null);
-        return;
-      }
+    if (event.key === "Escape" && isQuickFindOpen) {
+      event.preventDefault();
+      setIsQuickFindOpen(false);
+      setQuickFindQuery("");
+      window.requestAnimationFrame(() => {
+        quickFindReturnFocusRef.current?.focus();
+      });
+      return;
+    }
 
-      if (event.key === "Escape" && pendingSemanticOverride) {
-        event.preventDefault();
-        handleCancelSemanticOverride();
-        return;
-      }
+    if (event.key === "Escape" && isCanvasFocusMode) {
+      event.preventDefault();
+      setIsCanvasFocusMode(false);
+      setPanelState(panelStateBeforeFocusRef.current);
+      setIsFocusInspectorCollapsed(false);
+      return;
+    }
 
-      if (event.key === "Escape" && inlineRenameNodeId) {
-        event.preventDefault();
-        handleCancelInlineRename();
-        return;
-      }
+    if (event.shiftKey && event.key.toLowerCase() === "f") {
+      event.preventDefault();
 
-      if (
-        pendingConnectionAssistant ||
-        pendingNodeRepair ||
-        pendingSemanticOverride
-      ) {
-        return;
-      }
-
-      if (event.key === "Escape" && isAddNodeDialogOpen) {
-        event.preventDefault();
-        setIsAddNodeDialogOpen(false);
-        setAddNodeErrorMessage(null);
-        return;
-      }
-
-      const normalizedKey = event.key.toLowerCase();
-      const hasCommandModifier = event.ctrlKey || event.metaKey;
-      const targetIsEditable = isEditableKeyboardTarget(event.target);
-
-      if (
-        hasCommandModifier &&
-        !event.altKey &&
-        normalizedKey === "c" &&
-        !targetIsEditable
-      ) {
-        event.preventDefault();
-        void handleCopySelectionToClipboard().catch(() => {
-          setGlobalErrorMessage(editorT("shell.errors.copySelection"));
-        });
-        return;
-      }
-
-      if (
-        hasCommandModifier &&
-        !event.altKey &&
-        normalizedKey === "v" &&
-        !targetIsEditable
-      ) {
-        event.preventDefault();
-        void handlePasteFromClipboard().catch(() => {
-          setGlobalErrorMessage(editorT("shell.errors.pasteSelection"));
-        });
-        return;
-      }
-
-      if (
-        hasCommandModifier &&
-        !event.altKey &&
-        normalizedKey === "x" &&
-        !targetIsEditable
-      ) {
-        event.preventDefault();
-        void handleCutSelectionToClipboard().catch(() => {
-          setGlobalErrorMessage(editorT("shell.errors.cutSelection"));
-        });
-        return;
-      }
-
-      if (
-        hasCommandModifier &&
-        !event.altKey &&
-        normalizedKey === "d" &&
-        !targetIsEditable
-      ) {
-        event.preventDefault();
-        void handleDuplicateSelection().catch(() => {
-          setGlobalErrorMessage(editorT("shell.errors.duplicateSelection"));
-        });
-        return;
-      }
-
-      if (
-        (event.key === "Delete" || event.key === "Backspace") &&
-        !hasCommandModifier &&
-        !event.altKey &&
-        !targetIsEditable
-      ) {
-        event.preventDefault();
-        if (selectedNodeId || selectedEdgeId) {
-          handleRemoveSelected();
-        }
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        quickFindReturnFocusRef.current = document.activeElement as HTMLElement | null;
-        setQuickFindQuery("");
-        setQuickFindActiveIndex(0);
-        setIsQuickFindOpen(true);
-        return;
-      }
-
-      if (event.key === "Escape" && isQuickFindOpen) {
-        event.preventDefault();
-        setIsQuickFindOpen(false);
-        setQuickFindQuery("");
-        window.requestAnimationFrame(() => {
-          quickFindReturnFocusRef.current?.focus();
-        });
-        return;
-      }
-
-      if (event.key === "Escape" && isCanvasFocusMode) {
-        event.preventDefault();
+      if (isCanvasFocusMode) {
         setIsCanvasFocusMode(false);
         setPanelState(panelStateBeforeFocusRef.current);
         setIsFocusInspectorCollapsed(false);
         return;
       }
 
-      if (event.shiftKey && event.key.toLowerCase() === "f") {
-        event.preventDefault();
+      panelStateBeforeFocusRef.current = panelState;
+      setPanelState({
+        metadata: false,
+        prismaImport: false,
+        versions: false,
+      });
+      setIsCanvasFocusMode(true);
+      setIsFocusInspectorCollapsed(true);
+      window.requestAnimationFrame(() => {
+        canvasRegionRef.current?.focus();
+      });
+      return;
+    }
 
-        if (isCanvasFocusMode) {
-          setIsCanvasFocusMode(false);
-          setPanelState(panelStateBeforeFocusRef.current);
-          setIsFocusInspectorCollapsed(false);
-          return;
-        }
+    if (
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey &&
+      event.key.toLowerCase() === "a" &&
+      !isEditableKeyboardTarget(event.target)
+    ) {
+      event.preventDefault();
+      handleOpenAddDialog();
+    }
+  });
 
-        panelStateBeforeFocusRef.current = panelState;
-        setPanelState({
-          metadata: false,
-          prismaImport: false,
-          versions: false,
-        });
-        setIsCanvasFocusMode(true);
-        setIsFocusInspectorCollapsed(true);
-        window.requestAnimationFrame(() => {
-          canvasRegionRef.current?.focus();
-        });
-        return;
-      }
-
-      if (
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "a" &&
-        !isEditableKeyboardTarget(event.target)
-      ) {
-        event.preventDefault();
-        handleOpenAddDialog();
-      }
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      handleGlobalKeyDown(event);
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [
-    handleCancelSemanticOverride,
-    handleCancelInlineRename,
-    handleCopySelectionToClipboard,
-    handleCutSelectionToClipboard,
-    handleDuplicateSelection,
-    handleOpenAddDialog,
-    handlePasteFromClipboard,
-    handleRemoveSelected,
-    isAddNodeDialogOpen,
-    isCanvasFocusMode,
-    isQuickFindOpen,
-    pendingConnectionAssistant,
-    pendingErdQuickRelate,
-    pendingNodeRepair,
-    pendingSemanticOverride,
-    inlineRenameNodeId,
-    panelState,
-    selectedEdgeId,
-    selectedNodeId,
-  ]);
+  }, []);
 
   function handleCloseAddDialog() {
     setIsAddNodeDialogOpen(false);
@@ -4606,11 +3249,6 @@ export function EditorShell({
         ? current.filter((item) => item !== nodeId)
         : [...current, nodeId],
     );
-  }
-
-  function handleCancelConnectionAssistant() {
-    setPendingConnectionAssistant(null);
-    setQuerySyncMessage(editorT("shell.messages.connectionCancelled"));
   }
 
   function handleCancelErdQuickRelate() {
@@ -5231,7 +3869,7 @@ export function EditorShell({
   }
 
   function handleCancelPendingNodeRepair() {
-    setPendingNodeRepair(null);
+    dismissPendingNodeRepair();
     setNodeInspectorMessage(editorT("shell.messages.kindChangeCancelled"));
   }
 
@@ -5280,8 +3918,7 @@ export function EditorShell({
   }
 
   function handleCancelSemanticOverride() {
-    setPendingSemanticOverride(null);
-    setSemanticOverrideReason("");
+    dismissSemanticOverride();
   }
 
   async function handleConfirmSemanticOverride() {
@@ -5310,426 +3947,6 @@ export function EditorShell({
         formatErrorMessage(error, editorT("shell.errors.applySemanticOverride")),
       );
     }
-  }
-
-  function buildClipboardFragmentFromSelection(): MapiaClipboardFragment | null {
-    if (selectedNode) {
-      return {
-        version: 1,
-        sourceProjectId: project.id,
-        nodes: [
-          {
-            id: selectedNode.id,
-            kind: selectedNode.data.kind,
-            label: selectedNode.data.label,
-            position: { x: selectedNode.position.x, y: selectedNode.position.y },
-            data: clonePayload(selectedNode.data.payload),
-          },
-        ],
-        edges: [],
-      };
-    }
-
-    if (selectedEdge) {
-      const sourceNode = nodesRef.current.find((node) => node.id === selectedEdge.source);
-      const targetNode = nodesRef.current.find((node) => node.id === selectedEdge.target);
-
-      if (!sourceNode || !targetNode) {
-        return null;
-      }
-
-      return {
-        version: 1,
-        sourceProjectId: project.id,
-        nodes: [
-          {
-            id: sourceNode.id,
-            kind: sourceNode.data.kind,
-            label: sourceNode.data.label,
-            position: { x: sourceNode.position.x, y: sourceNode.position.y },
-            data: clonePayload(sourceNode.data.payload),
-          },
-          {
-            id: targetNode.id,
-            kind: targetNode.data.kind,
-            label: targetNode.data.label,
-            position: { x: targetNode.position.x, y: targetNode.position.y },
-            data: clonePayload(targetNode.data.payload),
-          },
-        ],
-        edges: [
-          {
-            id: selectedEdge.id,
-            sourceNodeId: selectedEdge.source,
-            targetNodeId: selectedEdge.target,
-            kind: selectedEdge.data?.kind ?? "flows-to",
-            label: selectedEdge.label ? String(selectedEdge.label) : undefined,
-            data: clonePayload(selectedEdge.data?.payload ?? {}),
-          },
-        ],
-      };
-    }
-
-    return null;
-  }
-
-  async function writeMapiaClipboardFragment(fragment: MapiaClipboardFragment) {
-    const serialized = JSON.stringify(fragment);
-    if (!navigator.clipboard) {
-      throw new Error(editorT("shell.errors.clipboardUnavailable"));
-    }
-
-    const supportsCustomMime =
-      typeof ClipboardItem !== "undefined" && typeof navigator.clipboard.write === "function";
-
-    if (supportsCustomMime) {
-      const item = new ClipboardItem({
-        [MAPIA_CLIPBOARD_MIME]: new Blob([serialized], {
-          type: MAPIA_CLIPBOARD_MIME,
-        }),
-        "text/plain": new Blob([serialized], { type: "text/plain" }),
-      });
-      await navigator.clipboard.write([item]);
-      return;
-    }
-
-    await navigator.clipboard.writeText(serialized);
-  }
-
-  async function readMapiaClipboardFragment(): Promise<MapiaClipboardFragment | null> {
-    if (!navigator.clipboard) {
-      return null;
-    }
-
-    if (typeof navigator.clipboard.read === "function") {
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          if (!item.types.includes(MAPIA_CLIPBOARD_MIME)) {
-            continue;
-          }
-
-          const blob = await item.getType(MAPIA_CLIPBOARD_MIME);
-          const text = await blob.text();
-          return JSON.parse(text) as MapiaClipboardFragment;
-        }
-      } catch {
-        // Fallback para readText abaixo.
-      }
-    }
-
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text.trim()) {
-        return null;
-      }
-      const parsed = JSON.parse(text) as Partial<MapiaClipboardFragment>;
-      if (parsed.version !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
-        return null;
-      }
-      return parsed as MapiaClipboardFragment;
-    } catch {
-      return null;
-    }
-  }
-
-  async function handleCopySelectionToClipboard() {
-    const fragment = buildClipboardFragmentFromSelection();
-    if (!fragment) {
-      return false;
-    }
-
-    await writeMapiaClipboardFragment(fragment);
-    setQuerySyncMessage(editorT("shell.messages.selectionCopied"));
-    return true;
-  }
-
-  function buildClipboardCommandsDraft(
-    fragment: MapiaClipboardFragment,
-    options?: {
-      edgeFilter?: (edgeCommand: ClipboardAddEdgeCommand) => boolean;
-    },
-  ): ClipboardCommandsDraft {
-    const idMap = new Map<string, string>();
-    let skippedEdges = 0;
-    const nodeCommands: ClipboardAddNodeCommand[] = [];
-    const edgeCommands: ClipboardAddEdgeCommand[] = [];
-
-    for (const node of fragment.nodes) {
-      const nextId = crypto.randomUUID();
-      idMap.set(node.id, nextId);
-      nodeCommands.push({
-        type: "addNode",
-        node: {
-          id: nextId,
-          kind: node.kind,
-          label: `${node.label} (copia)`,
-          position: {
-            x: node.position.x + DEFAULT_ADD_NODE_OFFSET.x / 2,
-            y: node.position.y + DEFAULT_ADD_NODE_OFFSET.y / 2,
-          },
-          data: clonePayload(node.data),
-        },
-      });
-    }
-
-    for (const edge of fragment.edges) {
-      const sourceNodeId = idMap.get(edge.sourceNodeId);
-      const targetNodeId = idMap.get(edge.targetNodeId);
-      if (!sourceNodeId || !targetNodeId) {
-        skippedEdges += 1;
-        continue;
-      }
-
-      const edgeCommand: ClipboardAddEdgeCommand = {
-        type: "addEdge",
-        edge: {
-          id: crypto.randomUUID(),
-          sourceNodeId,
-          targetNodeId,
-          kind: edge.kind,
-          label: edge.label,
-          data: clonePayload(edge.data),
-        },
-      };
-      if (options?.edgeFilter && !options.edgeFilter(edgeCommand)) {
-        skippedEdges += 1;
-        continue;
-      }
-
-      edgeCommands.push(edgeCommand);
-    }
-
-    const firstNodeId = nodeCommands[0]?.node.id;
-
-    return {
-      nodeCommands,
-      edgeCommands,
-      skippedEdges,
-      firstInsertedNodeId: firstNodeId,
-    };
-  }
-
-  function applyClipboardCommandsLocally(draft: ClipboardCommandsDraft) {
-    let appliedNodes = 0;
-    let appliedEdges = 0;
-
-    for (const command of draft.nodeCommands) {
-      if (applyLocalCommandAndQueue(command)) {
-        appliedNodes += 1;
-      }
-    }
-
-    for (const command of draft.edgeCommands) {
-      if (applyLocalCommandAndQueue(command)) {
-        appliedEdges += 1;
-      }
-    }
-
-    const firstNodeId = draft.firstInsertedNodeId;
-    if (firstNodeId) {
-      selectItem({ nodeId: firstNodeId, edgeId: null });
-    }
-
-    return {
-      appliedNodes,
-      appliedEdges,
-      skippedEdges: draft.skippedEdges,
-    };
-  }
-
-  async function validateClipboardDraftOnServer(draft: ClipboardCommandsDraft) {
-    const commands = [...draft.nodeCommands, ...draft.edgeCommands];
-    const projectedSnapshot = applyEditorCommandsLocally(
-      getCurrentSnapshot(),
-      project.id,
-      commands,
-    );
-
-    const validation = await validateSemanticDraftForEditor({
-      projectId: project.id,
-      snapshot: projectedSnapshot,
-      mode: inspectorMode,
-    });
-    setSemanticPolicy(validation.policy);
-
-    const shouldBlock =
-      validation.policy.enforceOnServer &&
-      validation.policy.strictEnabled &&
-      validation.bySeverity.error > 0;
-
-    return {
-      validation,
-      shouldBlock,
-    };
-  }
-
-  function filterClipboardEdgesBySemanticRules(
-    draft: ClipboardCommandsDraft,
-  ): ClipboardCommandsDraft {
-    const nodeMap = new Map(
-      draft.nodeCommands.map((command) => [
-        command.node.id,
-        {
-          id: command.node.id,
-          kind: command.node.kind,
-          label: command.node.label,
-          payload: command.node.data,
-        },
-      ] as const),
-    );
-
-    const filteredEdgeCommands = draft.edgeCommands.filter((command) => {
-      const sourceNode = nodeMap.get(command.edge.sourceNodeId);
-      const targetNode = nodeMap.get(command.edge.targetNodeId);
-      const semanticCheck = validateEdgeCreation(
-        {
-          diagramType: semanticDiagramType,
-          sourceNode,
-          targetNode,
-          edgeKind: command.edge.kind,
-          mode: inspectorMode,
-        },
-        semanticEngineOptions,
-      );
-
-      return semanticCheck.ok;
-    });
-
-    return {
-      ...draft,
-      edgeCommands: filteredEdgeCommands,
-      skippedEdges:
-        draft.skippedEdges + (draft.edgeCommands.length - filteredEdgeCommands.length),
-    };
-  }
-
-  async function applyClipboardFragment(fragment: MapiaClipboardFragment) {
-    const fullDraft = buildClipboardCommandsDraft(fragment);
-    const hasCommands = fullDraft.nodeCommands.length + fullDraft.edgeCommands.length > 0;
-    if (!hasCommands) {
-      return {
-        appliedNodes: 0,
-        appliedEdges: 0,
-        skippedEdges: fullDraft.skippedEdges,
-      };
-    }
-
-    try {
-      const initialValidation = await validateClipboardDraftOnServer(fullDraft);
-      let draftToApply = fullDraft;
-
-      if (initialValidation.shouldBlock) {
-        const allowPartialPaste = isClipboardPartialEdgePasteEnabled(
-          initialValidation.validation.policy ?? semanticPolicy,
-        );
-
-        if (!allowPartialPaste) {
-          const firstError =
-            initialValidation.validation.issues.find(
-              (issue) => issue.severity === "error",
-            ) ?? initialValidation.validation.issues[0];
-          setGlobalErrorMessage(
-            firstError?.message ?? editorT("shell.errors.pasteBlockedByPolicy"),
-          );
-          return {
-            appliedNodes: 0,
-            appliedEdges: 0,
-            skippedEdges: fullDraft.skippedEdges,
-          };
-        }
-
-        const filteredDraft = filterClipboardEdgesBySemanticRules(fullDraft);
-        const filteredValidation = await validateClipboardDraftOnServer(filteredDraft);
-
-        if (filteredValidation.shouldBlock) {
-          const firstError =
-            filteredValidation.validation.issues.find(
-              (issue) => issue.severity === "error",
-            ) ?? filteredValidation.validation.issues[0];
-          setGlobalErrorMessage(
-            firstError?.message ?? editorT("shell.errors.pasteBlockedByPolicy"),
-          );
-          return {
-            appliedNodes: 0,
-            appliedEdges: 0,
-            skippedEdges: filteredDraft.skippedEdges,
-          };
-        }
-
-        draftToApply = filteredDraft;
-      }
-
-      const applied = applyClipboardCommandsLocally(draftToApply);
-      setGlobalErrorMessage(null);
-      return applied;
-    } catch (error) {
-      setGlobalErrorMessage(
-        formatErrorMessage(
-          error,
-          editorT("shell.errors.validatePasteWithBackend"),
-        ),
-      );
-      return {
-        appliedNodes: 0,
-        appliedEdges: 0,
-        skippedEdges: fullDraft.skippedEdges,
-      };
-    }
-  }
-
-  async function handleCutSelectionToClipboard() {
-    const copied = await handleCopySelectionToClipboard();
-    if (!copied) {
-      return false;
-    }
-
-    handleRemoveSelected();
-    setQuerySyncMessage(editorT("shell.messages.selectionCut"));
-    return true;
-  }
-
-  async function handleDuplicateSelection() {
-    const fragment = buildClipboardFragmentFromSelection();
-    if (!fragment) {
-      return false;
-    }
-
-    const result = await applyClipboardFragment(fragment);
-    if (result.appliedNodes === 0 && result.appliedEdges === 0) {
-      setGlobalErrorMessage(editorT("shell.errors.duplicateCurrentSelection"));
-      return false;
-    }
-
-    setQuerySyncMessage(
-      editorT("shell.messages.duplicateCompleted", {
-        nodes: result.appliedNodes,
-        edges: result.appliedEdges,
-        skippedEdges: result.skippedEdges,
-      }),
-    );
-    return true;
-  }
-
-  async function handlePasteFromClipboard() {
-    const fragment = await readMapiaClipboardFragment();
-    if (!fragment || fragment.nodes.length === 0) {
-      setGlobalErrorMessage(editorT("shell.errors.invalidClipboardFragment"));
-      return false;
-    }
-
-    const result = await applyClipboardFragment(fragment);
-    if (result.appliedNodes === 0 && result.appliedEdges === 0) {
-      return false;
-    }
-    setQuerySyncMessage(
-      editorT("shell.messages.pasteCompleted", {
-        nodes: result.appliedNodes,
-        edges: result.appliedEdges,
-        skippedEdges: result.skippedEdges,
-      }),
-    );
-    return true;
   }
 
   function handleOrganizeDiagram() {
@@ -6074,16 +4291,16 @@ export function EditorShell({
       }
 
       try {
-        const result = await updateNodeForEditor({
-          projectId: project.id,
+        const result = await updateNodeDirect({
           nodeId: command.nodeId,
           patch: command.patch,
-          expectedRevision: currentRevisionRef.current,
           semanticMode: inspectorMode,
         });
+        if (!result.ok) {
+          setNodeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+          return;
+        }
 
-        syncFromSnapshot(result.workingSnapshot.snapshot);
-        setCurrentRevision(result.newRevision);
         setNodeInspectorMessage(editorT("shell.messages.nodeUpdatedSynced"));
         setGlobalErrorMessage(null);
       } catch (error) {
@@ -6114,17 +4331,19 @@ export function EditorShell({
               message: error.message,
               requireReason: error.payload.requireOverrideReason ?? true,
               onConfirm: async (reason) => {
-                const overrideResult = await updateNodeForEditor({
-                  projectId: project.id,
+                const overrideResult = await updateNodeDirect({
                   nodeId: command.nodeId,
                   patch: command.patch,
-                  expectedRevision: currentRevisionRef.current,
                   semanticMode: inspectorMode,
                   allowSemanticOverride: true,
                   overrideReason: reason,
                 });
-                syncFromSnapshot(overrideResult.workingSnapshot.snapshot);
-                setCurrentRevision(overrideResult.newRevision);
+                if (!overrideResult.ok) {
+                  setNodeInspectorMessage(
+                    editorT("shell.errors.finishPendingSaveBeforeApply"),
+                  );
+                  return;
+                }
                 setNodeInspectorMessage(editorT("shell.messages.nodeUpdatedWithOverride"));
               },
             });
@@ -6190,15 +4409,16 @@ export function EditorShell({
       }
 
       try {
-        const result = await updateEdgeForEditor({
-          projectId: project.id,
+        const result = await updateEdgeDirect({
           edgeId: command.edgeId,
           patch: command.patch,
-          expectedRevision: currentRevisionRef.current,
           semanticMode: inspectorMode,
         });
-        syncFromSnapshot(result.workingSnapshot.snapshot);
-        setCurrentRevision(result.newRevision);
+        if (!result.ok) {
+          setEdgeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+          return;
+        }
+
         setEdgeInspectorMessage(editorT("shell.messages.edgeUpdatedSynced"));
         setGlobalErrorMessage(null);
       } catch (error) {
@@ -6213,17 +4433,19 @@ export function EditorShell({
               message: error.message,
               requireReason: error.payload.requireOverrideReason ?? true,
               onConfirm: async (reason) => {
-                const overrideResult = await updateEdgeForEditor({
-                  projectId: project.id,
+                const overrideResult = await updateEdgeDirect({
                   edgeId: command.edgeId,
                   patch: command.patch,
-                  expectedRevision: currentRevisionRef.current,
                   semanticMode: inspectorMode,
                   allowSemanticOverride: true,
                   overrideReason: reason,
                 });
-                syncFromSnapshot(overrideResult.workingSnapshot.snapshot);
-                setCurrentRevision(overrideResult.newRevision);
+                if (!overrideResult.ok) {
+                  setEdgeInspectorMessage(
+                    editorT("shell.errors.finishPendingSaveBeforeApply"),
+                  );
+                  return;
+                }
                 setEdgeInspectorMessage(editorT("shell.messages.edgeUpdatedWithOverride"));
               },
             });
@@ -6262,462 +4484,94 @@ export function EditorShell({
         className={`editor-main-column ${isProcessDiagram ? "editor-main-column-process" : ""}`}
       >
         {shouldShowMetadataPanel ? (
-          <section className="panel editor-secondary-panel editor-panel-metadata">
-            <header className="panel-header">
-              <div>
-                <h3>{project.name}</h3>
-                <p>{editorT("shell.metadata.description")}</p>
-              </div>
-              <div className="row-actions">
-                <span
-                  className={`badge ${isSupportedDiagramType(layoutMetadata.diagramType) ? "" : "badge-warning"}`}
-                  data-testid="diagram-type-badge"
-                >
-                  {diagramDefinitionLabel}
-                </span>
-                <span className="badge" data-testid="visual-mode-badge">
-                  {editorT("shell.metadata.visualMode", {
-                    mode: editorT(`shell.rendererLabels.${renderer.key}`),
-                  })}
-                </span>
-                <Link
-                  className="btn btn-link"
-                  href={`/create?fromProjectId=${project.id}`}
-                  data-testid="layout-policy-open-wizard-link"
-                >
-                  {editorT("shell.metadata.changeInAssistant")}
-                </Link>
-                <span
-                  className={`badge ${isReapplyLayoutBlockedByPolicy ? "badge-warning" : ""}`}
-                  data-testid="layout-policy-badge"
-                >
-                  {editorT("shell.metadata.layoutPolicy", { policy: layoutPolicyLabel })}
-                </span>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => handleTogglePanel("metadata")}
-                  aria-expanded={panelState.metadata}
-                  data-testid="editor-panel-metadata-toggle"
-                >
-                  {panelState.metadata
-                    ? `▾ ${editorT("shell.metadata.toggleOpen")}`
-                    : `▸ ${editorT("shell.metadata.toggleClosed", { count: nodes.length })}`}
-                </button>
-              </div>
-            </header>
-            {panelState.metadata ? (
-              <div className="panel-body">
-                <div className="row-actions editor-toolbar editor-toolbar-meta">
-                  <span className="badge">
-                    <span className="badge-dot" aria-hidden="true" />
-                    {editorT("shell.metadata.workingSnapshot")}
-                  </span>
-                  <span className="muted">
-                    {editorT("shell.metadata.counts", {
-                      pendingCount: pendingCommands.length,
-                      nodeCount: nodes.length,
-                      edgeCount: edges.length,
-                    })}
-                  </span>
-                  {lastSavedAtLabel ? (
-                    <span className="muted">
-                      {editorT("shell.metadata.lastSavedAt", { time: lastSavedAtLabel })}
-                    </span>
-                  ) : null}
-                  <span className="helper">{saveState.message}</span>
-                  {isRefreshingFromQuery ? (
-                    <span className="helper">{editorT("shell.sync.syncing")}</span>
-                  ) : null}
-                  {querySyncMessage ? (
-                    <span className="helper">{querySyncMessage}</span>
-                  ) : null}
-                </div>
-
-                <div className="row-actions editor-toolbar editor-toolbar-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleRemoveSelected}
-                    disabled={
-                      saveState.status === "saving" || (!selectedNodeId && !selectedEdgeId)
-                    }
-                    data-testid="remove-selected-button"
-                  >
-                    {editorT("shell.buttons.removeSelected")}
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={handleManualSave}
-                    disabled={saveState.status === "saving" || isCreatingVersion}
-                    data-testid="save-button"
-                  >
-                    {saveState.status === "saving"
-                      ? editorT("autosave.saving")
-                      : editorT("shell.buttons.save")}
-                  </button>
-                  <div className="field">
-                    <label className="sr-only" htmlFor="new-version-name-input">
-                      {editorT("shell.versions.newVersionNameAria")}
-                    </label>
-                    <input
-                      id="new-version-name-input"
-                      value={newVersionName}
-                      onChange={(event) => setNewVersionName(event.target.value)}
-                      placeholder={editorT("shell.versions.newVersionNamePlaceholder")}
-                      aria-label={editorT("shell.versions.newVersionNameAria")}
-                    />
-                  </div>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleCreateVersion}
-                    disabled={saveState.status === "saving" || isCreatingVersion}
-                    data-testid="create-version-button"
-                  >
-                    {isCreatingVersion
-                      ? editorT("shell.versions.creating")
-                      : editorT("shell.versions.create")}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleReapplyLayout}
-                    disabled={saveState.status === "saving" || !canReapplyLayout}
-                    title={
-                      isReapplyLayoutBlockedByPolicy
-                        ? editorT("shell.layoutPolicy.blockedTooltip")
-                        : undefined
-                    }
-                    data-testid="reapply-layout-button"
-                  >
-                    {editorT("shell.buttons.reapplyLayout")}
-                  </button>
-                  {hasDiagramRendererMismatch ? (
-                    <span
-                      className="warning-text"
-                      data-testid="diagram-renderer-mismatch-warning"
-                    >
-                      {editorT("shell.metadata.rendererMismatch")}
-                    </span>
-                  ) : null}
-                  {isReapplyLayoutBlockedByPolicy ? (
-                    <>
-                      <span className="badge badge-warning">
-                        {editorT("shell.layoutPolicy.blocked")}
-                      </span>
-                      <span className="helper">
-                        {editorT("shell.layoutPolicy.blockedDescription")}
-                      </span>
-                    </>
-                  ) : null}
-                  {versionCreateFeedback ? (
-                    <span
-                      className="helper"
-                      aria-live="polite"
-                      role={versionCreateFeedback.kind === "error" ? "alert" : "status"}
-                      data-testid="create-version-feedback"
-                      data-feedback-kind={versionCreateFeedback.kind}
-                    >
-                      {versionCreateFeedback.message}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-          </section>
+          <EditorMetadataPanel
+            editorT={editorT}
+            project={project}
+            diagramDefinitionLabel={diagramDefinitionLabel}
+            rendererLabel={editorT(`shell.rendererLabels.${renderer.key}`)}
+            isSupportedDiagramType={isSupportedDiagramType(layoutMetadata.diagramType)}
+            layoutPolicyLabel={layoutPolicyLabel}
+            isReapplyLayoutBlockedByPolicy={isReapplyLayoutBlockedByPolicy}
+            isOpen={panelState.metadata}
+            onToggle={() => handleTogglePanel("metadata")}
+            pendingCount={pendingCommands.length}
+            nodeCount={nodes.length}
+            edgeCount={edges.length}
+            lastSavedAtLabel={lastSavedAtLabel}
+            saveMessage={saveState.message}
+            isRefreshingFromQuery={isRefreshingFromQuery}
+            querySyncMessage={querySyncMessage}
+            onRemoveSelected={handleRemoveSelected}
+            isRemoveSelectedDisabled={
+              saveState.status === "saving" || (!selectedNodeId && !selectedEdgeId)
+            }
+            onManualSave={() => {
+              void handleManualSave();
+            }}
+            isManualSaveDisabled={saveState.status === "saving" || isCreatingVersion}
+            isSaving={saveState.status === "saving"}
+            newVersionName={newVersionName}
+            onNewVersionNameChange={setNewVersionName}
+            onCreateVersion={() => {
+              void handleCreateVersion();
+            }}
+            isCreateVersionDisabled={saveState.status === "saving" || isCreatingVersion}
+            isCreatingVersion={isCreatingVersion}
+            onReapplyLayout={handleReapplyLayout}
+            isReapplyLayoutDisabled={saveState.status === "saving" || !canReapplyLayout}
+            hasDiagramRendererMismatch={hasDiagramRendererMismatch}
+            versionCreateFeedback={versionCreateFeedback}
+          />
         ) : null}
 
         {shouldShowPrismaPanel ? (
-          <section
-            className="panel editor-secondary-panel editor-panel-prisma"
-            aria-label={editorT("shell.prisma.ariaLabel")}
-          >
-            <header className="panel-header">
-              <div>
-                <h3>{editorT("shell.prisma.title")}</h3>
-                <p>{editorT("shell.prisma.description")}</p>
-              </div>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => handleTogglePanel("prismaImport")}
-                aria-expanded={panelState.prismaImport}
-                data-testid="editor-panel-prisma-toggle"
-              >
-                {panelState.prismaImport
-                  ? `▾ ${editorT("shell.prisma.toggleOpen")}`
-                  : `▸ ${editorT("shell.prisma.toggleClosed")}`}
-              </button>
-            </header>
-            {panelState.prismaImport ? (
-              <div className="panel-body stack-sm" data-testid="prisma-schema-import-panel">
-                <div className="row-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => {
-                      void handleImportPrismaSchema();
-                    }}
-                    disabled={
-                      saveState.status === "saving" ||
-                      isImportingPrismaSchema ||
-                      !canImportPrismaSchema
-                    }
-                    data-testid="prisma-schema-import-button"
-                  >
-                    {isImportingPrismaSchema
-                      ? editorT("shell.prisma.importing")
-                      : editorT("shell.prisma.import")}
-                  </button>
-                  <span className="helper">
-                    {editorT("shell.prisma.overwriteWarning")}
-                  </span>
-                </div>
-
-                <textarea
-                  className="mono"
-                  rows={8}
-                  value={prismaSchemaImportText}
-                  onChange={(event) => setPrismaSchemaImportText(event.target.value)}
-                  placeholder={`model User {\n  id String @id\n  posts Post[]\n}\n\nmodel Post {\n  id String @id\n  author User?\n}`}
-                  data-testid="prisma-schema-import-textarea"
-                />
-
-                {prismaSchemaImportFeedback ? (
-                  <div
-                    className="helper"
-                    role={prismaSchemaImportFeedback.kind === "error" ? "alert" : "status"}
-                    data-testid="prisma-schema-import-feedback"
-                    data-feedback-kind={prismaSchemaImportFeedback.kind}
-                  >
-                    {prismaSchemaImportFeedback.message}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
+          <EditorPrismaImportPanel
+            editorT={editorT}
+            isOpen={panelState.prismaImport}
+            onToggle={() => handleTogglePanel("prismaImport")}
+            onImport={() => {
+              void handleImportPrismaSchema();
+            }}
+            isImportDisabled={
+              saveState.status === "saving" || isImportingPrismaSchema
+            }
+            isImporting={isImportingPrismaSchema}
+            canImport={canImportPrismaSchema}
+            value={prismaSchemaImportText}
+            onValueChange={setPrismaSchemaImportText}
+            feedback={prismaSchemaImportFeedback}
+          />
         ) : null}
 
         {shouldShowVersionsPanel ? (
-          <section
-            className="panel editor-secondary-panel editor-panel-versions"
-            aria-label={editorT("shell.versions.ariaLabel")}
-            id="versoes"
-          >
-            <header className="panel-header">
-              <div>
-                <h3>{editorT("shell.versions.title")}</h3>
-                <p>{editorT("shell.versions.description")}</p>
-              </div>
-              <button
-                className="btn"
-                type="button"
-                onClick={() => handleTogglePanel("versions")}
-                aria-expanded={panelState.versions}
-                data-testid="editor-panel-versions-toggle"
-              >
-                {panelState.versions
-                  ? `▾ ${editorT("shell.versions.toggleOpen")}`
-                  : `▸ ${editorT("shell.versions.toggleClosed", {
-                      count: snapshotVersions.length,
-                    })}`}
-              </button>
-            </header>
-            {panelState.versions ? (
-              <div className="panel-body stack-sm">
-                <div className="row-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleRefreshVersionList}
-                    disabled={
-                      isRefreshingVersionList ||
-                      saveState.status === "saving" ||
-                      activeVersionRestoreId !== null
-                    }
-                    data-testid="version-list-refresh-button"
-                  >
-                    {isRefreshingVersionList
-                      ? editorT("shell.versions.refreshing")
-                      : editorT("shell.versions.refresh")}
-                  </button>
-                  <span className="helper">
-                    {editorT("shell.versions.localNameHint")}
-                  </span>
-                </div>
-
-                {versionActionFeedback ? (
-                  <div
-                    className="helper"
-                    role={versionActionFeedback.kind === "error" ? "alert" : "status"}
-                    data-testid="version-action-feedback"
-                    data-feedback-kind={versionActionFeedback.kind}
-                  >
-                    {versionActionFeedback.message}
-                  </div>
-                ) : null}
-
-                {versionDiffFeedback ? (
-                  <div
-                    className="helper"
-                    role={versionDiffFeedback.kind === "error" ? "alert" : "status"}
-                    data-testid="version-diff-feedback"
-                    data-feedback-kind={versionDiffFeedback.kind}
-                  >
-                    {versionDiffFeedback.message}
-                  </div>
-                ) : null}
-
-                {versionDiffSummary ? (
-                  <section
-                    className="version-diff-executive"
-                    data-testid="version-diff-executive-summary"
-                  >
-                    <h4>{editorT("shell.versions.summaryTitle")}</h4>
-                    <div className="version-diff-cards">
-                      <article
-                        className="version-diff-card"
-                        data-testid="version-diff-card-nodes-added"
-                      >
-                        <span>{editorT("shell.versions.cards.nodesAdded")}</span>
-                        <strong>{versionDiffSummary.cards.nodesAdded}</strong>
-                      </article>
-                      <article
-                        className="version-diff-card"
-                        data-testid="version-diff-card-nodes-removed"
-                      >
-                        <span>{editorT("shell.versions.cards.nodesRemoved")}</span>
-                        <strong>{versionDiffSummary.cards.nodesRemoved}</strong>
-                      </article>
-                      <article
-                        className="version-diff-card"
-                        data-testid="version-diff-card-nodes-changed"
-                      >
-                        <span>{editorT("shell.versions.cards.nodesChanged")}</span>
-                        <strong>{versionDiffSummary.cards.nodesChanged}</strong>
-                      </article>
-                      <article
-                        className="version-diff-card"
-                        data-testid="version-diff-card-edges-changed"
-                      >
-                        <span>{editorT("shell.versions.cards.edgesChanged")}</span>
-                        <strong>{versionDiffSummary.cards.edgesChanged}</strong>
-                      </article>
-                    </div>
-                    <p className="helper">
-                      {editorT("shell.versions.changedBreakdown", {
-                        renamed: versionDiffSummary.changedBreakdown.renamed,
-                        kindChanged: versionDiffSummary.changedBreakdown.kindChanged,
-                        payloadChanged: versionDiffSummary.changedBreakdown.payloadChanged,
-                      })}
-                    </p>
-                    <h5>{editorT("shell.versions.topChangesTitle")}</h5>
-                    <ul className="summary-list" data-testid="version-diff-top-changes">
-                      {versionDiffSummary.topChanges.map((entry, index) => (
-                        <li key={`${entry}-${index}`}>{entry}</li>
-                      ))}
-                    </ul>
-                  </section>
-                ) : null}
-
-                <div className="stack-sm" data-testid="version-list">
-                  {snapshotVersions.length === 0 ? (
-                    <div className="helper">
-                      {editorT("shell.versions.empty")}
-                    </div>
-                  ) : (
-                    snapshotVersions.map((version) => (
-                      <div
-                        key={version.id}
-                        className="tile"
-                        data-testid={`version-item-${version.id}`}
-                      >
-                        <div className="row-actions row-actions-between">
-                          <span className="badge">{getVersionDisplayName(version)}</span>
-                          <span className="badge">
-                            {editorT("shell.versions.originLabel", {
-                              origin: formatVersionOriginLabel(version.origin, editorT),
-                            })}
-                          </span>
-                          <span className="muted">
-                            {formatVersionCreatedAtLabel(version.createdAt, locale)}
-                          </span>
-                        </div>
-
-                        <div className="field">
-                          <label htmlFor={`version-name-input-${version.id}`}>
-                            {editorT("shell.versions.localNameLabel")}
-                          </label>
-                          <div className="row-actions">
-                            <input
-                              id={`version-name-input-${version.id}`}
-                              value={versionNameDrafts[version.id] ?? ""}
-                              onChange={(event) =>
-                                handleVersionNameDraftChange(version.id, event.target.value)
-                              }
-                              placeholder={editorT("shell.versions.localNamePlaceholder")}
-                              data-testid={`version-name-input-${version.id}`}
-                            />
-                            <button
-                              className="btn"
-                              type="button"
-                              onClick={() => handleSaveVersionName(version.id)}
-                              disabled={saveState.status === "saving"}
-                              data-testid={`version-save-name-button-${version.id}`}
-                            >
-                              {editorT("shell.versions.saveName")}
-                            </button>
-                          </div>
-                          <span className="helper">
-                            {editorT("shell.versions.localNameDescription")}
-                          </span>
-                        </div>
-
-                        <div className="row-actions">
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={() => {
-                              void handleCompareVersion(version.id);
-                            }}
-                            disabled={
-                              saveState.status === "saving" ||
-                              activeVersionRestoreId !== null ||
-                              activeVersionCompareId !== null
-                            }
-                            data-testid={`version-compare-button-${version.id}`}
-                          >
-                            {activeVersionCompareId === version.id
-                              ? editorT("shell.versions.comparing")
-                              : editorT("shell.versions.compare")}
-                          </button>
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={() => {
-                              void handleRestoreVersion(version);
-                            }}
-                            disabled={
-                              saveState.status === "saving" ||
-                              isCreatingVersion ||
-                              activeVersionRestoreId !== null
-                            }
-                            data-testid={`version-restore-button-${version.id}`}
-                          >
-                            {activeVersionRestoreId === version.id
-                              ? editorT("shell.versions.restoring")
-                              : editorT("shell.versions.restore")}
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : null}
-          </section>
+          <EditorVersionsPanel
+            editorT={editorT}
+            locale={locale}
+            isOpen={panelState.versions}
+            onToggle={() => handleTogglePanel("versions")}
+            onRefresh={() => {
+              void handleRefreshVersionList();
+            }}
+            isRefreshing={isRefreshingVersionList}
+            isSaving={saveState.status === "saving"}
+            isCreatingVersion={isCreatingVersion}
+            activeVersionCompareId={activeVersionCompareId}
+            activeVersionRestoreId={activeVersionRestoreId}
+            versionActionFeedback={versionActionFeedback}
+            versionDiffFeedback={versionDiffFeedback}
+            versionDiffSummary={versionDiffSummary}
+            snapshotVersions={snapshotVersions}
+            versionNameDrafts={versionNameDrafts}
+            onVersionNameDraftChange={handleVersionNameDraftChange}
+            onSaveVersionName={handleSaveVersionName}
+            onCompareVersion={(versionId) => {
+              void handleCompareVersion(versionId);
+            }}
+            onRestoreVersion={(version) => {
+              void handleRestoreVersion(version);
+            }}
+            getVersionDisplayName={getVersionDisplayName}
+          />
         ) : null}
 
         {globalErrorMessage ? (
@@ -6742,123 +4596,74 @@ export function EditorShell({
             renderer.canvasDataAttributes["data-diagram-renderer"] ?? renderer.key
           }
         >
-          <div
-            className={`canvas-top-bar ${isCanvasFocusMode ? "is-focus-mode" : ""}`}
-            role="region"
-            aria-label={editorT("shell.topBar.canvasBarAriaLabel")}
-            data-testid="canvas-top-bar"
-          >
-            <div className="canvas-top-bar-main">
-              <strong className="canvas-top-project-name" title={project.name}>
-                {project.name}
-              </strong>
-              <span
-                className={saveStatusClassName}
-                aria-live="polite"
-                data-testid="save-status-badge"
-                data-save-status={saveState.status}
-              >
-                {saveStatusLabel}
-              </span>
-            </div>
-            <div className="canvas-top-bar-actions">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={handleAddNode}
-                disabled={saveState.status === "saving"}
-                data-testid="add-node-button"
-              >
-                {quickAddCopy.addPrimary}
-              </button>
-              <span className="helper">{quickAddCopy.quickActionHint}</span>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleOpenQuickFind}
-                data-testid="canvas-toolbar-quick-find"
-              >
-                {editorT("shell.topBar.quickFind")}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleFitView}
-                data-testid="center-diagram-button"
-              >
-                {editorT("shell.topBar.fitView")}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleOrganizeDiagram}
-                data-testid="organize-diagram-button"
-              >
-                {editorT("shell.topBar.organize")}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleToggleValidationPanel}
-                data-testid="semantic-audit-button"
-              >
-                {isValidationPanelOpen
-                  ? editorT("shell.topBar.hideValidation")
-                  : editorT("shell.topBar.showValidation")}
-              </button>
-              {isErdDiagram ? (
-                <label className="erd-validation-level-control">
-                  <span>{editorT("shell.topBar.erdValidationLevel")}</span>
-                  <select
-                    value={erdPolicy.validationLevel}
-                    onChange={(event) => {
-                      void handleUpdateErdValidationLevel(
-                        event.target.value as ErdPolicyConfig["validationLevel"],
-                      );
+          <EditorShellTopBar
+            projectName={project.name}
+            isCanvasFocusMode={isCanvasFocusMode}
+            ariaLabel={editorT("shell.topBar.canvasBarAriaLabel")}
+            saveStatusClassName={saveStatusClassName}
+            saveStatusLabel={saveStatusLabel}
+            isSaving={saveState.status === "saving"}
+            addPrimaryLabel={quickAddCopy.addPrimary}
+            quickActionHint={quickAddCopy.quickActionHint}
+            quickFindLabel={editorT("shell.topBar.quickFind")}
+            fitViewLabel={editorT("shell.topBar.fitView")}
+            organizeLabel={editorT("shell.topBar.organize")}
+            validationLabel={
+              isValidationPanelOpen
+                ? editorT("shell.topBar.hideValidation")
+                : editorT("shell.topBar.showValidation")
+            }
+            inspectorToggleLabel={inspectorToggleLabel}
+            focusToggleLabel={
+              isCanvasFocusMode
+                ? editorT("shell.topBar.exitFocus")
+                : editorT("shell.topBar.enterFocus")
+            }
+            onAddNode={handleAddNode}
+            onOpenQuickFind={handleOpenQuickFind}
+            onFitView={handleFitView}
+            onOrganizeDiagram={handleOrganizeDiagram}
+            onToggleValidationPanel={handleToggleValidationPanel}
+            onToggleInspectorVisibility={handleToggleInspectorVisibility}
+            onToggleCanvasFocusMode={handleToggleCanvasFocusMode}
+            extraActions={
+              <>
+                {isErdDiagram ? (
+                  <label className="erd-validation-level-control">
+                    <span>{editorT("shell.topBar.erdValidationLevel")}</span>
+                    <select
+                      value={erdPolicy.validationLevel}
+                      onChange={(event) => {
+                        void handleUpdateErdValidationLevel(
+                          event.target.value as ErdPolicyConfig["validationLevel"],
+                        );
+                      }}
+                      data-testid="erd-validation-level-select"
+                    >
+                      <option value="draft">Draft</option>
+                      <option value="guided">Guided</option>
+                      <option value="strict">Strict</option>
+                    </select>
+                  </label>
+                ) : null}
+                {isErdDiagram ? (
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      void handleExportErdPreview();
                     }}
-                    data-testid="erd-validation-level-select"
+                    disabled={isExportingErdPreview}
+                    data-testid="erd-export-preview-button"
                   >
-                    <option value="draft">Draft</option>
-                    <option value="guided">Guided</option>
-                    <option value="strict">Strict</option>
-                  </select>
-                </label>
-              ) : null}
-              {isErdDiagram ? (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => {
-                    void handleExportErdPreview();
-                  }}
-                  disabled={isExportingErdPreview}
-                  data-testid="erd-export-preview-button"
-                >
-                  {isExportingErdPreview
-                    ? editorT("shell.topBar.exportPreviewGenerating")
-                    : editorT("shell.topBar.exportPreview")}
-                </button>
-              ) : null}
-              <button
-                className="btn"
-                type="button"
-                onClick={handleToggleInspectorVisibility}
-                data-testid="canvas-top-inspector-toggle"
-              >
-                {inspectorToggleLabel}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleToggleCanvasFocusMode}
-                data-testid="editor-focus-toggle"
-              >
-                {isCanvasFocusMode
-                  ? editorT("shell.topBar.exitFocus")
-                  : editorT("shell.topBar.enterFocus")}
-              </button>
-            </div>
-          </div>
+                    {isExportingErdPreview
+                      ? editorT("shell.topBar.exportPreviewGenerating")
+                      : editorT("shell.topBar.exportPreview")}
+                  </button>
+                ) : null}
+              </>
+            }
+          />
           {erdExportFeedback ? (
             <div
               className={`helper erd-export-feedback erd-export-feedback-${erdExportFeedback.kind}`}
@@ -6877,135 +4682,112 @@ export function EditorShell({
           />
 
           {selectedNode || selectedEdge ? (
-            isProcessDiagram ? (
-              <FlowSelectionHud
-                dismissKey={flowSelectionDismissKey}
-                selectedItemLabel={selectedItemLabel}
-                kindChipLabel={flowSelectionChipLabel ?? ""}
-                kindChipTone={selectedNode ? selectionNodeKindPresentation?.tone ?? "slate" : null}
-                semanticStatusLabel={selectedSemanticStatusLabel}
-                semanticStatusSeverity={selectedSemanticSeverity}
-                openInspectorLabel={
-                  selectedEdge
-                    ? editorT("shell.selection.openTransition")
-                    : editorT("shell.selection.openInspector")
-                }
-                primaryAction={
-                  selectedNode
-                    ? {
-                        id: quickAction.id,
-                        label: quickAction.label,
-                        onClick: () => handleAddContextualNode(),
-                      }
-                    : undefined
-                }
-                secondaryActions={
-                  selectedNode
-                    ? secondarySelectionActions.map((action) => ({
-                        id: action.id,
-                        label: action.label,
-                        onClick: () => handleAddContextualNode(action),
-                      }))
-                    : []
-                }
-                onOpenInspector={handleOpenSelectedItemInInspector}
-                onCenterView={handleCenterView}
-                onDuplicate={selectedNode ? handleDuplicateSelection : undefined}
-                onRemove={handleRemoveSelected}
-              />
-            ) : (
-              <div className="canvas-selection-hud" data-testid="canvas-selection-hud">
-                <div className="canvas-selection-hud-main">
-                  <strong>{selectedItemLabel}</strong>
-                  {selectedNode ? (
-                    <span
-                      className={`badge canvas-selection-kind-chip tone-${selectionNodeKindPresentation?.tone ?? "slate"}`}
-                      data-testid="canvas-selection-kind-chip"
-                    >
-                      {getNodeKindLabelForDiagram(
-                        currentSupportedDiagramType,
-                        selectedNode.data.kind,
-                        "operational",
-                        editorT,
-                      )}
-                      {inspectorMode === "technical"
+            <EditorSelectionHudSurface
+              variant={isProcessDiagram ? "process" : "default"}
+              processHudProps={
+                isProcessDiagram
+                  ? {
+                      dismissKey: flowSelectionDismissKey,
+                      selectedItemLabel,
+                      kindChipLabel: flowSelectionChipLabel ?? "",
+                      kindChipTone: selectedNode
+                        ? selectionNodeKindPresentation?.tone ?? "slate"
+                        : null,
+                      semanticStatusLabel: selectedSemanticStatusLabel,
+                      semanticStatusSeverity: selectedSemanticSeverity,
+                      openInspectorLabel: selectedEdge
+                        ? editorT("shell.selection.openTransition")
+                        : editorT("shell.selection.openInspector"),
+                      primaryAction: selectedNode
+                        ? {
+                            id: quickAction.id,
+                            label: quickAction.label,
+                            onClick: () => handleAddContextualNode(),
+                          }
+                        : undefined,
+                      secondaryActions: selectedNode
+                        ? secondarySelectionActions.map((action) => ({
+                            id: action.id,
+                            label: action.label,
+                            onClick: () => handleAddContextualNode(action),
+                          }))
+                        : [],
+                      onOpenInspector: handleOpenSelectedItemInInspector,
+                      onCenterView: handleCenterView,
+                      onDuplicate: selectedNode ? handleDuplicateSelection : undefined,
+                      onRemove: handleRemoveSelected,
+                    }
+                  : undefined
+              }
+              selectedItemLabel={selectedItemLabel}
+              kindChipLabel={
+                selectedNode
+                  ? `${getNodeKindLabelForDiagram(
+                      currentSupportedDiagramType,
+                      selectedNode.data.kind,
+                      "operational",
+                      editorT,
+                    )}${
+                      inspectorMode === "technical"
                         ? editorT("shell.selection.technicalKind", {
                             kind: selectedNode.data.kind,
                           })
-                        : ""}
-                    </span>
-                  ) : selectedEdge ? (
-                    <span className="badge canvas-selection-kind-chip" data-testid="canvas-selection-kind-chip">
-                      {getEdgeKindLabelForDiagram(
+                        : ""
+                    }`
+                  : selectedEdge
+                    ? `${getEdgeKindLabelForDiagram(
                         currentSupportedDiagramType,
                         selectedEdge.data?.kind ?? "flows-to",
                         "operational",
                         editorT,
-                      )}
-                      {inspectorMode === "technical"
-                        ? editorT("shell.selection.technicalKind", {
-                            kind: selectedEdge.data?.kind ?? "flows-to",
-                          })
-                        : ""}
-                    </span>
-                  ) : null}
-                  <span
-                    className={`badge canvas-selection-semantic-status ${
-                      selectedSemanticSeverity
-                        ? `canvas-selection-semantic-status-${selectedSemanticSeverity}`
-                        : ""
-                    }`}
-                    data-testid="canvas-selection-semantic-status"
-                  >
-                    {selectedSemanticStatusLabel}
-                  </span>
-                </div>
-                <div className="row-actions canvas-selection-hud-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => setIsFocusInspectorCollapsed(false)}
-                  >
-                    {editorT("shell.selection.edit")}
-                  </button>
-                  <button className="btn" type="button" onClick={handleCenterView}>
-                    {editorT("shell.selection.center")}
-                  </button>
-                  {selectedNode ? (
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => {
+                      )}${
+                        inspectorMode === "technical"
+                          ? editorT("shell.selection.technicalKind", {
+                              kind: selectedEdge.data?.kind ?? "flows-to",
+                            })
+                          : ""
+                      }`
+                    : null
+              }
+              kindChipTone={selectedNode ? selectionNodeKindPresentation?.tone ?? "slate" : null}
+              semanticStatusLabel={selectedSemanticStatusLabel}
+              semanticStatusSeverity={selectedSemanticSeverity}
+              editLabel={editorT("shell.selection.edit")}
+              centerLabel={editorT("shell.selection.center")}
+              duplicateAction={
+                selectedNode
+                  ? {
+                      id: "duplicate",
+                      label: editorT("selectionHud.duplicate"),
+                      onClick: () => {
                         void handleDuplicateSelection();
-                      }}
-                      data-testid="selection-hud-duplicate-button"
-                    >
-                      {editorT("selectionHud.duplicate")}
-                    </button>
-                  ) : null}
-                  {selectedNode ? (
-                    <button
-                      className="btn"
-                      type="button"
-                      onClick={() => handleAddContextualNode()}
-                      data-testid="selection-hud-contextual-add-button"
-                    >
-                      {quickAction.label}
-                    </button>
-                  ) : null}
-                  {selectedNode
-                    ? secondarySelectionActions.map((action) => (
-                        <button
-                          key={action.id}
-                          className="btn"
-                          type="button"
-                          onClick={() => handleAddContextualNode(action)}
-                          data-testid={`selection-hud-contextual-secondary-${action.id}`}
-                        >
-                          {action.label}
-                        </button>
-                      ))
-                    : null}
+                      },
+                      testId: "selection-hud-duplicate-button",
+                    }
+                  : undefined
+              }
+              primaryAction={
+                selectedNode
+                  ? {
+                      id: quickAction.id,
+                      label: quickAction.label,
+                      onClick: () => handleAddContextualNode(),
+                      testId: "selection-hud-contextual-add-button",
+                    }
+                  : undefined
+              }
+              secondaryActions={
+                selectedNode
+                  ? secondarySelectionActions.map((action) => ({
+                      id: action.id,
+                      label: action.label,
+                      onClick: () => handleAddContextualNode(action),
+                      testId: `selection-hud-contextual-secondary-${action.id}`,
+                    }))
+                  : []
+              }
+              extraActions={
+                <>
                   {selectedNode &&
                   hasErdAddFieldAction &&
                   selectedNode.data.kind === "entity" ? (
@@ -7030,12 +4812,13 @@ export function EditorShell({
                         : editorT("shell.selection.collapseSubtree")}
                     </button>
                   ) : null}
-                  <button className="btn" type="button" onClick={handleRemoveSelected}>
-                    {editorT("selectionHud.remove")}
-                  </button>
-                </div>
-              </div>
-            )
+                </>
+              }
+              removeLabel={editorT("selectionHud.remove")}
+              onOpenInspector={handleOpenSelectedItemInInspector}
+              onCenterView={handleCenterView}
+              onRemove={handleRemoveSelected}
+            />
           ) : null}
 
           <ReactFlow<RFNode, RFEdge>
@@ -7523,1926 +5306,186 @@ export function EditorShell({
       </div>
 
       {isInspectorVisible ? (
-        <aside
-          className={`inspector ${isProcessDiagram ? "inspector-process" : ""}`}
-          aria-label={editorT("shell.inspector.ariaLabel")}
-          data-testid="inspector-panel"
-        >
-          <div className="inspector-header">
-            <div className="row-actions inspector-selection-row">
-              <span className="badge">{inspectorSelectionBadge}</span>
-              {hasInspectorDirtyDraft ? (
-                <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                  {editorT("shell.inspector.draftBadge")}
-                </span>
-              ) : null}
-            </div>
-            <h3 className="inspector-selection-title" title={selectedItemLabel}>
-              {selectedItemLabel}
-            </h3>
-            <p className="helper inspector-subtitle">
-              {inspectorSubtitle}
-            </p>
-          </div>
+        <EditorInspectorFrame
+          ariaLabel={editorT("shell.inspector.ariaLabel")}
+          isProcessDiagram={isProcessDiagram}
+          selectionBadge={inspectorSelectionBadge}
+          draftBadgeLabel={editorT("shell.inspector.draftBadge")}
+          hasDirtyDraft={hasInspectorDirtyDraft}
+          selectedItemLabel={selectedItemLabel}
+          inspectorSubtitle={inspectorSubtitle}
+          mode={inspectorMode}
+          modeAriaLabel={editorT("shell.inspector.modeAria")}
+          operationalLabel={editorT("shell.inspector.modeOperational")}
+          technicalLabel={editorT("shell.inspector.modeTechnical")}
+          onModeChange={setInspectorMode}
+          semanticAudit={
+            <EditorSemanticAuditPanel
+              ariaLabel={editorT("shell.audit.ariaLabel")}
+              title={editorT("shell.audit.title")}
+              summaryLabel={editorT("shell.audit.summary", {
+                total: displayedSemanticAudit.counters.total,
+                errors: displayedSemanticAudit.bySeverity.error,
+              })}
+              applyAllSafeFixesLabel={
+                isErdDiagram && localErdSafeBatchFix?.safeFixes.length
+                  ? editorT("shell.audit.applyAllSafeFixes")
+                  : undefined
+              }
+              onApplyAllSafeFixes={
+                isErdDiagram && localErdSafeBatchFix?.safeFixes.length
+                  ? handleApplyAllSafeErdFixes
+                  : undefined
+              }
+              isOpen={isValidationPanelOpen}
+              safeFixPreviewItems={
+                isErdDiagram && localErdSafeBatchFix?.safeFixes.length
+                  ? localErdSafeBatchFix.safeFixes
+                      .slice(0, 6)
+                      .map((fix) =>
+                        fix.description ? `${fix.label}: ${fix.description}` : fix.label,
+                      )
+                  : []
+              }
+              issues={displayedSemanticAudit.issues}
+              emptyLabel={editorT("shell.audit.empty")}
+              collapsedHint={editorT("shell.audit.collapsedHint")}
+              renderSeverityLabel={(severity) =>
+                getSemanticSeverityLabel(severity, editorT)
+              }
+              renderIssueActions={(issue, index) => {
+                const issueFixes = readIssueSuggestedFixes(issue);
 
-          <div
-            className="row-actions inspector-mode-toggle"
-            role="group"
-            aria-label={editorT("shell.inspector.modeAria")}
-            data-testid="inspector-mode-toggle"
-          >
-            <button
-              className={`btn ${inspectorMode === "operational" ? "btn-primary" : ""}`}
-              type="button"
-              aria-pressed={inspectorMode === "operational"}
-              onClick={() => setInspectorMode("operational")}
-              data-testid="inspector-operational"
-            >
-              {editorT("shell.inspector.modeOperational")}
-            </button>
-            <button
-              className={`btn ${inspectorMode === "technical" ? "btn-primary" : ""}`}
-              type="button"
-              aria-pressed={inspectorMode === "technical"}
-              onClick={() => setInspectorMode("technical")}
-              data-testid="inspector-technical"
-            >
-              {editorT("shell.inspector.modeTechnical")}
-            </button>
-          </div>
-
-          <section
-            className={`semantic-audit-panel ${isValidationPanelOpen ? "is-open" : ""}`}
-            aria-label={editorT("shell.audit.ariaLabel")}
-            data-testid="semantic-audit-panel"
-          >
-            <div className="row-actions semantic-audit-header">
-              <strong>{editorT("shell.audit.title")}</strong>
-              <span className="badge">
-                {editorT("shell.audit.summary", {
-                  total: displayedSemanticAudit.counters.total,
-                  errors: displayedSemanticAudit.bySeverity.error,
-                })}
-              </span>
-              {isErdDiagram && localErdSafeBatchFix?.safeFixes.length ? (
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleApplyAllSafeErdFixes}
-                  data-testid="semantic-audit-apply-all-safe-fixes"
-                >
-                  {editorT("shell.audit.applyAllSafeFixes")}
-                </button>
-              ) : null}
-            </div>
-
-            {isValidationPanelOpen ? (
-              displayedSemanticAudit.issues.length > 0 ? (
-                <>
-                  {isErdDiagram && localErdSafeBatchFix?.safeFixes.length ? (
-                    <ul className="summary-list semantic-safe-fix-preview">
-                      {localErdSafeBatchFix.safeFixes.slice(0, 6).map((fix) => (
-                        <li key={fix.id}>
-                          {fix.description ? `${fix.label}: ${fix.description}` : fix.label}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  <ul className="summary-list semantic-audit-list" data-testid="semantic-audit-issues">
-                    {displayedSemanticAudit.issues.slice(0, 40).map((issue, index) => {
-                      const issueFixes = readIssueSuggestedFixes(issue);
-                      return (
-                        <li
-                          key={issue.id}
-                          className={`semantic-audit-item semantic-audit-item-${issue.severity}`}
-                          data-testid={`semantic-issue-item-${index}`}
-                        >
-                          <div className="semantic-audit-item-main">
-                            <strong>{getSemanticSeverityLabel(issue.severity, editorT)}</strong>
-                            <span>{issue.message}</span>
-                            {issue.explanation ? (
-                              <span className="helper">{issue.explanation}</span>
-                            ) : null}
-                          </div>
-                          <div className="row-actions">
-                            <button
-                              className="btn btn-link"
-                              type="button"
-                              onClick={() => handleFocusSemanticIssue(issue)}
-                              data-testid={`semantic-issue-goto-${index}`}
-                            >
-                              {editorT("shell.audit.goToIssue")}
-                            </button>
-                            {issueFixes.map((fix) => (
-                              <button
-                                key={fix.id}
-                                className="btn"
-                                type="button"
-                                onClick={() => handleApplyErdSuggestedFix(fix.commands)}
-                                data-testid={`semantic-issue-fix-${index}-${fix.id}`}
-                              >
-                                {fix.label}
-                              </button>
-                            ))}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              ) : (
-                <p className="helper" data-testid="semantic-audit-empty">
-                  {editorT("shell.audit.empty")}
-                </p>
-              )
-            ) : (
-              <p className="helper">{editorT("shell.audit.collapsedHint")}</p>
-            )}
-          </section>
-
-          {selectedNode &&
-          inspectorMode === "operational" &&
-          isErdDiagram &&
-          selectedNode.data.kind === "entity" &&
-          selectedErdEntityPayload ? (
-            <div className="stack-sm erd-entity-inspector">
-              <div className="row-actions inspector-selection-row">
-                <span className="badge">{editorT("shell.erd.entity.badge")}</span>
-                {nodeInspectorDirty ? (
-                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                    {editorT("shell.inspector.draftBadge")}
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="field">
-                <label htmlFor="erd-entity-label-input">{editorT("shell.erd.entity.nameLabel")}</label>
-                <input
-                  id="erd-entity-label-input"
-                  value={operationalNodeDraft?.label ?? selectedNode.data.label}
-                  onChange={(event) =>
-                    setOperationalNodeDraft((current) =>
-                      current ? { ...current, label: event.target.value } : current,
-                    )
-                  }
-                  data-testid="erd-entity-label-input"
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="erd-entity-table-name-input">
-                  {editorT("shell.erd.entity.tableNameLabel")}
-                </label>
-                <input
-                  id="erd-entity-table-name-input"
-                  defaultValue={selectedErdEntityPayload.tableName ?? ""}
-                  key={`erd-table-name-${selectedNode.id}-${selectedErdEntityPayload.tableName ?? ""}`}
-                  onBlur={(event) => {
-                    const tableName = event.target.value.trim();
-                    updateSelectedErdEntityPayload((payload) => ({
-                      ...payload,
-                      ...(tableName ? { tableName } : { tableName: undefined }),
-                    }));
-                  }}
-                  placeholder={editorT("shell.erd.entity.tableNamePlaceholder")}
-                  data-testid="erd-entity-table-name-input"
-                />
-              </div>
-
-              <div className="field">
-                <label htmlFor="erd-entity-description-input">
-                  {editorT("shell.erd.entity.descriptionLabel")}
-                </label>
-                <textarea
-                  id="erd-entity-description-input"
-                  rows={2}
-                  defaultValue={selectedErdEntityPayload.description ?? ""}
-                  key={`erd-description-${selectedNode.id}-${selectedErdEntityPayload.description ?? ""}`}
-                  onBlur={(event) => {
-                    const description = event.target.value.trim();
-                    updateSelectedErdEntityPayload((payload) => ({
-                      ...payload,
-                      ...(description ? { description } : { description: undefined }),
-                    }));
-                  }}
-                  data-testid="erd-entity-description-input"
-                />
-              </div>
-
-              <div className="erd-fields-grid" data-testid="erd-entity-fields-grid">
-                <div className="erd-fields-grid-header">
-                  <span>{editorT("shell.erd.entity.grid.name")}</span>
-                  <span>{editorT("shell.erd.entity.grid.type")}</span>
-                  <span>{editorT("shell.erd.entity.grid.flags")}</span>
-                  <span>{editorT("shell.erd.entity.grid.actions")}</span>
-                </div>
-                {selectedErdEntityPayload.fields.map((field, index) => {
-                  const draft = erdFieldDrafts[field.id] ?? {
-                    name: field.name,
-                    type: field.type,
-                  };
-                  const nextField = selectedErdEntityPayload.fields[index + 1];
-
-                  return (
-                    <div
-                      key={field.id}
-                      className="erd-fields-grid-row"
-                      data-testid={`erd-field-row-${field.id}`}
-                    >
-                      <input
-                        value={draft.name}
-                        onChange={(event) =>
-                          handleUpdateErdFieldDraft(field.id, { name: event.target.value })
-                        }
-                        onBlur={() => commitErdFieldDraft(field.id)}
-                        onKeyDown={(event) => {
-                          handleErdFieldShortcut(event, field.id);
-                          if (event.key !== "Enter") {
-                            return;
-                          }
-
-                          event.preventDefault();
-                          commitErdFieldDraft(field.id);
-                          if (nextField) {
-                            window.requestAnimationFrame(() => {
-                              document
-                                .querySelector<HTMLInputElement>(
-                                  `[data-erd-field-input="${nextField.id}:name"]`,
-                                )
-                                ?.focus();
-                            });
-                            return;
-                          }
-
-                          handleAddErdField();
-                        }}
-                        data-erd-field-input={`${field.id}:name`}
-                        data-testid={`erd-field-name-input-${index}`}
-                      />
-                      <input
-                        value={draft.type}
-                        onChange={(event) =>
-                          handleUpdateErdFieldDraft(field.id, { type: event.target.value })
-                        }
-                        onBlur={() => commitErdFieldDraft(field.id)}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter") {
-                            handleErdFieldShortcut(event, field.id);
-                            return;
-                          }
-
-                          event.preventDefault();
-                          commitErdFieldDraft(field.id);
-                          if (nextField) {
-                            window.requestAnimationFrame(() => {
-                              document
-                                .querySelector<HTMLInputElement>(
-                                  `[data-erd-field-input="${nextField.id}:name"]`,
-                                )
-                                ?.focus();
-                            });
-                            return;
-                          }
-                          handleAddErdField();
-                        }}
-                        list="erd-logical-types"
-                        data-erd-field-input={`${field.id}:type`}
-                        data-testid={`erd-field-type-input-${index}`}
-                      />
-                      <div className="row-actions erd-field-flags">
-                        {(["PK", "FK", "UQ", "NOT_NULL"] as ErdFieldFlag[]).map((flag) => (
-                          <button
-                            key={flag}
-                            className={`btn btn-link erd-field-flag-chip ${
-                              field.flags.includes(flag) ? "is-active" : ""
-                            }`}
-                            type="button"
-                            onClick={() => handleToggleErdFieldFlag(field.id, flag)}
-                            data-testid={`erd-field-flag-${flag.toLowerCase()}-${index}`}
-                          >
-                            {flag === "NOT_NULL" ? "N" : flag}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="row-actions">
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => handleMoveErdField(field.id, "up")}
-                          disabled={index === 0}
-                          data-testid={`erd-field-move-up-${index}`}
-                        >
-                          ↑
-                        </button>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => handleMoveErdField(field.id, "down")}
-                          disabled={index === selectedErdEntityPayload.fields.length - 1}
-                          data-testid={`erd-field-move-down-${index}`}
-                        >
-                          ↓
-                        </button>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => handleRemoveErdField(field.id)}
-                          data-testid={`erd-field-remove-${index}`}
-                        >
-                          {editorT("selectionHud.remove")}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <datalist id="erd-logical-types">
-                <option value="string" />
-                <option value="text" />
-                <option value="integer" />
-                <option value="uuid" />
-                <option value="datetime" />
-                <option value="boolean" />
-                <option value="json" />
-                <option value="decimal" />
-              </datalist>
-
-              <div className="row-actions">
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleAddErdField}
-                  data-testid="erd-fields-add-button"
-                >
-                  {editorT("shell.erd.entity.addField")}
-                </button>
-                <span className="helper">
-                  {editorT("shell.erd.entity.keyboardHint")}
-                </span>
-              </div>
-
-              {nodeInspectorMessage ? (
-                <div
-                  className={`inspector-feedback ${nodeInspectorHasErrors ? "is-error" : ""}`}
-                  aria-live="polite"
-                  data-testid="inspector-node-feedback"
-                >
-                  {nodeInspectorMessage}
-                </div>
-              ) : null}
-
-              <div className="row-actions inspector-actions">
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={handleApplyNodeInspector}
-                  disabled={saveState.status === "saving"}
-                  data-testid="inspector-apply-node"
-                >
-                  {editorT("shell.applyChanges")}
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleNodeInspectorReset}
-                  data-testid="inspector-reset-node"
-                >
-                  {editorT("shell.revert")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {selectedNode &&
-          inspectorMode === "operational" &&
-          operationalNodeDraft &&
-          (!isErdDiagram || selectedNode.data.kind !== "entity") &&
-          isProcessDiagram &&
-          processNodeInspectorModel &&
-          processSelectedNodeRelations ? (
-              <ProcessOperationalNodeInspector
-                copy={processNodeInspectorModel.copy}
-                overview={processNodeInspectorModel.overview}
-                relations={processSelectedNodeRelations}
-                draft={operationalNodeDraft}
-                nodeKindOptions={nodeKindOptions}
-                sections={{
-                  general: inspectorSections.general,
-                  details: inspectorSections.details,
-                  relations: inspectorSections.relations,
-                }}
-                tagPreview={operationalTagPreview}
-                nodeInspectorErrors={nodeInspectorErrors}
-                nodeInspectorMessage={nodeInspectorMessage}
-                nodeInspectorHasErrors={nodeInspectorHasErrors}
-                isSaving={saveState.status === "saving"}
-                primaryAction={{
-                  id: quickAction.id,
-                  label: quickAction.label,
-                  onClick: () => handleAddContextualNode(quickAction),
-                }}
-                secondaryActions={secondarySelectionActions.slice(0, 2).map((action) => ({
-                  id: action.id,
-                  label: action.label,
-                  onClick: () => handleAddContextualNode(action),
-                }))}
-                onToggleSection={handleToggleInspectorSection}
-                onLabelChange={(value) =>
-                  setOperationalNodeDraft((current) =>
-                    current ? { ...current, label: value } : current,
-                  )
-                }
-                onKindChange={(kind) =>
-                  setOperationalNodeDraft((current) =>
-                    current ? { ...current, kind } : current,
-                  )
-                }
-                onDescriptionChange={(value) =>
-                  setOperationalNodeDraft((current) =>
-                    current ? { ...current, description: value } : current,
-                  )
-                }
-                onTagsChange={(value) =>
-                  setOperationalNodeDraft((current) =>
-                    current ? { ...current, tagsText: value } : current,
-                  )
-                }
-                onOpenRelatedNode={handleOpenRelatedNodeFromRelation}
-                onOpenTransition={handleOpenTransitionFromRelation}
-                onRemoveRelation={handleRemoveRelation}
-                onApply={handleApplyNodeInspector}
-                onReset={handleNodeInspectorReset}
-              />
-          ) : null}
-
-          {selectedNode &&
-          inspectorMode === "operational" &&
-          operationalNodeDraft &&
-          (!isErdDiagram || selectedNode.data.kind !== "entity") &&
-          !isProcessDiagram ? (
-              <div className="stack-sm">
-                <div className="row-actions inspector-selection-row">
-                  <span className="badge">{inspectorSelectionBadge}</span>
-                  {nodeInspectorDirty ? (
-                    <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                      {editorT("shell.inspector.draftBadge")}
-                    </span>
-                  ) : null}
-                </div>
-
-              {graphSelectedNodeSemantic ? (
-                <div
-                  className="tile inspector-context-tile inspector-context-tile--graph"
-                  data-testid="graph-inspector-overview"
-                >
-                  <div className="row-actions">
-                    <span className="badge">{graphSelectedNodeSemantic.roleBadgeLabel}</span>
-                    <span className="badge">{graphSelectedNodeSemantic.kindLabel}</span>
-                  </div>
-                  <h4>{editorT("shell.graph.readingTitle")}</h4>
-                  <p className="helper">{graphSelectedNodeSemantic.summary}</p>
-                  <dl className="inspector-meta-list">
-                    <div>
-                      <dt>{editorT("shell.graph.networkPosition")}</dt>
-                      <dd>{graphSelectedNodeSemantic.footprintLabel}</dd>
-                    </div>
-                    <div>
-                      <dt>{editorT("shell.inspector.neighborhood")}</dt>
-                      <dd>{graphSelectedNodeSemantic.connectivityLabel}</dd>
-                    </div>
-                  </dl>
-                  <div
-                    className="row-actions"
-                    data-testid="graph-inspector-context-actions"
-                  >
+                return (
+                  <>
                     <button
-                      className="btn"
+                      className="btn btn-link"
                       type="button"
-                      onClick={() => handleAddContextualNode(quickAction)}
+                      onClick={() => handleFocusSemanticIssue(issue)}
+                      data-testid={`semantic-issue-goto-${index}`}
                     >
-                      {quickAction.label}
+                      {editorT("shell.audit.goToIssue")}
                     </button>
-                    {secondarySelectionActions.slice(0, 2).map((action) => (
+                    {issueFixes.map((fix) => (
                       <button
-                        key={action.id}
+                        key={fix.id}
                         className="btn"
                         type="button"
-                        onClick={() => handleAddContextualNode(action)}
-                        data-testid={`graph-inspector-action-${action.id}`}
+                        onClick={() => handleApplyErdSuggestedFix(fix.commands)}
+                        data-testid={`semantic-issue-fix-${index}-${fix.id}`}
                       >
-                        {action.label}
+                        {fix.label}
                       </button>
                     ))}
-                  </div>
-                </div>
-              ) : null}
+                  </>
+                );
+              }}
+            />
+          }
+        >
 
-              <div className="row-actions inspector-section-tabs">
-                <button
-                  className="btn inspector-section-toggle"
-                  type="button"
-                  onClick={() => handleToggleInspectorSection("general")}
-                  aria-expanded={inspectorSections.general}
-                  data-testid="inspector-section-general-toggle"
-                >
-                  {operationalGeneralSectionTitle} {inspectorSections.general ? "▾" : "▸"}
-                </button>
-                <button
-                  className="btn inspector-section-toggle"
-                  type="button"
-                  onClick={() => handleToggleInspectorSection("details")}
-                  aria-expanded={inspectorSections.details}
-                  data-testid="inspector-section-details-toggle"
-                >
-                  {operationalDetailsSectionTitle} {inspectorSections.details ? "▾" : "▸"}
-                </button>
-                <button
-                  className="btn inspector-section-toggle"
-                  type="button"
-                  onClick={() => handleToggleInspectorSection("relations")}
-                  aria-expanded={inspectorSections.relations}
-                  data-testid="inspector-section-relations-toggle"
-                >
-                  {operationalRelationsSectionTitle} {inspectorSections.relations ? "▾" : "▸"}
-                </button>
-              </div>
-
-              {inspectorSections.general ? (
-                <>
-                  <div className="field">
-                    <label htmlFor="node-title-input">{operationalNodeTitleLabel}</label>
-                    <input
-                      id="node-title-input"
-                      data-testid="inspector-node-label"
-                      value={operationalNodeDraft.label}
-                      onChange={(event) =>
-                        setOperationalNodeDraft((current) =>
-                          current ? { ...current, label: event.target.value } : current,
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="node-kind-operational-input">
-                      {operationalNodeKindLabel}
-                    </label>
-                    <select
-                      id="node-kind-operational-input"
-                      data-testid="inspector-node-kind"
-                      value={operationalNodeDraft.kind}
-                      onChange={(event) =>
-                        setOperationalNodeDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                kind: event.target.value as OperationalNodeDraft["kind"],
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      {nodeKindOptions.map((option) => (
-                        <option key={option.kind} value={option.kind}>
-                          {getNodeKindLabelForDiagram(
-                            currentSupportedDiagramType,
-                            option.kind,
-                            "operational",
-                            editorT,
-                          )}
-                          {option.outOfProfile
-                            ? editorT("shell.inspector.outOfProfileSuffix")
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="helper">
-                      {getNodeKindDescriptionForDiagram(
-                        currentSupportedDiagramType,
-                        operationalNodeDraft.kind,
-                        editorT,
-                      )}
-                    </span>
-                  </div>
-                </>
-              ) : null}
-
-              {inspectorSections.details ? (
-                <>
-                  <div className="field">
-                    <label htmlFor="node-description-operational-input">
-                      {operationalNodeDescriptionLabel}
-                    </label>
-                    <textarea
-                      id="node-description-operational-input"
-                      rows={3}
-                      value={operationalNodeDraft.description}
-                      onChange={(event) =>
-                        setOperationalNodeDraft((current) =>
-                          current
-                            ? { ...current, description: event.target.value }
-                            : current,
-                        )
-                      }
-                      placeholder={operationalNodeDescriptionPlaceholder}
-                      data-testid="inspector-node-description"
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="node-tags-operational-input">
-                      {operationalNodeTagsLabel}
-                    </label>
-                    <input
-                      id="node-tags-operational-input"
-                      value={operationalNodeDraft.tagsText}
-                      onChange={(event) =>
-                        setOperationalNodeDraft((current) =>
-                          current ? { ...current, tagsText: event.target.value } : current,
-                        )
-                      }
-                      placeholder={operationalNodeTagsPlaceholder}
-                      data-testid="inspector-node-tags"
-                    />
-                    <span className="helper">{operationalNodeTagsHelper}</span>
-                  </div>
-
-                  {operationalTagPreview.length > 0 ? (
-                    <div className="row-actions">
-                      {operationalTagPreview.map((tag) => (
-                        <span key={tag} className="badge">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div
-                    className={`tile inspector-context-tile ${
-                      isGraphDiagram ? "inspector-context-tile--graph" : ""
-                    }`}
-                    data-testid={isGraphDiagram ? "graph-inspector-context" : undefined}
-                  >
-                    <h4>{operationalNodeContextTitle}</h4>
-                    <p className="helper">
-                      {editorT("shell.inspector.currentRole")}{" "}
-                      <strong>{selectedNodeRoleLabel ?? editorT("shell.roles.undefined")}</strong>
-                    </p>
-                    {isGraphDiagram ? (
-                      <dl className="inspector-meta-list">
-                        <div>
-                          <dt>{editorT("shell.inspector.dominantReading")}</dt>
-                          <dd>{graphSelectedNodeKindLabel ?? editorT("graph.nodeKinds.entity.labelOperational")}</dd>
-                        </div>
-                        <div>
-                          <dt>{editorT("shell.inspector.neighborhood")}</dt>
-                          <dd>
-                            {editorT("shell.inspector.neighborhoodSummary", {
-                              incomingCount: selectedNodeRelations.incomingCount,
-                              outgoingCount: selectedNodeRelations.outgoingCount,
-                            })}
-                          </dd>
-                        </div>
-                      </dl>
-                    ) : null}
-                    {isGraphDiagram && graphSelectedNodeKindDescription ? (
-                      <p className="helper">{graphSelectedNodeKindDescription}</p>
-                    ) : null}
-                    <ul className="summary-list">
-                      {selectedNodeStructureTips.map((tip) => (
-                        <li key={tip}>{tip}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </>
-              ) : null}
-
-              {nodeInspectorErrors.label ? (
-                <span className="helper field-error" role="alert">
-                  {nodeInspectorErrors.label}
-                </span>
-              ) : null}
-              {nodeInspectorErrors.kind ? (
-                <span className="helper field-error" role="alert">
-                  {nodeInspectorErrors.kind}
-                </span>
-              ) : null}
-
-              {inspectorSections.relations ? (
-                <div className="tile">
-                  <h4>{operationalRelationsSectionTitle}</h4>
-                  <p className="helper">
-                    {isGraphDiagram
-                      ? editorT("shell.relations.graphSummary", {
-                          incomingCount: selectedNodeRelations.incomingCount,
-                          outgoingCount: selectedNodeRelations.outgoingCount,
-                        })
-                      : editorT("shell.relations.flowSummary", {
-                          incomingCount: selectedNodeRelations.incomingCount,
-                          outgoingCount: selectedNodeRelations.outgoingCount,
-                        })}
-                  </p>
-                  {selectedNodeRelations.preview.length > 0 ? (
-                    <ul className="summary-list inspector-relation-list">
-                      {selectedNodeRelations.preview.map((relation) => (
-                        <li
-                          key={relation.id}
-                          className={`inspector-relation-item ${
-                            relation.lane ? `inspector-relation-item--${relation.lane}` : ""
-                          }`}
-                        >
-                          <div className="inspector-relation-item__head">
-                            <span className="badge">{relation.directionLabel}</span>
-                          </div>
-                          <p className="inspector-relation-item__peer">{relation.otherLabel}</p>
-                          <p className="helper inspector-relation-item__path">
-                            {`${relation.sourceLabel} -> ${relation.targetLabel}`}
-                          </p>
-                          <div className="row-actions inspector-relation-item__actions">
-                            <button
-                              className="btn btn-link"
-                              type="button"
-                              onClick={() =>
-                                handleOpenRelatedNodeFromRelation(
-                                  relation.id,
-                                  relation.otherNodeId,
-                                )
-                              }
-                            >
-                              {isGraphDiagram
-                                ? editorT("shell.relations.openComponent")
-                                : editorT("shell.relations.openRelatedNode")}
-                            </button>
-                            <button
-                              className="btn btn-link"
-                              type="button"
-                              onClick={() => handleOpenTransitionFromRelation(relation.id)}
-                            >
-                              {editorT("shell.relations.editConnection")}
-                            </button>
-                            <button
-                              className="btn btn-link btn-danger"
-                              type="button"
-                              onClick={() => handleRemoveRelation(relation.id)}
-                            >
-                              {editorT("selectionHud.remove")}
-                            </button>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="helper">
-                      {isGraphDiagram
-                        ? editorT("shell.relations.emptyGraph")
-                        : editorT("shell.relations.empty")}
-                    </p>
-                  )}
-                </div>
-              ) : null}
-
-              {nodeInspectorMessage ? (
-                <div
-                  className={`inspector-feedback ${nodeInspectorHasErrors ? "is-error" : ""}`}
-                  aria-live="polite"
-                  data-testid="inspector-node-feedback"
-                >
-                  {nodeInspectorMessage}
-                </div>
-              ) : null}
-
-              <div className="row-actions inspector-actions">
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={handleApplyNodeInspector}
-                  disabled={saveState.status === "saving"}
-                  data-testid="inspector-apply-node"
-                >
-                  {editorT("shell.applyChanges")}
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleNodeInspectorReset}
-                  data-testid="inspector-reset-node"
-                >
-                  {editorT("shell.revert")}
-                </button>
-              </div>
-              </div>
-          ) : null}
-
-          {selectedNode && inspectorMode === "technical" && nodeInspectorDraft ? (
-          <div className="stack-sm">
-            <div className="row-actions inspector-selection-row">
-              <span className="badge">{inspectorSelectionBadge}</span>
-              {nodeInspectorDirty ? (
-                <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                  {editorT("shell.inspector.draftBadge")}
-                </span>
-                ) : null}
-            </div>
-            <span className="sr-only" data-testid="inspector-node-id">
-              {selectedNode.id}
-            </span>
-
-            <div className="row-actions inspector-section-tabs">
-              <button
-                className="btn inspector-section-toggle"
-                type="button"
-                onClick={() => handleToggleInspectorSection("general")}
-                aria-expanded={inspectorSections.general}
-                data-testid="inspector-section-general-toggle"
-              >
-                {editorT("shell.technical.generalSection")} {inspectorSections.general ? "▾" : "▸"}
-              </button>
-              <button
-                className="btn inspector-section-toggle"
-                type="button"
-                onClick={() => handleToggleInspectorSection("details")}
-                aria-expanded={inspectorSections.details}
-                data-testid="inspector-section-details-toggle"
-              >
-                {editorT("shell.technical.detailsSection")} {inspectorSections.details ? "▾" : "▸"}
-              </button>
-              <button
-                className="btn inspector-section-toggle"
-                type="button"
-                onClick={() => handleToggleInspectorSection("advanced")}
-                aria-expanded={inspectorSections.advanced}
-                data-testid="inspector-section-advanced-toggle"
-              >
-                {editorT("shell.technical.advancedSection")} {inspectorSections.advanced ? "▾" : "▸"}
-              </button>
-            </div>
-
-            {inspectorSections.general ? (
-              <>
-                <div className="field">
-                  <label htmlFor="node-label-input">{editorT("shell.technical.node.label")}</label>
-                  <input
-                    id="node-label-input"
-                    data-testid="inspector-node-label"
-                    value={nodeInspectorDraft.label}
-                    onChange={(event) =>
-                      setNodeInspectorDraft((current) =>
-                        current ? { ...current, label: event.target.value } : current,
-                      )
-                    }
-                  />
-                  {nodeInspectorErrors.label ? (
-                    <span className="helper field-error" role="alert">
-                      {nodeInspectorErrors.label}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="field">
-                  <label htmlFor="node-kind-input">{editorT("shell.technical.node.rawKind")}</label>
-                  <select
-                    id="node-kind-input"
-                    data-testid="inspector-node-kind"
-                    value={nodeInspectorDraft.kind}
-                    onChange={(event) =>
-                      setNodeInspectorDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              kind: event.target.value as NodeInspectorDraft["kind"],
-                            }
-                          : current,
-                      )
-                    }
-                  >
-                    {nodeKindOptions.map((option) => (
-                      <option key={option.kind} value={option.kind}>
-                        {option.kind}
-                        {option.outOfProfile ? editorT("shell.inspector.outOfProfileSuffix") : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <span
-                    className="helper"
-                    title={getFriendlyNodeKindDescription(nodeInspectorDraft.kind, editorT)}
-                  >
-                    {editorT("shell.technical.friendlyLabel", {
-                      label: getFriendlyNodeKindLabel(nodeInspectorDraft.kind, editorT),
-                    })}
-                  </span>
-                  {nodeInspectorErrors.kind ? (
-                    <span className="helper field-error" role="alert">
-                      {nodeInspectorErrors.kind}
-                    </span>
-                  ) : null}
-                </div>
-              </>
-            ) : null}
-
-            {inspectorSections.details ? (
-              <div className="field">
-                <label htmlFor="node-data-json-input">{editorT("shell.technical.node.dataJson")}</label>
-                <div className="row-actions">
-                  <button className="btn" type="button" onClick={handleFormatNodeJson}>
-                    {editorT("shell.technical.formatJson")}
-                  </button>
-                  <button className="btn" type="button" onClick={handleCopyNodeJson}>
-                    {editorT("shell.technical.copyJson")}
-                  </button>
-                </div>
-                <textarea
-                  id="node-data-json-input"
-                  rows={8}
-                  className="mono"
-                  data-testid="inspector-node-data-json"
-                  value={nodeInspectorDraft.dataJson}
-                  onChange={(event) =>
-                    setNodeInspectorDraft((current) =>
-                      current ? { ...current, dataJson: event.target.value } : current,
-                    )
-                  }
-                />
-                {nodeInspectorErrors.dataJson ? (
-                  <span className="helper field-error" role="alert">
-                    {nodeInspectorErrors.dataJson}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-
-            {nodeInspectorMessage ? (
-              <div
-                className={`inspector-feedback ${nodeInspectorHasErrors ? "is-error" : ""}`}
-                aria-live="polite"
-                data-testid="inspector-node-feedback"
-              >
-                {nodeInspectorMessage}
-              </div>
-            ) : null}
-
-            <div className="row-actions inspector-actions">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={handleApplyNodeInspector}
-                disabled={saveState.status === "saving"}
-                data-testid="inspector-apply-node"
-              >
-                {editorT("shell.applyChanges")}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleNodeInspectorReset}
-                data-testid="inspector-reset-node"
-              >
-                {editorT("shell.revert")}
-              </button>
-            </div>
-
-            {inspectorSections.advanced ? (
-              <>
-                <div className="row-actions">
-                  <span className="badge mono" data-testid="inspector-node-id">
-                    {selectedNode.id}
-                  </span>
-                  <button className="btn" type="button" onClick={handleCopyNodeId}>
-                    {editorT("shell.technical.copyId")}
-                  </button>
-                </div>
-                <dl className="inspector-meta-list">
-                  <div>
-                    <dt>{editorT("shell.technical.position")}</dt>
-                    <dd data-testid="inspector-node-position">
-                      {Math.round(selectedNode.position.x)},{" "}
-                      {Math.round(selectedNode.position.y)}
-                    </dd>
-                  </div>
-                </dl>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-
-          {selectedEdge &&
-          inspectorMode === "operational" &&
-          isErdDiagram &&
-          (selectedEdge.data?.kind ?? "flows-to") === "references" &&
-          selectedErdRelationPayload ? (
-            <div className="stack-sm erd-relation-inspector">
-              <div className="row-actions inspector-selection-row">
-                <span className="badge">{editorT("shell.erd.relation.badge")}</span>
-                {edgeInspectorDirty ? (
-                  <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                    {editorT("shell.inspector.draftBadge")}
-                  </span>
-                ) : null}
-              </div>
-
-              <section className="inspector-section-body">
-                <h4>{editorT("shell.erd.relation.sections.general")}</h4>
-                <div className="field">
-                  <label htmlFor="erd-relation-name-input">
-                    {editorT("shell.erd.relation.nameLabel")}
-                  </label>
-                  <input
-                    id="erd-relation-name-input"
-                    defaultValue={selectedErdRelationPayload.name ?? ""}
-                    key={`erd-relation-name-${selectedEdge.id}-${selectedErdRelationPayload.name ?? ""}`}
-                    onBlur={(event) => {
-                      updateSelectedErdRelationName(event.target.value);
-                    }}
-                    placeholder={editorT("shell.erd.relation.optionalPlaceholder")}
-                    data-testid="erd-relation-name-input"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="erd-relation-description-input">
-                    {editorT("shell.erd.relation.descriptionLabel")}
-                  </label>
-                  <textarea
-                    id="erd-relation-description-input"
-                    rows={2}
-                    defaultValue={selectedErdRelationPayload.description ?? ""}
-                    key={`erd-relation-description-${selectedEdge.id}-${selectedErdRelationPayload.description ?? ""}`}
-                    onBlur={(event) => {
-                      const description = event.target.value.trim();
-                      updateSelectedErdRelationPayload((payload) => ({
-                        ...payload,
-                        ...(description ? { description } : { description: undefined }),
-                      }));
-                    }}
-                    data-testid="erd-relation-description-input"
-                  />
-                </div>
-                <dl className="inspector-meta-list">
-                  <div>
-                    <dt>{editorT("shell.erd.relation.source")}</dt>
-                    <dd>{selectedEdgeSourceLabel}</dd>
-                  </div>
-                  <div>
-                    <dt>{editorT("shell.erd.relation.target")}</dt>
-                    <dd>{selectedEdgeTargetLabel}</dd>
-                  </div>
-                </dl>
-                <div className="row-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleSwapSelectedErdRelationDirection}
-                    data-testid="erd-relation-swap-direction"
-                  >
-                    {editorT("shell.erd.relation.swapDirection")}
-                  </button>
-                </div>
-              </section>
-
-              <section className="inspector-section-body">
-                <h4>{editorT("shell.erd.relation.sections.cardinality")}</h4>
-                <div className="row-actions">
-                  {(["1:1", "1:N", "N:1", "N:N"] as ErdCardinalityPreset[]).map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      className={`btn ${
-                        erdCardinalityToPreset(selectedErdRelationPayload.cardinality) === preset
-                          ? "btn-primary"
-                          : ""
-                      }`}
-                      onClick={() =>
-                        updateSelectedErdRelationPayload((payload) => ({
-                          ...payload,
-                          cardinality: erdCardinalityFromPreset(preset),
-                        }))
-                      }
-                      data-testid={`erd-relation-cardinality-preset-${preset.replace(":", "-")}`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
-                </div>
-                <div className="erd-cardinality-advanced">
-                  {(() => {
-                    const cardinality =
-                      selectedErdRelationPayload.cardinality ??
-                      erdCardinalityFromPreset("1:N");
-
-                    return (
-                      <>
-                        <label>
-                          {editorT("shell.erd.relation.minSource")}
-                          <select
-                            value={String(cardinality.minSource)}
-                            onChange={(event) =>
-                              updateSelectedErdRelationPayload((payload) => ({
-                                ...payload,
-                                cardinality: {
-                                  ...(payload.cardinality ?? cardinality),
-                                  minSource: event.target.value === "1" ? 1 : 0,
-                                },
-                              }))
-                            }
-                            data-testid="erd-cardinality-min-source"
-                          >
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                          </select>
-                        </label>
-                        <label>
-                          {editorT("shell.erd.relation.maxSource")}
-                          <select
-                            value={String(cardinality.maxSource)}
-                            onChange={(event) =>
-                              updateSelectedErdRelationPayload((payload) => ({
-                                ...payload,
-                                cardinality: {
-                                  ...(payload.cardinality ?? cardinality),
-                                  maxSource: event.target.value === "N" ? "N" : 1,
-                                },
-                              }))
-                            }
-                            data-testid="erd-cardinality-max-source"
-                          >
-                            <option value="1">1</option>
-                            <option value="N">N</option>
-                          </select>
-                        </label>
-                        <label>
-                          {editorT("shell.erd.relation.minTarget")}
-                          <select
-                            value={String(cardinality.minTarget)}
-                            onChange={(event) =>
-                              updateSelectedErdRelationPayload((payload) => ({
-                                ...payload,
-                                cardinality: {
-                                  ...(payload.cardinality ?? cardinality),
-                                  minTarget: event.target.value === "1" ? 1 : 0,
-                                },
-                              }))
-                            }
-                            data-testid="erd-cardinality-min-target"
-                          >
-                            <option value="0">0</option>
-                            <option value="1">1</option>
-                          </select>
-                        </label>
-                        <label>
-                          {editorT("shell.erd.relation.maxTarget")}
-                          <select
-                            value={String(cardinality.maxTarget)}
-                            onChange={(event) =>
-                              updateSelectedErdRelationPayload((payload) => ({
-                                ...payload,
-                                cardinality: {
-                                  ...(payload.cardinality ?? cardinality),
-                                  maxTarget: event.target.value === "N" ? "N" : 1,
-                                },
-                              }))
-                            }
-                            data-testid="erd-cardinality-max-target"
-                          >
-                            <option value="1">1</option>
-                            <option value="N">N</option>
-                          </select>
-                        </label>
-                        <label className="erd-cardinality-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={cardinality.minSource === 0}
-                            onChange={(event) =>
-                              updateSelectedErdRelationPayload((payload) => ({
-                                ...payload,
-                                cardinality: {
-                                  ...(payload.cardinality ?? cardinality),
-                                  minSource: event.target.checked ? 0 : 1,
-                                },
-                              }))
-                            }
-                            data-testid="erd-cardinality-optional-source"
-                          />
-                          {editorT("shell.erd.relation.optionalSource")}
-                        </label>
-                        <label className="erd-cardinality-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={cardinality.minTarget === 0}
-                            onChange={(event) =>
-                              updateSelectedErdRelationPayload((payload) => ({
-                                ...payload,
-                                cardinality: {
-                                  ...(payload.cardinality ?? cardinality),
-                                  minTarget: event.target.checked ? 0 : 1,
-                                },
-                              }))
-                            }
-                            data-testid="erd-cardinality-optional-target"
-                          />
-                          {editorT("shell.erd.relation.optionalTarget")}
-                        </label>
-                      </>
-                    );
-                  })()}
-                </div>
-              </section>
-
-              <section className="inspector-section-body">
-                <h4>{editorT("shell.erd.relation.sections.roles")}</h4>
-                <div className="field">
-                  <label htmlFor="erd-role-source-input">sourceRole</label>
-                  <input
-                    id="erd-role-source-input"
-                    defaultValue={selectedErdRelationPayload.roles?.sourceRole ?? ""}
-                    key={`erd-role-source-${selectedEdge.id}-${selectedErdRelationPayload.roles?.sourceRole ?? ""}`}
-                    onBlur={(event) => {
-                      const sourceRole = event.target.value.trim();
-                      updateSelectedErdRelationPayload((payload) => ({
-                        ...payload,
-                        roles: {
-                          ...(payload.roles ?? {}),
-                          ...(sourceRole ? { sourceRole } : { sourceRole: undefined }),
-                        },
-                      }));
-                    }}
-                    data-testid="erd-role-source-input"
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="erd-role-target-input">targetRole</label>
-                  <input
-                    id="erd-role-target-input"
-                    defaultValue={selectedErdRelationPayload.roles?.targetRole ?? ""}
-                    key={`erd-role-target-${selectedEdge.id}-${selectedErdRelationPayload.roles?.targetRole ?? ""}`}
-                    onBlur={(event) => {
-                      const targetRole = event.target.value.trim();
-                      updateSelectedErdRelationPayload((payload) => ({
-                        ...payload,
-                        roles: {
-                          ...(payload.roles ?? {}),
-                          ...(targetRole ? { targetRole } : { targetRole: undefined }),
-                        },
-                      }));
-                    }}
-                    data-testid="erd-role-target-input"
-                  />
-                </div>
-                <p className="helper" data-testid="erd-role-preview">
-                  {selectedEdgeSourceLabel}{" "}
-                  {selectedErdRelationPayload.roles?.sourceRole ?? editorT("shell.erd.relation.roleFallback")}
-                  {" / "}
-                  {selectedEdgeTargetLabel}{" "}
-                  {selectedErdRelationPayload.roles?.targetRole ?? editorT("shell.erd.relation.roleFallback")}
-                </p>
-              </section>
-
-              <section className="inspector-section-body">
-                <h4>{editorT("shell.erd.relation.sections.materialization")}</h4>
-                <p className="helper">
-                  {editorT("shell.erd.relation.currentState")}{" "}
-                  {selectedErdRelationPayload.materialization?.mode === "fk"
-                    ? editorT("shell.erd.relation.materialization.fk")
-                    : selectedErdRelationPayload.materialization?.mode === "associative"
-                      ? editorT("shell.erd.relation.materialization.associative")
-                      : editorT("shell.erd.relation.materialization.conceptual")}
-                </p>
-                <div className="erd-materialization-controls">
-                  <label>
-                    {editorT("shell.erd.relation.dependentSide")}
-                    <select
-                      value={erdMaterializeDependentSide}
-                      onChange={(event) =>
-                        setErdMaterializeDependentSide(
-                          event.target.value as "source" | "target",
-                        )
-                      }
-                      data-testid="erd-materialize-dependent-side"
-                    >
-                      <option value="source">{editorT("shell.erd.relation.source")}</option>
-                      <option value="target">{editorT("shell.erd.relation.target")}</option>
-                    </select>
-                  </label>
-                  {(() => {
-                    const dependentEntityNode =
-                      erdMaterializeDependentSide === "source"
-                        ? selectedErdSourceEntityNode
-                        : selectedErdTargetEntityNode;
-                    const dependentFields = dependentEntityNode
-                      ? normalizeErdEntityPayloadFromNode(dependentEntityNode).fields
-                      : [];
-
-                    return (
-                      <label>
-                        {editorT("shell.erd.relation.fkField")}
-                        <select
-                          value={erdMaterializeExistingFieldId}
-                          onChange={(event) => setErdMaterializeExistingFieldId(event.target.value)}
-                          data-testid="erd-materialize-field-select"
-                        >
-                          <option value="__new__">{editorT("shell.erd.relation.createNewField")}</option>
-                          {dependentFields.map((field) => (
-                            <option key={field.id} value={field.id}>
-                              {field.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    );
-                  })()}
-                  <label className="erd-cardinality-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={erdMaterializeUnique}
-                      onChange={(event) => setErdMaterializeUnique(event.target.checked)}
-                      data-testid="erd-materialize-unique-toggle"
-                    />
-                    {editorT("shell.erd.relation.uniqueOnFk")}
-                  </label>
-                </div>
-                <div className="row-actions">
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleMaterializeSelectedErdRelationAsFk}
-                    data-testid="erd-materialize-fk-button"
-                  >
-                    {editorT("shell.erd.relation.materializeFk")}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleApplySelectedErdOneToOneUniqueFix}
-                    data-testid="erd-materialize-apply-unique-button"
-                  >
-                    {editorT("shell.erd.relation.applyUnique")}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleConvertSelectedErdRelationToAssociative}
-                    disabled={erdCardinalityToPreset(selectedErdRelationPayload.cardinality) !== "N:N"}
-                    data-testid="erd-convert-associative-button"
-                  >
-                    {editorT("shell.erd.relation.convertAssociative")}
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={handleMarkSelectedErdRelationConceptual}
-                    disabled={!erdPolicy.allowConceptualRelations}
-                    data-testid="erd-mark-conceptual-button"
-                  >
-                    {editorT("shell.erd.relation.markConceptual")}
-                  </button>
-                </div>
-              </section>
-
-              <section className="inspector-section-body">
-                <h4>{editorT("shell.erd.relation.sections.referentialIntegrity")}</h4>
-                <div className="erd-cardinality-advanced">
-                  <label>
-                    onDelete
-                    <select
-                      value={selectedErdRelationPayload.referentialActions?.onDelete ?? ""}
-                      onChange={(event) =>
-                        updateSelectedErdRelationPayload((payload) => ({
-                          ...payload,
-                          referentialActions: {
-                            ...(payload.referentialActions ?? {}),
-                            ...(event.target.value
-                              ? { onDelete: event.target.value as "restrict" | "cascade" | "setNull" | "noAction" }
-                              : { onDelete: undefined }),
-                          },
-                        }))
-                      }
-                      data-testid="erd-referential-on-delete"
-                    >
-                      <option value="">{editorT("shell.erd.relation.defaultOption")}</option>
-                      <option value="restrict">restrict</option>
-                      <option value="cascade">cascade</option>
-                      <option value="setNull">setNull</option>
-                      <option value="noAction">noAction</option>
-                    </select>
-                  </label>
-                  <label>
-                    onUpdate
-                    <select
-                      value={selectedErdRelationPayload.referentialActions?.onUpdate ?? ""}
-                      onChange={(event) =>
-                        updateSelectedErdRelationPayload((payload) => ({
-                          ...payload,
-                          referentialActions: {
-                            ...(payload.referentialActions ?? {}),
-                            ...(event.target.value
-                              ? { onUpdate: event.target.value as "restrict" | "cascade" | "setNull" | "noAction" }
-                              : { onUpdate: undefined }),
-                          },
-                        }))
-                      }
-                      data-testid="erd-referential-on-update"
-                    >
-                      <option value="">{editorT("shell.erd.relation.defaultOption")}</option>
-                      <option value="restrict">restrict</option>
-                      <option value="cascade">cascade</option>
-                      <option value="setNull">setNull</option>
-                      <option value="noAction">noAction</option>
-                    </select>
-                  </label>
-                </div>
-              </section>
-
-              <section className="inspector-section-body">
-                <h4>{editorT("shell.erd.relation.sections.diagnostics")}</h4>
-                {selectedErdRelationIssues.length > 0 ? (
-                  <ul className="summary-list">
-                    {selectedErdRelationIssues.map((issue) => (
-                      <li key={issue.id}>
-                        <span>
-                          {getSemanticSeverityLabel(issue.severity, editorT)}: {issue.message}
-                        </span>
-                        <div className="row-actions">
-                          <button
-                            className="btn btn-link"
-                            type="button"
-                            onClick={() => handleFocusSemanticIssue(issue)}
-                            data-testid={`erd-relation-issue-goto-${issue.id}`}
-                          >
-                            {editorT("shell.audit.goToIssue")}
-                          </button>
-                          {readIssueSuggestedFixes(issue).map((fix) => (
-                            <button
-                              key={fix.id}
-                              className="btn"
-                              type="button"
-                              onClick={() => handleApplyErdSuggestedFix(fix.commands)}
-                              data-testid={`erd-relation-issue-fix-${fix.id}`}
-                            >
-                              {fix.label}
-                            </button>
-                          ))}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="helper">{editorT("shell.erd.relation.diagnosticsEmpty")}</p>
-                )}
-              </section>
-
-              {edgeInspectorMessage ? (
-                <div
-                  className={`inspector-feedback ${edgeInspectorHasErrors ? "is-error" : ""}`}
-                  aria-live="polite"
-                  data-testid="inspector-edge-feedback"
-                >
-                  {edgeInspectorMessage}
-                </div>
-              ) : null}
-
-              <div className="row-actions inspector-actions">
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleRemoveSelected}
-                  disabled={saveState.status === "saving"}
-                  data-testid="erd-relation-remove-button"
-                >
-                  {editorT("shell.erd.relation.remove")}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {selectedEdge &&
-          inspectorMode === "operational" &&
-          operationalEdgeDraft &&
-          (!isErdDiagram || (selectedEdge.data?.kind ?? "flows-to") !== "references") &&
-          isProcessDiagram &&
-          processEdgeInspectorModel &&
-          selectedEdgeSourceLabel &&
-          selectedEdgeTargetLabel ? (
-              <ProcessOperationalEdgeInspector
-                copy={processEdgeInspectorModel.copy}
-                overview={processEdgeInspectorModel.overview}
-                draft={operationalEdgeDraft}
-                edgeKindOptions={edgeKindOptions}
-                sections={{
-                  general: inspectorSections.general,
-                  relations: inspectorSections.relations,
-                }}
-                sourceLabel={selectedEdgeSourceLabel}
-                targetLabel={selectedEdgeTargetLabel}
-                edgeReadingKind={selectedEdge.data?.kind ?? "flows-to"}
-                edgeInspectorErrors={edgeInspectorErrors}
-                edgeInspectorMessage={edgeInspectorMessage}
-                edgeInspectorHasErrors={edgeInspectorHasErrors}
-                isSaving={saveState.status === "saving"}
-                onToggleSection={handleToggleInspectorSection}
-                onLabelChange={(value) =>
-                  setOperationalEdgeDraft((current) =>
-                    current ? { ...current, label: value } : current,
-                  )
-                }
-                onKindChange={(kind) =>
-                  setOperationalEdgeDraft((current) =>
-                    current ? { ...current, kind } : current,
-                  )
-                }
-                onApply={handleApplyEdgeInspector}
-                onReset={handleEdgeInspectorReset}
-                onRemove={handleRemoveSelected}
-              />
-          ) : null}
-
-          {selectedEdge &&
-          inspectorMode === "operational" &&
-          operationalEdgeDraft &&
-          (!isErdDiagram || (selectedEdge.data?.kind ?? "flows-to") !== "references") &&
-          !isProcessDiagram ? (
-              <div className="stack-sm">
-                <div className="row-actions inspector-selection-row">
-                  <span className="badge">
-                    {inspectorSelectionState.edgeSelected
-                      ? inspectorSelectionState.badgeLabel
-                      : editorT("shell.selection.edgeFocused")}
-                  </span>
-                  {edgeInspectorDirty ? (
-                    <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                      {editorT("shell.inspector.draftBadge")}
-                    </span>
-                  ) : null}
-                </div>
-
-              <div className="row-actions inspector-section-tabs">
-                <button
-                  className="btn inspector-section-toggle"
-                  type="button"
-                  onClick={() => handleToggleInspectorSection("general")}
-                  aria-expanded={inspectorSections.general}
-                  data-testid="inspector-section-general-toggle"
-                >
-                  {operationalEdgeGeneralSectionTitle} {inspectorSections.general ? "▾" : "▸"}
-                </button>
-                <button
-                  className="btn inspector-section-toggle"
-                  type="button"
-                  onClick={() => handleToggleInspectorSection("relations")}
-                  aria-expanded={inspectorSections.relations}
-                  data-testid="inspector-section-relations-toggle"
-                >
-                  {operationalRelationsSectionTitle} {inspectorSections.relations ? "▾" : "▸"}
-                </button>
-              </div>
-
-              {graphSelectedEdgeSemantic ? (
-                <div
-                  className="tile inspector-context-tile inspector-context-tile--graph"
-                  data-testid="graph-edge-overview"
-                >
-                  <div className="row-actions">
-                    <span className="badge">{graphSelectedEdgeSemantic.labelOperational}</span>
-                    <span className="badge">{graphSelectedEdgeSemantic.defaultVerbLabel}</span>
-                  </div>
-                  <h4>{editorT("shell.graph.edgeReadingTitle")}</h4>
-                  <p className="helper">
-                    {selectedEdgeSourceLabel} {" -> "} {selectedEdgeTargetLabel}
-                  </p>
-                  <p className="helper">{graphSelectedEdgeSemantic.description}</p>
-                </div>
-              ) : null}
-
-              {inspectorSections.general ? (
-                <>
-                  <div className="field">
-                    <label htmlFor="edge-label-operational-input">
-                      {operationalEdgeLabelLabel}
-                    </label>
-                    <input
-                      id="edge-label-operational-input"
-                      value={operationalEdgeDraft.label}
-                      onChange={(event) =>
-                        setOperationalEdgeDraft((current) =>
-                          current ? { ...current, label: event.target.value } : current,
-                        )
-                      }
-                    />
-                  </div>
-
-                  <div className="field">
-                    <label htmlFor="edge-kind-operational-input">
-                      {operationalEdgeKindLabel}
-                    </label>
-                    <select
-                      id="edge-kind-operational-input"
-                      value={operationalEdgeDraft.kind}
-                      onChange={(event) =>
-                        setOperationalEdgeDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                kind: event.target.value as OperationalEdgeDraft["kind"],
-                              }
-                            : current,
-                        )
-                      }
-                    >
-                      {edgeKindOptions.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {getEdgeKindLabelForDiagram(
-                            currentSupportedDiagramType,
-                            kind,
-                            "operational",
-                            editorT,
-                          )}
-                        </option>
-                      ))}
-                    </select>
-                    <span className="helper">
-                      {getEdgeKindDescriptionForDiagram(
-                        currentSupportedDiagramType,
-                        operationalEdgeDraft.kind,
-                        editorT,
-                      )}
-                    </span>
-                  </div>
-                </>
-              ) : null}
-
-              {inspectorSections.relations ? (
-                <dl className="inspector-meta-list">
-                  <div>
-                    <dt>{operationalEdgeSourceLabel}</dt>
-                    <dd>{selectedEdgeSourceLabel}</dd>
-                  </div>
-                  <div>
-                    <dt>{operationalEdgeTargetLabel}</dt>
-                    <dd>{selectedEdgeTargetLabel}</dd>
-                  </div>
-                </dl>
-              ) : null}
-
-              {edgeInspectorErrors.label ? (
-                <span className="helper field-error" role="alert">
-                  {edgeInspectorErrors.label}
-                </span>
-              ) : null}
-              {edgeInspectorErrors.kind ? (
-                <span className="helper field-error" role="alert">
-                  {edgeInspectorErrors.kind}
-                </span>
-              ) : null}
-
-              {edgeInspectorMessage ? (
-                <div
-                  className={`inspector-feedback ${edgeInspectorHasErrors ? "is-error" : ""}`}
-                  aria-live="polite"
-                  data-testid="inspector-edge-feedback"
-                >
-                  {edgeInspectorMessage}
-                </div>
-              ) : null}
-
-              <div className="row-actions inspector-actions">
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={handleApplyEdgeInspector}
-                  disabled={saveState.status === "saving"}
-                >
-                  {editorT("shell.applyChanges")}
-                </button>
-                <button className="btn" type="button" onClick={handleEdgeInspectorReset}>
-                  {editorT("shell.revert")}
-                </button>
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={handleRemoveSelected}
-                  disabled={saveState.status === "saving"}
-                >
-                  {editorT("shell.edgeActions.remove")}
-                </button>
-              </div>
-              </div>
-          ) : null}
-
-          {selectedEdge && inspectorMode === "technical" && edgeInspectorDraft ? (
-          <div className="stack-sm">
-            <div className="row-actions inspector-selection-row">
-              <span className="badge">
-                {inspectorSelectionState.edgeSelected
-                  ? inspectorSelectionState.badgeLabel
-                  : editorT("shell.selection.edgeFocused")}
-              </span>
-              {edgeInspectorDirty ? (
-                <span className="badge editor-save-badge editor-save-badge-dirty editor-draft-badge">
-                  {editorT("shell.inspector.draftBadge")}
-                  </span>
-                ) : null}
-            </div>
-
-            <div className="row-actions inspector-section-tabs">
-              <button
-                className="btn inspector-section-toggle"
-                type="button"
-                onClick={() => handleToggleInspectorSection("general")}
-                aria-expanded={inspectorSections.general}
-                data-testid="inspector-section-general-toggle"
-              >
-                {editorT("shell.technical.generalSection")} {inspectorSections.general ? "▾" : "▸"}
-              </button>
-              <button
-                className="btn inspector-section-toggle"
-                type="button"
-                onClick={() => handleToggleInspectorSection("details")}
-                aria-expanded={inspectorSections.details}
-                data-testid="inspector-section-details-toggle"
-              >
-                {editorT("shell.technical.detailsSection")} {inspectorSections.details ? "▾" : "▸"}
-              </button>
-              <button
-                className="btn inspector-section-toggle"
-                type="button"
-                onClick={() => handleToggleInspectorSection("advanced")}
-                aria-expanded={inspectorSections.advanced}
-                data-testid="inspector-section-advanced-toggle"
-              >
-                {editorT("shell.technical.advancedSection")} {inspectorSections.advanced ? "▾" : "▸"}
-              </button>
-            </div>
-
-            {inspectorSections.general ? (
-              <>
-                <div className="field">
-                  <label htmlFor="edge-label-input">{editorT("shell.technical.edge.label")}</label>
-                  <input
-                    id="edge-label-input"
-                    value={edgeInspectorDraft.label}
-                    onChange={(event) =>
-                      setEdgeInspectorDraft((current) =>
-                        current ? { ...current, label: event.target.value } : current,
-                      )
-                    }
-                  />
-                  {edgeInspectorErrors.label ? (
-                    <span className="helper field-error" role="alert">
-                      {edgeInspectorErrors.label}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="field">
-                  <label htmlFor="edge-kind-input">{editorT("shell.technical.edge.rawKind")}</label>
-                  <select
-                    id="edge-kind-input"
-                    value={edgeInspectorDraft.kind}
-                    onChange={(event) =>
-                      setEdgeInspectorDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              kind: event.target.value as EdgeInspectorDraft["kind"],
-                            }
-                          : current,
-                      )
-                    }
-                  >
-                    {edgeKindOptions.map((kind) => (
-                      <option key={kind} value={kind}>
-                        {kind}
-                      </option>
-                    ))}
-                  </select>
-                  <span
-                    className="helper"
-                    title={getFriendlyEdgeKindDescription(edgeInspectorDraft.kind, editorT)}
-                  >
-                    {editorT("shell.technical.friendlyLabel", {
-                      label: getFriendlyEdgeKindLabel(edgeInspectorDraft.kind, editorT),
-                    })}
-                  </span>
-                  {edgeInspectorErrors.kind ? (
-                    <span className="helper field-error" role="alert">
-                      {edgeInspectorErrors.kind}
-                    </span>
-                  ) : null}
-                </div>
-              </>
-            ) : null}
-
-            {inspectorSections.details ? (
-              <div className="field">
-                <label htmlFor="edge-data-json-input">{editorT("shell.technical.edge.dataJson")}</label>
-                <div className="row-actions">
-                  <button className="btn" type="button" onClick={handleFormatEdgeJson}>
-                    {editorT("shell.technical.formatJson")}
-                  </button>
-                  <button className="btn" type="button" onClick={handleCopyEdgeJson}>
-                    {editorT("shell.technical.copyJson")}
-                  </button>
-                </div>
-                <textarea
-                  id="edge-data-json-input"
-                  rows={8}
-                  className="mono"
-                  value={edgeInspectorDraft.dataJson}
-                  onChange={(event) =>
-                    setEdgeInspectorDraft((current) =>
-                      current ? { ...current, dataJson: event.target.value } : current,
-                    )
-                  }
-                />
-                {edgeInspectorErrors.dataJson ? (
-                  <span className="helper field-error" role="alert">
-                    {edgeInspectorErrors.dataJson}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-
-            {edgeInspectorMessage ? (
-              <div
-                className={`inspector-feedback ${edgeInspectorHasErrors ? "is-error" : ""}`}
-                aria-live="polite"
-                data-testid="inspector-edge-feedback"
-              >
-                {edgeInspectorMessage}
-              </div>
-            ) : null}
-
-            <div className="row-actions inspector-actions">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={handleApplyEdgeInspector}
-                disabled={saveState.status === "saving"}
-              >
-                {editorT("shell.applyChanges")}
-              </button>
-              <button className="btn" type="button" onClick={handleEdgeInspectorReset}>
-                {editorT("shell.revert")}
-              </button>
-              <button
-                className="btn"
-                type="button"
-                onClick={handleRemoveSelected}
-                disabled={saveState.status === "saving"}
-              >
-                {editorT("shell.edgeActions.remove")}
-              </button>
-            </div>
-
-            {inspectorSections.advanced ? (
-              <>
-                <div className="row-actions">
-                  <span className="badge mono">{selectedEdge.id}</span>
-                  <button className="btn" type="button" onClick={handleCopyEdgeId}>
-                    {editorT("shell.technical.copyId")}
-                  </button>
-                </div>
-                <dl className="inspector-meta-list">
-                  <div>
-                    <dt>{editorT("shell.technical.link")}</dt>
-                    <dd>
-                      {selectedEdge.source} -&gt; {selectedEdge.target}
-                    </dd>
-                  </div>
-                </dl>
-              </>
-            ) : null}
-          </div>
-        ) : null}
-
-        {!selectedNode && !selectedEdge ? (
-          <div className="inspector-empty-state" data-testid="inspector-empty-state">
-            <p className="helper">
-              {inspectorCopy.emptyTitle}
-            </p>
-            <p className="helper">
-              {inspectorCopy.emptySummary}
-            </p>
-            <p className="helper">
-              {inspectorCopy.emptyGuidance}
-            </p>
-            <dl className="inspector-meta-list">
-              <div>
-                <dt>{editorT("shell.emptyState.nodes")}</dt>
-                <dd>{nodes.length}</dd>
-              </div>
-              <div>
-                <dt>{editorT("shell.emptyState.edges")}</dt>
-                <dd>{edges.length}</dd>
-              </div>
-              <div>
-                <dt>{editorT("shell.emptyState.viewport")}</dt>
-                <dd>
-                  {Math.round(viewport.x)}, {Math.round(viewport.y)} @{" "}
-                  {viewport.zoom.toFixed(2)}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        ) : null}
-        </aside>
+          {selectedNode || selectedEdge ? (
+            <DiagramInspectorAdapter
+              editorT={editorT}
+              diagramType={currentSupportedDiagramType}
+              inspectorCopy={inspectorCopy}
+              inspectorMode={inspectorMode}
+              inspectorSections={inspectorSections}
+              inspectorSelectionBadge={inspectorSelectionBadge}
+              inspectorSelectionState={inspectorSelectionState}
+              selectedNode={selectedNode}
+              selectedEdge={selectedEdge}
+              selectedEdgeSourceLabel={selectedEdgeSourceLabel}
+              selectedEdgeTargetLabel={selectedEdgeTargetLabel}
+              saveStatus={saveState.status}
+              nodeKindOptions={nodeKindOptions}
+              edgeKindOptions={edgeKindOptions}
+              nodeInspectorDraft={nodeInspectorDraft}
+              setNodeInspectorDraft={setNodeInspectorDraft}
+              edgeInspectorDraft={edgeInspectorDraft}
+              setEdgeInspectorDraft={setEdgeInspectorDraft}
+              operationalNodeDraft={operationalNodeDraft}
+              setOperationalNodeDraft={setOperationalNodeDraft}
+              operationalEdgeDraft={operationalEdgeDraft}
+              setOperationalEdgeDraft={setOperationalEdgeDraft}
+              nodeInspectorDirty={nodeInspectorDirty}
+              edgeInspectorDirty={edgeInspectorDirty}
+              nodeInspectorErrors={nodeInspectorErrors}
+              edgeInspectorErrors={edgeInspectorErrors}
+              nodeInspectorMessage={nodeInspectorMessage}
+              edgeInspectorMessage={edgeInspectorMessage}
+              nodeInspectorHasErrors={nodeInspectorHasErrors}
+              edgeInspectorHasErrors={edgeInspectorHasErrors}
+              graphSelectedNodeSemantic={graphSelectedNodeSemantic}
+              graphSelectedEdgeSemantic={graphSelectedEdgeSemantic}
+              graphSelectedNodeKindLabel={graphSelectedNodeKindLabel}
+              graphSelectedNodeKindDescription={graphSelectedNodeKindDescription}
+              selectedNodeRelations={selectedNodeRelations}
+              selectedNodeRoleLabel={selectedNodeRoleLabel}
+              selectedNodeStructureTips={selectedNodeStructureTips}
+              operationalTagPreview={operationalTagPreview}
+              quickAction={quickAction}
+              secondarySelectionActions={secondarySelectionActions}
+              processSelectedNodeRelations={processSelectedNodeRelations}
+              processNodeInspectorModel={processNodeInspectorModel}
+              processEdgeInspectorModel={processEdgeInspectorModel}
+              selectedErdEntityPayload={selectedErdEntityPayload}
+              selectedErdRelationPayload={selectedErdRelationPayload}
+              selectedErdSourceEntityNode={selectedErdSourceEntityNode}
+              selectedErdTargetEntityNode={selectedErdTargetEntityNode}
+              erdFieldDrafts={erdFieldDrafts}
+              erdMaterializeDependentSide={erdMaterializeDependentSide}
+              setErdMaterializeDependentSide={setErdMaterializeDependentSide}
+              erdMaterializeExistingFieldId={erdMaterializeExistingFieldId}
+              setErdMaterializeExistingFieldId={setErdMaterializeExistingFieldId}
+              erdMaterializeUnique={erdMaterializeUnique}
+              setErdMaterializeUnique={setErdMaterializeUnique}
+              selectedErdRelationIssues={selectedErdRelationIssues}
+              erdPolicy={erdPolicy}
+              onToggleInspectorSection={handleToggleInspectorSection}
+              onHandleAddContextualNode={handleAddContextualNode}
+              onOpenRelatedNodeFromRelation={handleOpenRelatedNodeFromRelation}
+              onOpenTransitionFromRelation={handleOpenTransitionFromRelation}
+              onRemoveRelation={handleRemoveRelation}
+              onApplyNodeInspector={handleApplyNodeInspector}
+              onResetNodeInspector={handleNodeInspectorReset}
+              onFormatNodeJson={handleFormatNodeJson}
+              onCopyNodeId={handleCopyNodeId}
+              onCopyNodeJson={handleCopyNodeJson}
+              onApplyEdgeInspector={handleApplyEdgeInspector}
+              onResetEdgeInspector={handleEdgeInspectorReset}
+              onFormatEdgeJson={handleFormatEdgeJson}
+              onCopyEdgeId={handleCopyEdgeId}
+              onCopyEdgeJson={handleCopyEdgeJson}
+              onRemoveSelected={handleRemoveSelected}
+              onUpdateSelectedErdEntityPayload={updateSelectedErdEntityPayload}
+              onAddErdField={handleAddErdField}
+              onUpdateErdFieldDraft={handleUpdateErdFieldDraft}
+              onCommitErdFieldDraft={commitErdFieldDraft}
+              onRemoveErdField={handleRemoveErdField}
+              onToggleErdFieldFlag={handleToggleErdFieldFlag}
+              onMoveErdField={handleMoveErdField}
+              onErdFieldShortcut={handleErdFieldShortcut}
+              onUpdateSelectedErdRelationPayload={updateSelectedErdRelationPayload}
+              onUpdateSelectedErdRelationName={updateSelectedErdRelationName}
+              onApplyErdSuggestedFix={handleApplyErdSuggestedFix}
+              onFocusSemanticIssue={handleFocusSemanticIssue}
+              onSwapSelectedErdRelationDirection={handleSwapSelectedErdRelationDirection}
+              onMaterializeSelectedErdRelationAsFk={handleMaterializeSelectedErdRelationAsFk}
+              onApplySelectedErdOneToOneUniqueFix={handleApplySelectedErdOneToOneUniqueFix}
+              onConvertSelectedErdRelationToAssociative={handleConvertSelectedErdRelationToAssociative}
+              onMarkSelectedErdRelationConceptual={handleMarkSelectedErdRelationConceptual}
+            />
+          ) : (
+            <EditorInspectorEmptyState
+              editorT={editorT}
+              inspectorCopy={inspectorCopy}
+              nodesCount={nodes.length}
+              edgesCount={edges.length}
+              viewport={viewport}
+            />
+          )}
+        </EditorInspectorFrame>
       ) : null}
     </div>
   );
