@@ -20,8 +20,13 @@ type FlowHandleVisibility = {
 };
 
 type FlowNodeCanvasSemantics = FlowHandleVisibility & {
-  badgeMode: "badge" | "kind";
   visualWeight: "primary" | "supporting" | "terminal";
+  notation:
+    | "start-event"
+    | "activity"
+    | "gateway"
+    | "end-event"
+    | "artifact";
 };
 
 type FlowEdgeSemanticKey = Extract<EdgeKind, "flows-to" | "depends-on" | "references">;
@@ -34,39 +39,41 @@ type FlowEdgeSemantic = {
 
 export type FlowNodePresentation = FlowHandleVisibility & {
   variant: ProcessNodeRole;
-  badgeLabel: string;
+  eyebrowLabel: string;
+  roleLabel: string;
   summary: string;
   visualWeight: FlowNodeCanvasSemantics["visualWeight"];
+  notation: FlowNodeCanvasSemantics["notation"];
 };
 
 const FLOW_NODE_VARIANT_PRESENTATION: Record<ProcessNodeRole, FlowNodeCanvasSemantics> = {
   "flow-start": {
-    badgeMode: "badge",
     visualWeight: "terminal",
+    notation: "start-event",
     showSourceHandle: true,
     showTargetHandle: false,
   },
   "flow-step": {
-    badgeMode: "kind",
     visualWeight: "primary",
+    notation: "activity",
     showSourceHandle: true,
     showTargetHandle: true,
   },
   "flow-decision": {
-    badgeMode: "badge",
     visualWeight: "primary",
+    notation: "gateway",
     showSourceHandle: true,
     showTargetHandle: true,
   },
   "flow-end": {
-    badgeMode: "badge",
     visualWeight: "terminal",
+    notation: "end-event",
     showSourceHandle: false,
     showTargetHandle: true,
   },
   "flow-note": {
-    badgeMode: "badge",
     visualWeight: "supporting",
+    notation: "artifact",
     showSourceHandle: true,
     showTargetHandle: true,
   },
@@ -175,9 +182,11 @@ export function resolveFlowNodePresentation(input: {
 
   return {
     variant,
-    badgeLabel: semantics.badgeMode === "kind" ? meta.kindLabel : meta.badgeLabel,
+    eyebrowLabel: meta.badgeLabel,
+    roleLabel: meta.kindLabel,
     summary: meta.canvasHint,
     visualWeight: semantics.visualWeight,
+    notation: semantics.notation,
     showSourceHandle: semantics.showSourceHandle,
     showTargetHandle: semantics.showTargetHandle,
   };

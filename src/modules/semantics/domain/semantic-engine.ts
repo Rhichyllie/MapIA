@@ -1,5 +1,11 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
-import { resolveDiagramRole } from "@/src/modules/diagrams/domain";
+import {
+  getProcessRoleSemantics,
+  isProcessMainEdgeKind,
+  resolveDiagramRole,
+  resolveProcessConnectionPolicy,
+  type ProcessConnectionRestrictionCode,
+} from "@/src/modules/diagrams/domain";
 import type { DiagramType } from "@/src/modules/graph/domain";
 import {
   normalizeErdGraphFromSemantic,
@@ -147,6 +153,13 @@ type RepairPlanInput = {
   edges: SemanticEdgeRef[];
 };
 
+type FlowProcessRole =
+  | "flow-start"
+  | "flow-step"
+  | "flow-decision"
+  | "flow-end"
+  | "flow-note";
+
 function readRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
@@ -274,6 +287,204 @@ function isNodeKindAllowedForProfile(
   }
 
   return profile.allowedNodeKinds.includes(nodeKind);
+}
+
+function isFlowProcessRole(role: string): role is FlowProcessRole {
+  return (
+    role === "flow-start" ||
+    role === "flow-step" ||
+    role === "flow-decision" ||
+    role === "flow-end" ||
+    role === "flow-note"
+  );
+}
+
+function resolveFlowProcessRole(node: SemanticNodeRef | undefined): FlowProcessRole | undefined {
+  if (!node) {
+    return undefined;
+  }
+
+  const resolvedRole = resolveDiagramRole({
+    diagramType: "flow",
+    nodeKind: node.kind,
+    nodePayload: node.payload ?? {},
+    nodeLabel: node.label,
+  });
+
+  return isFlowProcessRole(resolvedRole) ? resolvedRole : undefined;
+}
+
+function getFlowRoleLabel(role: FlowProcessRole | undefined) {
+  if (role === "flow-start") {
+    return "inicio";
+  }
+
+  if (role === "flow-step") {
+    return "etapa";
+  }
+
+  if (role === "flow-decision") {
+    return "decisao";
+  }
+
+  if (role === "flow-end") {
+    return "encerramento";
+  }
+
+  if (role === "flow-note") {
+    return "observacao";
+  }
+
+  return "ponto do processo";
+}
+
+function describeFlowNode(node: SemanticNodeRef | undefined) {
+  const label = node?.label?.trim();
+  if (label) {
+    return label;
+  }
+
+  return getFlowRoleLabel(resolveFlowProcessRole(node));
+}
+
+function normalizeProcessEdgeLabel(label: string | undefined | null) {
+  const normalized = label?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function getFlowEdgeKindLabel(kind: EdgeKind) {
+  if (kind === "flows-to") {
+    return "continuidade";
+  }
+
+  if (kind === "depends-on") {
+    return "desvio";
+  }
+
+  if (kind === "references") {
+    return "observacao";
+  }
+
+  return "ligacao";
+}
+
+function buildFlowInvalidConnectionViolation(input: {
+  sourceNode?: SemanticNodeRef;
+  targetNode?: SemanticNodeRef;
+  mode: SemanticMode;
+  details: string;
+}) {
+  const sourceLabel = describeFlowNode(input.sourceNode);
+  const targetLabel = describeFlowNode(input.targetNode);
+  const severity: SemanticSeverity =
+    input.mode === "operational" ? "error" : "warning";
+
+  return {
+    code: "EDGE_CONNECTION_NOT_ALLOWED",
+    severity,
+    message: `Ligacao invalida no processo entre ${sourceLabel} e ${targetLabel}.`,
+    details: input.details,
+    suggestedFixes: [
+      "Usar a sugestao de ligacao",
+      "Revisar o papel dos pontos conectados",
+    ],
+  } satisfies SemanticViolation;
+}
+
+function buildFlowEdgeKindMismatchViolation(input: {
+  attemptedKind: EdgeKind;
+  allowedEdgeKinds: EdgeKind[];
+  mode: SemanticMode;
+}) {
+  const severity: SemanticSeverity =
+    input.mode === "operational" ? "error" : "warning";
+  const allowedLabels = input.allowedEdgeKinds.map(getFlowEdgeKindLabel);
+
+  return {
+    code: "EDGE_KIND_NOT_ALLOWED",
+    severity,
+    message: `Essa ligacao pede ${allowedLabels.join(" ou ")}, e nao ${getFlowEdgeKindLabel(
+      input.attemptedKind,
+    )}.`,
+    details: "Ajuste o tipo da ligacao para manter a leitura do processo clara.",
+    suggestedFixes: input.allowedEdgeKinds.map(
+      (kind) => `Usar ${getFlowEdgeKindLabel(kind)}`,
+    ),
+  } satisfies SemanticViolation;
+}
+
+function describeProcessConnectionRestriction(
+  code: ProcessConnectionRestrictionCode,
+) {
+  switch (code) {
+    case "roles_missing":
+      return "Use apenas inicio, etapa, decisao, encerramento e observacao para montar este processo.";
+    case "note_to_note":
+      return "Observacoes devem apoiar um ponto do processo, e nao outra observacao.";
+    case "start_cannot_receive_main":
+      return "O inicio abre o processo. Conecte a partir dele para a primeira etapa, em vez de apontar algo para tras.";
+    case "end_cannot_emit_main":
+      return "O encerramento deve fechar o percurso. Se ainda existe um proximo passo, este ponto provavelmente ainda nao e um encerramento.";
+    case "start_requires_forward_target":
+      return "O inicio deve apontar para a primeira etapa, uma decisao ou um encerramento valido.";
+    case "step_requires_forward_target":
+      return "Uma etapa deve continuar para outra etapa, abrir uma decisao ou concluir em um encerramento.";
+    case "decision_requires_forward_target":
+      return "Uma decisao deve abrir caminhos para outra etapa, outra decisao ou um encerramento claro.";
+    default:
+      return "A ligacao escolhida nao respeita a gramática operacional deste processo.";
+  }
+}
+
+function resolveAllowedFlowEdgeKinds(input: {
+  sourceNode?: SemanticNodeRef;
+  targetNode?: SemanticNodeRef;
+  mode: SemanticMode;
+}) {
+  const sourceRole = resolveFlowProcessRole(input.sourceNode);
+  const targetRole = resolveFlowProcessRole(input.targetNode);
+  const policy = resolveProcessConnectionPolicy({
+    sourceRole,
+    targetRole,
+  });
+
+  return {
+    allowedEdgeKinds: policy.allowedEdgeKinds,
+    ...(policy.restrictionCode
+      ? {
+          violation: buildFlowInvalidConnectionViolation({
+            sourceNode: input.sourceNode,
+            targetNode: input.targetNode,
+            mode: input.mode,
+            details: describeProcessConnectionRestriction(policy.restrictionCode),
+          }),
+        }
+      : {}),
+    sourceRole: policy.sourceRole,
+    targetRole: policy.targetRole,
+  };
+}
+
+function resolveRecommendedFlowEdgeKind(input: {
+  allowedEdgeKinds: EdgeKind[];
+  sourceRole?: FlowProcessRole;
+}) {
+  if (input.allowedEdgeKinds.includes("references")) {
+    return "references" as const;
+  }
+
+  if (
+    input.sourceRole === "flow-decision" &&
+    input.allowedEdgeKinds.includes("depends-on")
+  ) {
+    return "depends-on" as const;
+  }
+
+  if (input.allowedEdgeKinds.includes("flows-to")) {
+    return "flows-to" as const;
+  }
+
+  return input.allowedEdgeKinds[0];
 }
 
 function resolveAllowedEdgeKindsForNodes(input: {
@@ -464,7 +675,7 @@ export function getSemanticProfile(
       label: "Processo",
       strictRulesEnabled: strictEnabled,
       allowedNodeKinds: ["flow-step", "note"],
-      allowedEdgeKinds: ["flows-to", "depends-on"],
+      allowedEdgeKinds: ["flows-to", "depends-on", "references"],
       defaultEdgeKind: "flows-to",
     };
   }
@@ -517,17 +728,33 @@ export function validateEdgeCreation(
   const targetSemanticKind = ctx.targetNode
     ? toSemanticKind(ctx.diagramType, ctx.targetNode.kind, ctx.targetNode.payload)
     : undefined;
-  const allowedEdgeKinds = resolveAllowedEdgeKindsForNodes({
-    profile,
-    sourceKind: sourceSemanticKind,
-    targetKind: targetSemanticKind,
-  });
-  const recommendedEdgeKind = resolveRecommendedEdgeKind({
-    profile,
-    sourceKind: sourceSemanticKind,
-    targetKind: targetSemanticKind,
-    allowedEdgeKinds,
-  });
+  const flowConnection =
+    profile.diagramType === "flow"
+      ? resolveAllowedFlowEdgeKinds({
+          sourceNode: ctx.sourceNode,
+          targetNode: ctx.targetNode,
+          mode: ctx.mode,
+        })
+      : null;
+  const allowedEdgeKinds =
+    flowConnection?.allowedEdgeKinds ??
+    resolveAllowedEdgeKindsForNodes({
+      profile,
+      sourceKind: sourceSemanticKind,
+      targetKind: targetSemanticKind,
+    });
+  const recommendedEdgeKind =
+    profile.diagramType === "flow"
+      ? resolveRecommendedFlowEdgeKind({
+          allowedEdgeKinds,
+          sourceRole: flowConnection?.sourceRole,
+        })
+      : resolveRecommendedEdgeKind({
+          profile,
+          sourceKind: sourceSemanticKind,
+          targetKind: targetSemanticKind,
+          allowedEdgeKinds,
+        });
 
   if (!ctx.sourceNode || !ctx.targetNode) {
     return {
@@ -547,12 +774,14 @@ export function validateEdgeCreation(
       ok: false,
       allowedEdgeKinds,
       recommendedEdgeKind,
-      violation: buildInvalidConnectionViolation({
-        profile,
-        sourceNode: ctx.sourceNode,
-        targetNode: ctx.targetNode,
-        mode: ctx.mode,
-      }),
+      violation:
+        flowConnection?.violation ??
+        buildInvalidConnectionViolation({
+          profile,
+          sourceNode: ctx.sourceNode,
+          targetNode: ctx.targetNode,
+          mode: ctx.mode,
+        }),
     };
   }
 
@@ -561,13 +790,20 @@ export function validateEdgeCreation(
       ok: false,
       allowedEdgeKinds,
       recommendedEdgeKind,
-      violation: {
-        code: "EDGE_KIND_NOT_ALLOWED",
-        severity: ctx.mode === "operational" ? "error" : "warning",
-        message: `Relacao '${ctx.edgeKind}' nao permitida para esta conexao.`,
-        details: "Use uma das relacoes permitidas para manter integridade semantica.",
-        suggestedFixes: allowedEdgeKinds.map((kind) => `Usar '${kind}'`),
-      },
+      violation:
+        profile.diagramType === "flow"
+          ? buildFlowEdgeKindMismatchViolation({
+              attemptedKind: ctx.edgeKind,
+              allowedEdgeKinds,
+              mode: ctx.mode,
+            })
+          : {
+              code: "EDGE_KIND_NOT_ALLOWED",
+              severity: ctx.mode === "operational" ? "error" : "warning",
+              message: `Relacao '${ctx.edgeKind}' nao permitida para esta conexao.`,
+              details: "Use uma das relacoes permitidas para manter integridade semantica.",
+              suggestedFixes: allowedEdgeKinds.map((kind) => `Usar '${kind}'`),
+            },
     };
   }
 
@@ -911,27 +1147,387 @@ export function runGraphAudit(
   }
 
   if (profile.diagramType === "flow") {
+    const flowRoleByNodeId = new Map(
+      sortedNodes.map((node) => [node.id, resolveFlowProcessRole(node)] as const),
+    );
+    const processIncomingCountByNodeId = new Map<string, number>();
+    const processOutgoingCountByNodeId = new Map<string, number>();
+    const namedOutgoingCountByNodeId = new Map<string, number>();
+    const totalConnectionCountByNodeId = new Map<string, number>();
+    const processTargetsBySource = new Map<string, Set<string>>();
+    const processSourcesByTarget = new Map<string, Set<string>>();
+
+    for (const node of sortedNodes) {
+      processIncomingCountByNodeId.set(node.id, 0);
+      processOutgoingCountByNodeId.set(node.id, 0);
+      namedOutgoingCountByNodeId.set(node.id, 0);
+      totalConnectionCountByNodeId.set(node.id, 0);
+    }
+
+    for (const edge of sortedEdges) {
+      totalConnectionCountByNodeId.set(
+        edge.sourceNodeId,
+        (totalConnectionCountByNodeId.get(edge.sourceNodeId) ?? 0) + 1,
+      );
+      totalConnectionCountByNodeId.set(
+        edge.targetNodeId,
+        (totalConnectionCountByNodeId.get(edge.targetNodeId) ?? 0) + 1,
+      );
+
+      if (!isProcessMainEdgeKind(edge.kind)) {
+        continue;
+      }
+
+      processIncomingCountByNodeId.set(
+        edge.targetNodeId,
+        (processIncomingCountByNodeId.get(edge.targetNodeId) ?? 0) + 1,
+      );
+      processOutgoingCountByNodeId.set(
+        edge.sourceNodeId,
+        (processOutgoingCountByNodeId.get(edge.sourceNodeId) ?? 0) + 1,
+      );
+
+      const targetIds = processTargetsBySource.get(edge.sourceNodeId) ?? new Set<string>();
+      targetIds.add(edge.targetNodeId);
+      processTargetsBySource.set(edge.sourceNodeId, targetIds);
+      const sourceIds = processSourcesByTarget.get(edge.targetNodeId) ?? new Set<string>();
+      sourceIds.add(edge.sourceNodeId);
+      processSourcesByTarget.set(edge.targetNodeId, sourceIds);
+
+      if (normalizeProcessEdgeLabel(edge.label)) {
+        namedOutgoingCountByNodeId.set(
+          edge.sourceNodeId,
+          (namedOutgoingCountByNodeId.get(edge.sourceNodeId) ?? 0) + 1,
+        );
+      }
+    }
+
+    const startNodes = sortedNodes.filter(
+      (node) => flowRoleByNodeId.get(node.id) === "flow-start",
+    );
+    const endNodes = sortedNodes.filter(
+      (node) => flowRoleByNodeId.get(node.id) === "flow-end",
+    );
+    const reachableFromStart = new Set<string>();
+    const canReachEnd = new Set<string>();
+
+    if (startNodes.length > 0) {
+      const queue = startNodes.map((node) => node.id);
+      for (const startNode of startNodes) {
+        reachableFromStart.add(startNode.id);
+      }
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) {
+          continue;
+        }
+
+        for (const targetId of processTargetsBySource.get(current) ?? []) {
+          if (reachableFromStart.has(targetId)) {
+            continue;
+          }
+
+          reachableFromStart.add(targetId);
+          queue.push(targetId);
+        }
+      }
+    }
+
+    if (endNodes.length > 0) {
+      const queue = endNodes.map((node) => node.id);
+      for (const endNode of endNodes) {
+        canReachEnd.add(endNode.id);
+      }
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) {
+          continue;
+        }
+
+        for (const sourceId of processSourcesByTarget.get(current) ?? []) {
+          if (canReachEnd.has(sourceId)) {
+            continue;
+          }
+
+          canReachEnd.add(sourceId);
+          queue.push(sourceId);
+        }
+      }
+    }
+
+    if (startNodes.length === 0) {
+      issues.push({
+        id: buildIssueId("FLOW_START_MISSING", "graph", undefined, issues.length),
+        code: "FLOW_START_MISSING",
+        severity: "warning",
+        message: "O mapa de processo ainda nao tem um inicio explicito.",
+        details: "Defina onde o processo comeca para deixar a leitura mais clara.",
+        targetType: "graph",
+      });
+    } else if (startNodes.length > 1) {
+      issues.push({
+        id: buildIssueId("FLOW_MULTIPLE_STARTS", "graph", undefined, issues.length),
+        code: "FLOW_MULTIPLE_STARTS",
+        severity: "warning",
+        message: "Existem varios pontos marcados como inicio no mesmo processo.",
+        details: "Mantenha multiplos inicios apenas quando o processo realmente tiver aberturas independentes.",
+        targetType: "graph",
+      });
+    }
+
+    if (endNodes.length === 0) {
+      issues.push({
+        id: buildIssueId("FLOW_END_MISSING", "graph", undefined, issues.length),
+        code: "FLOW_END_MISSING",
+        severity: "warning",
+        message: "O mapa de processo ainda nao mostra um encerramento explicito.",
+        details: "Defina pelo menos um ponto final para comunicar o desfecho do percurso.",
+        targetType: "graph",
+      });
+    } else if (
+      endNodes.length > 0 &&
+      !endNodes.some((node) => reachableFromStart.has(node.id))
+    ) {
+      issues.push({
+        id: buildIssueId("FLOW_NO_REACHABLE_END", "graph", undefined, issues.length),
+        code: "FLOW_NO_REACHABLE_END",
+        severity: "warning",
+        message: "O processo tem encerramentos, mas nenhum deles e alcancado a partir do inicio.",
+        details: "Revise a continuidade principal para garantir que pelo menos um percurso chega a um encerramento real.",
+        targetType: "graph",
+      });
+    }
+
     for (const node of sortedNodes) {
       const semanticKind = semanticKindByNodeId.get(node.id);
       if (!semanticKind) {
         continue;
       }
 
-      if (isNodeKindAllowedForProfile(profile, semanticKind)) {
-        continue;
+      if (!isNodeKindAllowedForProfile(profile, semanticKind)) {
+        const severity: SemanticSeverity =
+          mode === "operational" ? "error" : "warning";
+        issues.push({
+          id: buildIssueId("NODE_KIND_OUT_OF_PROFILE", "node", node.id, issues.length),
+          code: "NODE_KIND_OUT_OF_PROFILE",
+          severity,
+          message: `No '${node.label ?? node.id}' usa tipo '${node.kind}' fora do perfil ${profile.label}.`,
+          details: `Tipos permitidos: ${profile.allowedNodeKinds.join(", ")}.`,
+          targetType: "node",
+          targetId: node.id,
+        });
       }
 
-      const severity: SemanticSeverity =
-        mode === "operational" ? "error" : "warning";
-      issues.push({
-        id: buildIssueId("NODE_KIND_OUT_OF_PROFILE", "node", node.id, issues.length),
-        code: "NODE_KIND_OUT_OF_PROFILE",
-        severity,
-        message: `No '${node.label ?? node.id}' usa tipo '${node.kind}' fora do perfil ${profile.label}.`,
-        details: `Tipos permitidos: ${profile.allowedNodeKinds.join(", ")}.`,
-        targetType: "node",
-        targetId: node.id,
-      });
+      const role = flowRoleByNodeId.get(node.id);
+      const incomingProcessCount = processIncomingCountByNodeId.get(node.id) ?? 0;
+      const outgoingProcessCount = processOutgoingCountByNodeId.get(node.id) ?? 0;
+      const namedOutgoingCount = namedOutgoingCountByNodeId.get(node.id) ?? 0;
+      const totalConnectionCount = totalConnectionCountByNodeId.get(node.id) ?? 0;
+      const roleSemantics = role ? getProcessRoleSemantics(role) : null;
+
+      if (role && totalConnectionCount === 0) {
+        issues.push({
+          id: buildIssueId("FLOW_NODE_ISOLATED", "node", node.id, issues.length),
+          code: "FLOW_NODE_ISOLATED",
+          severity: roleSemantics?.isolatedSeverity ?? "warning",
+          message:
+            role === "flow-note"
+              ? `A observacao '${node.label ?? node.id}' ainda esta solta no mapa.`
+              : `O ponto '${node.label ?? node.id}' ainda esta isolado no processo.`,
+          details:
+            role === "flow-note"
+              ? "Conecte a observacao ao trecho que ela esclarece."
+              : "Conecte de onde este ponto vem e para onde ele segue para evitar ilhas operacionais.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (
+        role &&
+        role !== "flow-start" &&
+        role !== "flow-note" &&
+        incomingProcessCount === 0 &&
+        outgoingProcessCount > 0
+      ) {
+        issues.push({
+          id: buildIssueId("FLOW_NODE_MISSING_ORIGIN", "node", node.id, issues.length),
+          code: "FLOW_NODE_MISSING_ORIGIN",
+          severity: "warning",
+          message: `O ponto '${node.label ?? node.id}' abre caminho, mas nao mostra de onde vem.`,
+          details: "Conecte a etapa anterior ou reveja se este ponto deveria ser o inicio do processo.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (role === "flow-decision" && outgoingProcessCount < 2) {
+        issues.push({
+          id: buildIssueId("FLOW_DECISION_NEEDS_BRANCHES", "node", node.id, issues.length),
+          code: "FLOW_DECISION_NEEDS_BRANCHES",
+          severity: "warning",
+          message: `A decisao '${node.label ?? node.id}' ainda nao mostra caminhos suficientes.`,
+          details: "Adicione pelo menos dois caminhos para explicitar alternativas ou condicoes.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (
+        role === "flow-decision" &&
+        outgoingProcessCount >= 2 &&
+        namedOutgoingCount < Math.min(outgoingProcessCount, 2)
+      ) {
+        issues.push({
+          id: buildIssueId("FLOW_DECISION_PATHS_NEED_LABELS", "node", node.id, issues.length),
+          code: "FLOW_DECISION_PATHS_NEED_LABELS",
+          severity: "warning",
+          message: `A decisao '${node.label ?? node.id}' ainda nao nomeia bem as suas saidas.`,
+          details: "Use rotulos curtos como 'Sim', 'Nao', 'Excecao' ou outro criterio operacional para cada caminho.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (role === "flow-decision") {
+        const normalizedLabels = sortedEdges
+          .filter(
+            (edge) =>
+              edge.sourceNodeId === node.id &&
+              isProcessMainEdgeKind(edge.kind) &&
+              Boolean(normalizeProcessEdgeLabel(edge.label)),
+          )
+          .map((edge) => normalizeProcessEdgeLabel(edge.label)!)
+          .map((label) =>
+            label
+              .normalize("NFD")
+              .replace(/\p{Diacritic}/gu, "")
+              .trim()
+              .toLowerCase(),
+          );
+        const duplicatedLabel = normalizedLabels.find(
+          (label, index) => normalizedLabels.indexOf(label) !== index,
+        );
+
+        if (duplicatedLabel) {
+          issues.push({
+            id: buildIssueId("FLOW_DECISION_DUPLICATED_LABELS", "node", node.id, issues.length),
+            code: "FLOW_DECISION_DUPLICATED_LABELS",
+            severity: "warning",
+            message: `A decisao '${node.label ?? node.id}' repete nomes de saida e perde clareza.`,
+            details: "Diferencie cada caminho da decisao com rotulos unicos e curtos.",
+            targetType: "node",
+            targetId: node.id,
+          });
+        }
+      }
+
+      if (
+        (role === "flow-start" || role === "flow-step") &&
+        outgoingProcessCount > 1
+      ) {
+        issues.push({
+          id: buildIssueId("FLOW_STEP_MULTIPLE_OUTPUTS", "node", node.id, issues.length),
+          code: "FLOW_STEP_MULTIPLE_OUTPUTS",
+          severity: "warning",
+          message: `O ponto '${node.label ?? node.id}' abre varios caminhos sem estar marcado como decisao.`,
+          details: "Considere transformar esse ponto em decisao para deixar a bifurcacao explicita.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (role === "flow-start" && outgoingProcessCount === 0) {
+        issues.push({
+          id: buildIssueId("FLOW_START_WITHOUT_PATH", "node", node.id, issues.length),
+          code: "FLOW_START_WITHOUT_PATH",
+          severity: "error",
+          message: `O inicio '${node.label ?? node.id}' ainda nao dispara o processo.`,
+          details: "Conecte a primeira etapa ou remova este ponto se ele ainda nao for o inicio real.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (role === "flow-end" && incomingProcessCount === 0) {
+        issues.push({
+          id: buildIssueId("FLOW_END_WITHOUT_INCOMING", "node", node.id, issues.length),
+          code: "FLOW_END_WITHOUT_INCOMING",
+          severity: "warning",
+          message: `O encerramento '${node.label ?? node.id}' ainda nao recebe nenhum caminho.`,
+          details: "Conecte a etapa que leva a este encerramento para que ele represente um desfecho real.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (
+        role &&
+        role !== "flow-end" &&
+        role !== "flow-note" &&
+        incomingProcessCount > 0 &&
+        outgoingProcessCount === 0
+      ) {
+        issues.push({
+          id: buildIssueId("FLOW_NODE_DEAD_END", "node", node.id, issues.length),
+          code: "FLOW_NODE_DEAD_END",
+          severity: roleSemantics?.deadEndSeverity ?? "warning",
+          message: `O ponto '${node.label ?? node.id}' recebe fluxo, mas ainda termina sem um desfecho claro.`,
+          details: "Conecte a proxima etapa, uma decisao ou um encerramento para evitar caminho morto.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (role === "flow-note" && totalConnectionCount === 0) {
+        issues.push({
+          id: buildIssueId("FLOW_NOTE_ORPHAN", "node", node.id, issues.length),
+          code: "FLOW_NOTE_ORPHAN",
+          severity: "info",
+          message: `A observacao '${node.label ?? node.id}' ainda nao apoia nenhum ponto do processo.`,
+          details: "Conecte a observacao ao trecho que ela esclarece.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (
+        role &&
+        role !== "flow-note" &&
+        startNodes.length > 0 &&
+        !reachableFromStart.has(node.id)
+      ) {
+        issues.push({
+          id: buildIssueId("FLOW_NODE_UNREACHABLE_FROM_START", "node", node.id, issues.length),
+          code: "FLOW_NODE_UNREACHABLE_FROM_START",
+          severity: "warning",
+          message: `O ponto '${node.label ?? node.id}' nao e alcancado a partir do inicio do processo.`,
+          details: "Revise as ligacoes principais ou defina se este trecho pertence a outro fluxo.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+
+      if (
+        role &&
+        role !== "flow-note" &&
+        role !== "flow-end" &&
+        endNodes.length > 0 &&
+        reachableFromStart.has(node.id) &&
+        !canReachEnd.has(node.id)
+      ) {
+        issues.push({
+          id: buildIssueId("FLOW_NODE_WITHOUT_CLOSURE", "node", node.id, issues.length),
+          code: "FLOW_NODE_WITHOUT_CLOSURE",
+          severity: "warning",
+          message: `O trecho que passa por '${node.label ?? node.id}' nao chega a um encerramento conhecido.`,
+          details: "Revise a continuidade principal e os desvios para garantir um desfecho operacional.",
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
     }
   }
 

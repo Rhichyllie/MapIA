@@ -50,7 +50,7 @@ describe("i18n messages", () => {
     expect(messages.Editor.shell.applyChanges).toBe("Apply changes");
     expect(messages.Editor.shell.topBar.canvasBarAriaLabel).toBe("Canvas top bar");
     expect(messages.Editor.process.quickActions["flow-add-next-step"].label).toBe(
-      "Continue flow",
+      "Add next step",
     );
     expect(messages.Editor.process.quickAddRoles["flow-decision"].label).toBe(
       "Decision",
@@ -61,7 +61,7 @@ describe("i18n messages", () => {
     );
     expect(messages.Editor.shell.topBar.quickFind).toBe("Search (Ctrl+K)");
     expect(messages.Editor.shell.quickAdd.copy.flow.addPrimary).toBe(
-      "Add activity",
+      "Add step",
     );
     expect(messages.Editor.shell.quickAdd.copy.graph.dialogTitle).toBe(
       "Architecture quick add",

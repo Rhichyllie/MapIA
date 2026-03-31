@@ -49,11 +49,11 @@ export function resolveFlowRolePriority(node: DiagramLayoutNode) {
     return 0;
   }
 
-  if (node.diagramRole === "flow-step" || node.kind === "flow-step") {
+  if (node.diagramRole === "flow-decision") {
     return 1;
   }
 
-  if (node.diagramRole === "flow-decision") {
+  if (node.diagramRole === "flow-step" || node.kind === "flow-step") {
     return 2;
   }
 

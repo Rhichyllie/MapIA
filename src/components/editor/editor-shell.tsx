@@ -45,21 +45,11 @@ import {
   type EditorDiagramProcessInspectorStrategy,
 } from "./diagram-modes";
 import { resolveEditorDiagramInspectorAdapter } from "./diagram-modes/inspector-adapters";
-import {
-  computeParallelEdgeMeta,
-} from "./diagram-renderers";
-import {
-  type DiagramLayoutType,
-} from "./diagram-renderers/layout/diagram-layout";
-import {
-  EditorRemoteError,
-} from "./editor-command-service";
-import {
-  createInitialEditorAutosaveState,
-} from "./editor-autosave-state";
-import {
-  getFriendlyInspectorFeedback,
-} from "./editor-inspector-feedback";
+import { computeParallelEdgeMeta } from "./diagram-renderers";
+import { type DiagramLayoutType } from "./diagram-renderers/layout/diagram-layout";
+import { EditorRemoteError } from "./editor-command-service";
+import { createInitialEditorAutosaveState } from "./editor-autosave-state";
+import { getFriendlyInspectorFeedback } from "./editor-inspector-feedback";
 import {
   buildUpdateEdgeCommandFromInspectorForm,
   buildUpdateNodeCommandFromInspectorForm,
@@ -87,7 +77,11 @@ import {
   getNodeKindPresentation,
 } from "./presentation/kinds";
 import {
+  buildDefaultProcessNodeTitle,
+  resolveDefaultProcessEdgeLabel,
+  resolveProcessSelectionQuickActions,
   getProcessRoleMeta,
+  resolveProcessNodeShapeForRole,
   resolveProcessNodeRole,
   type ProcessRelationsViewModel,
 } from "./presentation/process-semantics";
@@ -242,7 +236,19 @@ function buildDefaultNodeTitle(
   nextIndex: number,
   diagramType?: ContextualDiagramType,
   t?: EditorTranslationFn,
+  diagramRole?: DiagramRole,
 ) {
+  if (
+    diagramType === "flow" &&
+    (diagramRole === "flow-start" ||
+      diagramRole === "flow-step" ||
+      diagramRole === "flow-decision" ||
+      diagramRole === "flow-note" ||
+      diagramRole === "flow-end")
+  ) {
+    return buildDefaultProcessNodeTitle(diagramRole, nextIndex, t);
+  }
+
   const nodeKindLabel = diagramType
     ? getNodeKindLabelForDiagram(diagramType, kind, "operational", t)
     : getNodeKindLabel(kind, "operational", t);
@@ -260,9 +266,7 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
 function toErdPolicyConfig(
   policy: SemanticPolicyPayload | null | undefined,
 ): ErdPolicyConfig {
-  return normalizeErdPolicyFromCustomRules(
-    readRecord(policy?.customRulesJson),
-  );
+  return normalizeErdPolicyFromCustomRules(readRecord(policy?.customRulesJson));
 }
 
 function normalizeErdEntityPayloadFromNode(node: RFNode): ErdEntityPayload {
@@ -288,7 +292,10 @@ function createErdField(input: { entityId: string; index: number }): ErdField {
   };
 }
 
-function toggleErdFieldFlag(input: { field: ErdField; flag: ErdFieldFlag }): ErdField {
+function toggleErdFieldFlag(input: {
+  field: ErdField;
+  flag: ErdFieldFlag;
+}): ErdField {
   const nextFlags = new Set<ErdFieldFlag>(input.field.flags);
   if (nextFlags.has(input.flag)) {
     nextFlags.delete(input.flag);
@@ -317,7 +324,9 @@ function toggleErdFieldFlag(input: { field: ErdField; flag: ErdFieldFlag }): Erd
   };
 }
 
-function flipErdRelationPayloadDirection(payload: ErdRelationPayload): ErdRelationPayload {
+function flipErdRelationPayloadDirection(
+  payload: ErdRelationPayload,
+): ErdRelationPayload {
   const currentCardinality = payload.cardinality;
   const swappedCardinality = currentCardinality
     ? {
@@ -375,7 +384,9 @@ function readIssueSuggestedFixCommands(value: unknown): ErdEditorCommand[] {
 }
 
 function readIssueSuggestedFixes(issue: SemanticIssueLike) {
-  const rawFixes = Array.isArray(issue.suggestedFixes) ? issue.suggestedFixes : [];
+  const rawFixes = Array.isArray(issue.suggestedFixes)
+    ? issue.suggestedFixes
+    : [];
 
   return rawFixes
     .map((fix) => {
@@ -411,7 +422,9 @@ function readIssueSuggestedFixes(issue: SemanticIssueLike) {
       };
     })
     .filter(
-      (fix): fix is {
+      (
+        fix,
+      ): fix is {
         id: string;
         label: string;
         description?: string;
@@ -458,13 +471,15 @@ function getMindmapRootNodeId(
     return null;
   }
 
-  return [...nodes]
-    .sort(
-      (nodeA, nodeB) =>
-        Math.hypot(nodeA.position.x, nodeA.position.y) -
-        Math.hypot(nodeB.position.x, nodeB.position.y),
-    )
-    .at(0)?.id ?? null;
+  return (
+    [...nodes]
+      .sort(
+        (nodeA, nodeB) =>
+          Math.hypot(nodeA.position.x, nodeA.position.y) -
+          Math.hypot(nodeB.position.x, nodeB.position.y),
+      )
+      .at(0)?.id ?? null
+  );
 }
 
 function createNodeInspectorDraft(node: RFNode): NodeInspectorDraft {
@@ -516,9 +531,8 @@ export function EditorShell({
     initialFlowState.edges,
   );
   const [viewport, setViewport] = useState(initialFlowState.viewport);
-  const [layoutMetadata, setLayoutMetadata] = useState<EditorSnapshotLayoutMetadata>(
-    initialFlowState.layoutMetadata,
-  );
+  const [layoutMetadata, setLayoutMetadata] =
+    useState<EditorSnapshotLayoutMetadata>(initialFlowState.layoutMetadata);
   const [hiddenDiagramNodeIds, setHiddenDiagramNodeIds] = useState<string[]>(
     initialFlowState.hiddenNodeIds,
   );
@@ -526,14 +540,21 @@ export function EditorShell({
     string | null
   >(initialFlowState.computedRootNodeId ?? null);
   const [querySyncMessage, setQuerySyncMessage] = useState<string | null>(null);
-  const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(null);
+  const [globalErrorMessage, setGlobalErrorMessage] = useState<string | null>(
+    null,
+  );
   const [isRefreshingFromQuery, setIsRefreshingFromQuery] = useState(false);
   const [isAddNodeDialogOpen, setIsAddNodeDialogOpen] = useState(false);
-  const [addNodeErrorMessage, setAddNodeErrorMessage] = useState<string | null>(null);
-  const [inlineRenameNodeId, setInlineRenameNodeId] = useState<string | null>(null);
+  const [addNodeErrorMessage, setAddNodeErrorMessage] = useState<string | null>(
+    null,
+  );
+  const [inlineRenameNodeId, setInlineRenameNodeId] = useState<string | null>(
+    null,
+  );
   const [inlineRenameDraft, setInlineRenameDraft] = useState("");
-  const [inlineRenameErrorMessage, setInlineRenameErrorMessage] =
-    useState<string | null>(null);
+  const [inlineRenameErrorMessage, setInlineRenameErrorMessage] = useState<
+    string | null
+  >(null);
   const [activeConnectionSourceNodeId, setActiveConnectionSourceNodeId] =
     useState<string | null>(null);
   const [addNodeDraft, setAddNodeDraft] = useState<AddNodeDraft>({
@@ -543,7 +564,9 @@ export function EditorShell({
     description: "",
     tagsText: "",
   });
-  const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<string[]>([]);
+  const [collapsedTreeNodeIds, setCollapsedTreeNodeIds] = useState<string[]>(
+    [],
+  );
   const nodesRef = useRef(nodes);
   const edgesRef = useRef(edges);
   const viewportRef = useRef(viewport);
@@ -681,7 +704,10 @@ export function EditorShell({
     return normalizeErdEntityPayloadFromNode(selectedNode);
   }, [selectedNode]);
   const selectedErdRelationPayload = useMemo(() => {
-    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+    if (
+      !selectedEdge ||
+      (selectedEdge.data?.kind ?? "flows-to") !== "references"
+    ) {
       return null;
     }
 
@@ -692,7 +718,9 @@ export function EditorShell({
       return null;
     }
 
-    const node = nodes.find((candidate) => candidate.id === selectedEdge.source);
+    const node = nodes.find(
+      (candidate) => candidate.id === selectedEdge.source,
+    );
     return node && node.data.kind === "entity" ? node : null;
   }, [nodes, selectedEdge]);
   const selectedErdTargetEntityNode = useMemo(() => {
@@ -700,7 +728,9 @@ export function EditorShell({
       return null;
     }
 
-    const node = nodes.find((candidate) => candidate.id === selectedEdge.target);
+    const node = nodes.find(
+      (candidate) => candidate.id === selectedEdge.target,
+    );
     return node && node.data.kind === "entity" ? node : null;
   }, [nodes, selectedEdge]);
   const {
@@ -825,7 +855,9 @@ export function EditorShell({
     cancelAutosave: () => autosaveDebouncerRef.current.cancel(),
   });
   const hasPendingChangesGuard =
-    pendingCommands.length > 0 || saveState.isDirty || saveState.status === "saving";
+    pendingCommands.length > 0 ||
+    saveState.isDirty ||
+    saveState.status === "saving";
 
   usePendingChangesGuard(hasPendingChangesGuard);
 
@@ -844,7 +876,9 @@ export function EditorShell({
       return;
     }
 
-    const renameNodeStillExists = nodes.some((node) => node.id === inlineRenameNodeId);
+    const renameNodeStillExists = nodes.some(
+      (node) => node.id === inlineRenameNodeId,
+    );
     if (renameNodeStillExists) {
       return;
     }
@@ -890,7 +924,11 @@ export function EditorShell({
         template: project.template,
         layoutOptions: layoutMetadata.layoutOptions,
       }),
-    [layoutMetadata.diagramType, layoutMetadata.layoutOptions, project.template],
+    [
+      layoutMetadata.diagramType,
+      layoutMetadata.layoutOptions,
+      project.template,
+    ],
   );
   const diagramMode = diagramModeResolution.mode;
   const renderer = diagramModeResolution.renderer;
@@ -979,7 +1017,8 @@ export function EditorShell({
     () =>
       selectedEdge
         ? displayedSemanticAudit.issues.filter(
-            (issue) => issue.targetType === "edge" && issue.targetId === selectedEdge.id,
+            (issue) =>
+              issue.targetType === "edge" && issue.targetId === selectedEdge.id,
           )
         : [],
     [displayedSemanticAudit.issues, selectedEdge],
@@ -1054,17 +1093,26 @@ export function EditorShell({
     }
 
     return [];
-  }, [selectedEdge, selectedNode, semanticIssuesByEdgeId, semanticIssuesByNodeId]);
-  const selectedSemanticSeverity: "error" | "warning" | "suggestion" | "info" | null =
-    selectedSemanticIssues.some((issue) => issue.severity === "error")
-      ? "error"
-      : selectedSemanticIssues.some((issue) => issue.severity === "warning")
-        ? "warning"
-        : selectedSemanticIssues.some((issue) => issue.severity === "suggestion")
-          ? "suggestion"
-          : selectedSemanticIssues.some((issue) => issue.severity === "info")
-            ? "info"
-            : null;
+  }, [
+    selectedEdge,
+    selectedNode,
+    semanticIssuesByEdgeId,
+    semanticIssuesByNodeId,
+  ]);
+  const selectedSemanticSeverity:
+    | "error"
+    | "warning"
+    | "suggestion"
+    | "info"
+    | null = selectedSemanticIssues.some((issue) => issue.severity === "error")
+    ? "error"
+    : selectedSemanticIssues.some((issue) => issue.severity === "warning")
+      ? "warning"
+      : selectedSemanticIssues.some((issue) => issue.severity === "suggestion")
+        ? "suggestion"
+        : selectedSemanticIssues.some((issue) => issue.severity === "info")
+          ? "info"
+          : null;
   const selectedSemanticStatusLabel = selectedSemanticSeverity
     ? selectedSemanticSeverity === "error"
       ? editorT("shell.selection.semanticAttention")
@@ -1131,7 +1179,12 @@ export function EditorShell({
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
     }
-  }, [hiddenCanvasNodeIdSet, selectedNodeId, setSelectedEdgeId, setSelectedNodeId]);
+  }, [
+    hiddenCanvasNodeIdSet,
+    selectedNodeId,
+    setSelectedEdgeId,
+    setSelectedNodeId,
+  ]);
 
   useEffect(() => {
     if (!selectedEdgeId) {
@@ -1164,7 +1217,10 @@ export function EditorShell({
     );
     const diagramVisibleNodeIdSet = new Set(
       nodes
-        .filter((node) => !hiddenDiagramNodeIdSet.has(node.id) && node.hidden !== true)
+        .filter(
+          (node) =>
+            !hiddenDiagramNodeIdSet.has(node.id) && node.hidden !== true,
+        )
         .map((node) => node.id),
     );
     const treeNodesWithContainsChildren = new Set<string>();
@@ -1189,7 +1245,10 @@ export function EditorShell({
           ? computedMindmapRootNodeId
           : getMindmapRootNodeId(visibleNodes, layoutMetadata.rootNodeName)
         : null;
-    const connectionTargetStateByNodeId = new Map<string, "allowed" | "blocked">();
+    const connectionTargetStateByNodeId = new Map<
+      string,
+      "allowed" | "blocked"
+    >();
     const erdNnSuggestedNodeIds = new Set<string>();
 
     if (renderer.key === "erd") {
@@ -1208,7 +1267,9 @@ export function EditorShell({
       }
     }
     const activeSourceNode = activeConnectionSourceNodeId
-      ? visibleNodes.find((node) => node.id === activeConnectionSourceNodeId) ?? null
+      ? (visibleNodes.find(
+          (node) => node.id === activeConnectionSourceNodeId,
+        ) ?? null)
       : null;
 
     if (activeSourceNode) {
@@ -1252,19 +1313,28 @@ export function EditorShell({
                 label: string;
                 tone: "warning" | "info" | "suggestion";
               }> = [];
-              const hasPk = entityPayload.fields.some((field) => field.flags.includes("PK"));
+              const hasPk = entityPayload.fields.some((field) =>
+                field.flags.includes("PK"),
+              );
 
               if (!hasPk) {
-                badges.push({ label: editorT("shell.erd.badges.noPk"), tone: "warning" });
+                badges.push({
+                  label: editorT("shell.erd.badges.noPk"),
+                  tone: "warning",
+                });
               }
 
               const fkPending = entityPayload.fields.some(
                 (field) =>
                   field.flags.includes("FK") &&
-                  (!field.references?.entityId || !field.references?.relationEdgeId),
+                  (!field.references?.entityId ||
+                    !field.references?.relationEdgeId),
               );
               if (fkPending) {
-                badges.push({ label: editorT("shell.erd.badges.fkPending"), tone: "info" });
+                badges.push({
+                  label: editorT("shell.erd.badges.fkPending"),
+                  tone: "info",
+                });
               }
 
               if (erdNnSuggestedNodeIds.has(node.id)) {
@@ -1278,19 +1348,23 @@ export function EditorShell({
             })()
           : [];
       const highlightedIssueClass =
-        nodeIssues.length > 0 && (isValidationPanelOpen || selectedNodeId === node.id)
+        nodeIssues.length > 0 &&
+        (isValidationPanelOpen || selectedNodeId === node.id)
           ? nodeIssues.some((issue) => issue.severity === "error")
             ? "editor-node-has-issue editor-node-issue-error"
             : "editor-node-has-issue editor-node-issue-warning"
           : null;
       const graphNodeSemantic =
         renderer.key === "graph"
-          ? resolveGraphNodeSemantic({
-              diagramRole: node.data.diagramRole,
-              kind: node.data.kind,
-              label: node.data.label,
-              payload: node.data.payload,
-            }, editorT)
+          ? resolveGraphNodeSemantic(
+              {
+                diagramRole: node.data.diagramRole,
+                kind: node.data.kind,
+                label: node.data.label,
+                payload: node.data.payload,
+              },
+              editorT,
+            )
           : null;
 
       return {
@@ -1339,7 +1413,8 @@ export function EditorShell({
             treeNodesWithContainsChildren.has(node.id),
           erdBadges,
           onToggleTreeCollapse:
-            renderer.key === "tree" && treeNodesWithContainsChildren.has(node.id)
+            renderer.key === "tree" &&
+            treeNodesWithContainsChildren.has(node.id)
               ? (targetNodeId: string) => {
                   setCollapsedTreeNodeIds((current) =>
                     current.includes(targetNodeId)
@@ -1351,10 +1426,13 @@ export function EditorShell({
           presentationMode: inspectorMode,
           displayLabel:
             inspectorMode === "operational"
-              ? diagramMode.presentation.getOperationalDisplayLabel({
-                  label: node.data.label,
-                  payload: node.data.payload,
-                }, editorT)
+              ? diagramMode.presentation.getOperationalDisplayLabel(
+                  {
+                    label: node.data.label,
+                    payload: node.data.payload,
+                  },
+                  editorT,
+                )
               : node.data.label,
         },
       };
@@ -1386,17 +1464,26 @@ export function EditorShell({
         !hiddenCanvasNodeIdSet.has(edge.source) &&
         !hiddenCanvasNodeIdSet.has(edge.target),
     );
+    const nodeById = new Map(nodes.map((node) => [node.id, node] as const));
     const baseEdges = visibleEdges.map((edge) => {
       const edgeKind = edge.data?.kind ?? "flows-to";
       const payload = edge.data?.payload ?? {};
+      const sourceNode = nodeById.get(edge.source);
+      const targetNode = nodeById.get(edge.target);
       const renderedPresentation = diagramMode.render.resolveEdgePresentation({
         baseLabel: edge.label ? String(edge.label) : undefined,
         edgeKind,
         payload,
+        sourceRole: sourceNode?.data.diagramRole,
+        targetRole: targetNode?.data.diagramRole,
+        sourcePosition: sourceNode?.position,
+        targetPosition: targetNode?.position,
+        direction: renderer.treeDirection,
       });
       const edgeIssues = semanticIssuesByEdgeId.get(edge.id) ?? [];
       const highlightedIssueClass =
-        edgeIssues.length > 0 && (isValidationPanelOpen || selectedEdgeId === edge.id)
+        edgeIssues.length > 0 &&
+        (isValidationPanelOpen || selectedEdgeId === edge.id)
           ? edgeIssues.some((issue) => issue.severity === "error")
             ? "editor-edge-invalid editor-edge-invalid-error"
             : "editor-edge-invalid editor-edge-invalid-warning"
@@ -1413,11 +1500,15 @@ export function EditorShell({
         },
         label: renderedPresentation.label,
         type: edge.type ?? renderer.defaultEdgeOptions.type,
-        markerEnd: renderedPresentation.markerEnd ?? edge.markerEnd ?? renderer.defaultEdgeOptions.markerEnd,
+        markerEnd:
+          renderedPresentation.markerEnd ??
+          edge.markerEnd ??
+          renderer.defaultEdgeOptions.markerEnd,
         labelStyle: renderedPresentation.labelStyle,
         labelBgStyle: renderedPresentation.labelBgStyle,
         labelShowBg: renderedPresentation.labelShowBg ?? edge.labelShowBg,
-        labelBgPadding: renderedPresentation.labelBgPadding ?? edge.labelBgPadding,
+        labelBgPadding:
+          renderedPresentation.labelBgPadding ?? edge.labelBgPadding,
         labelBgBorderRadius:
           renderedPresentation.labelBgBorderRadius ?? edge.labelBgBorderRadius,
         animated: edge.animated ?? renderer.defaultEdgeOptions.animated,
@@ -1449,11 +1540,13 @@ export function EditorShell({
     diagramMode,
     hiddenCanvasNodeIdSet,
     isValidationPanelOpen,
+    nodes,
     renderer,
     selectedEdgeId,
     semanticIssuesByEdgeId,
   ]);
-  const isReapplyLayoutBlockedByPolicy = layoutMetadata.allowReapplyLayout === false;
+  const isReapplyLayoutBlockedByPolicy =
+    layoutMetadata.allowReapplyLayout === false;
   const canReapplyLayout = useMemo(
     () =>
       isSupportedDiagramType(layoutMetadata.diagramType) &&
@@ -1524,12 +1617,18 @@ export function EditorShell({
       setQuerySyncMessage(editorT("shell.prisma.synced"));
       setPrismaSchemaImportFeedback({
         kind: "success",
-        message: buildPrismaSchemaImportFeedbackMessage(result.importSummary, editorT),
+        message: buildPrismaSchemaImportFeedbackMessage(
+          result.importSummary,
+          editorT,
+        ),
       });
     } catch (error) {
       setPrismaSchemaImportFeedback({
         kind: "error",
-        message: formatErrorMessage(error, editorT("shell.prisma.errors.import")),
+        message: formatErrorMessage(
+          error,
+          editorT("shell.prisma.errors.import"),
+        ),
       });
     } finally {
       setIsImportingPrismaSchema(false);
@@ -1558,9 +1657,7 @@ export function EditorShell({
             localMutationVersionRef.current > 0
           ) {
             setCurrentRevision(result.revision);
-            setQuerySyncMessage(
-              editorT("shell.sync.initialIgnored"),
-            );
+            setQuerySyncMessage(editorT("shell.sync.initialIgnored"));
             return;
           }
 
@@ -1576,10 +1673,7 @@ export function EditorShell({
         if (!active) return;
 
         setQuerySyncMessage(
-          formatErrorMessage(
-            error,
-            editorT("shell.sync.errors.snapshot"),
-          ),
+          formatErrorMessage(error, editorT("shell.sync.errors.snapshot")),
         );
       } finally {
         if (active) {
@@ -1647,7 +1741,10 @@ export function EditorShell({
     const options = [...scopedOptions];
     const selectedKind = selectedNode?.data.kind;
 
-    if (selectedKind && !options.some((option) => option.kind === selectedKind)) {
+    if (
+      selectedKind &&
+      !options.some((option) => option.kind === selectedKind)
+    ) {
       options.push({
         kind: selectedKind,
         outOfProfile: true,
@@ -1658,7 +1755,11 @@ export function EditorShell({
     return options;
   }, [diagramMode, inspectorMode, selectedNode?.data.kind, semanticPolicy]);
   const quickAddKindOptions = useMemo(
-    () => diagramMode.presentation.getAllowedNodeKinds("operational", semanticPolicy),
+    () =>
+      diagramMode.presentation.getAllowedNodeKinds(
+        "operational",
+        semanticPolicy,
+      ),
     [diagramMode, semanticPolicy],
   );
   const personaDefaultNodeKind = useMemo(() => {
@@ -1668,7 +1769,11 @@ export function EditorShell({
     }
 
     return diagramMode.presentation.getDefaultNodeKind();
-  }, [diagramMode, editorPersona.quickAdd.defaultNodeKind, quickAddKindOptions]);
+  }, [
+    diagramMode,
+    editorPersona.quickAdd.defaultNodeKind,
+    quickAddKindOptions,
+  ]);
   const quickAddRoleOptions = useMemo(
     () => diagramMode.quickAdd.getRoleOptions(editorT),
     [diagramMode, editorT],
@@ -1684,10 +1789,13 @@ export function EditorShell({
         nodes.map((node) => [
           node.id,
           inspectorMode === "operational"
-            ? diagramMode.presentation.getOperationalDisplayLabel({
-                label: node.data.label,
-                payload: node.data.payload,
-              }, editorT)
+            ? diagramMode.presentation.getOperationalDisplayLabel(
+                {
+                  label: node.data.label,
+                  payload: node.data.payload,
+                },
+                editorT,
+              )
             : node.data.label,
         ]),
       ),
@@ -1726,11 +1834,19 @@ export function EditorShell({
       inspectorMode,
       t: editorT,
     });
-  }, [diagramMode, edges, editorT, inspectorMode, nodeLabelById, nodeRoleById, selectedNode]);
+  }, [
+    diagramMode,
+    edges,
+    editorT,
+    inspectorMode,
+    nodeLabelById,
+    nodeRoleById,
+    selectedNode,
+  ]);
   const processSelectedNodeRelations = useMemo(
     () =>
       diagramMode.inspector.kind === "process" && selectedNode
-        ? (selectedNodeRelations as ProcessRelationsViewModel)
+        ? (selectedNodeRelations as unknown as ProcessRelationsViewModel)
         : null,
     [diagramMode.inspector.kind, selectedNode, selectedNodeRelations],
   );
@@ -1745,26 +1861,38 @@ export function EditorShell({
       return [] as string[];
     }
 
-    return diagramMode.semantic.getNodeStructureTips({
-      diagramRole: nodeRoleById.get(selectedNode.id),
-      nodeKind: selectedNode.data.kind,
-      nodeLabel: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
-      incomingCount: selectedNodeRelations.incomingCount,
-      outgoingCount: selectedNodeRelations.outgoingCount,
-    }, editorT);
-  }, [diagramMode, editorT, nodeLabelById, nodeRoleById, selectedNode, selectedNodeRelations]);
+    return diagramMode.semantic.getNodeStructureTips(
+      {
+        diagramRole: nodeRoleById.get(selectedNode.id),
+        nodeKind: selectedNode.data.kind,
+        nodeLabel:
+          nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+        incomingCount: selectedNodeRelations.incomingCount,
+        outgoingCount: selectedNodeRelations.outgoingCount,
+      },
+      editorT,
+    );
+  }, [
+    diagramMode,
+    editorT,
+    nodeLabelById,
+    nodeRoleById,
+    selectedNode,
+    selectedNodeRelations,
+  ]);
   const selectedEdgeSourceLabel = selectedEdge
-    ? nodeLabelById.get(selectedEdge.source) ?? selectedEdge.source
+    ? (nodeLabelById.get(selectedEdge.source) ?? selectedEdge.source)
     : null;
   const selectedEdgeTargetLabel = selectedEdge
-    ? nodeLabelById.get(selectedEdge.target) ?? selectedEdge.target
+    ? (nodeLabelById.get(selectedEdge.target) ?? selectedEdge.target)
     : null;
   const quickFindOptions = useMemo(
-    () => filterNodeQuickFindOptions(nodes, quickFindQuery, inspectorMode, editorT),
+    () =>
+      filterNodeQuickFindOptions(nodes, quickFindQuery, inspectorMode, editorT),
     [editorT, inspectorMode, nodes, quickFindQuery],
   );
   const selectedItemLabel = selectedNode
-    ? nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label
+    ? (nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label)
     : selectedEdge
       ? selectedEdge.label
         ? String(selectedEdge.label)
@@ -1772,10 +1900,13 @@ export function EditorShell({
             selectedEdgeTargetLabel ?? selectedEdge.target
           }`
       : editorT("shell.selection.none");
-  const inspectorSelectionState = resolveInspectorSelectionState({
-    hasSelectedNode: Boolean(selectedNode),
-    hasSelectedEdge: Boolean(selectedEdge),
-  }, editorT);
+  const inspectorSelectionState = resolveInspectorSelectionState(
+    {
+      hasSelectedNode: Boolean(selectedNode),
+      hasSelectedEdge: Boolean(selectedEdge),
+    },
+    editorT,
+  );
   const isProcessDiagram = diagramMode.inspector.kind === "process";
   const isGraphDiagram = Boolean(diagramMode.semantic.graph);
   const DiagramInspectorAdapter = useMemo(
@@ -1792,12 +1923,17 @@ export function EditorShell({
   );
   const processNodeInspectorModel =
     processInspectorStrategy && selectedNode && processSelectedNodeRelations
-        ? processInspectorStrategy.process.resolveNodeViewModel({
-          diagramRole: nodeRoleById.get(selectedNode.id),
-          kind: selectedNode.data.kind,
-          label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
-          relations: processSelectedNodeRelations,
-        }, editorT)
+      ? processInspectorStrategy.process.resolveNodeViewModel(
+          {
+            diagramRole: nodeRoleById.get(selectedNode.id),
+            kind: selectedNode.data.kind,
+            label:
+              nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+            payload: selectedNode.data.payload,
+            relations: processSelectedNodeRelations,
+          },
+          editorT,
+        )
       : null;
   const flowSelectionKindLabel =
     processNodeInspectorModel?.selectionKindLabel ??
@@ -1806,17 +1942,22 @@ export function EditorShell({
           const role = resolveProcessNodeRole({
             diagramRole: nodeRoleById.get(selectedNode.id),
             kind: selectedNode.data.kind,
-            label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+            label:
+              nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
           });
           const roleMeta = getProcessRoleMeta(role, editorT);
 
-          return role === "flow-step" ? roleMeta.kindLabel : roleMeta.badgeLabel;
+          return role === "flow-step"
+            ? roleMeta.kindLabel
+            : roleMeta.badgeLabel;
         })()
       : null);
   const flowSelectionChipLabel = isProcessDiagram
     ? selectedNode
       ? `${flowSelectionKindLabel ?? ""}${
-          inspectorMode === "technical" ? ` (kind: ${selectedNode.data.kind})` : ""
+          inspectorMode === "technical"
+            ? ` (kind: ${selectedNode.data.kind})`
+            : ""
         }`
       : selectedEdge
         ? `${getEdgeKindLabelForDiagram(
@@ -1836,23 +1977,29 @@ export function EditorShell({
     selectedEdge &&
     selectedEdgeSourceLabel &&
     selectedEdgeTargetLabel
-        ? processInspectorStrategy.process.resolveEdgeViewModel({
-          kind: selectedEdge.data?.kind ?? "flows-to",
-          label: selectedEdge.label ? String(selectedEdge.label) : undefined,
-          sourceLabel: selectedEdgeSourceLabel,
-          targetLabel: selectedEdgeTargetLabel,
-        }, editorT)
+      ? processInspectorStrategy.process.resolveEdgeViewModel(
+          {
+            kind: selectedEdge.data?.kind ?? "flows-to",
+            label: selectedEdge.label ? String(selectedEdge.label) : undefined,
+            sourceLabel: selectedEdgeSourceLabel,
+            targetLabel: selectedEdgeTargetLabel,
+          },
+          editorT,
+        )
       : null;
   const graphSelectedNodeSemantic =
     isGraphDiagram && selectedNode
-      ? diagramMode.semantic.graph?.resolveNodeSemantic({
-          diagramRole: nodeRoleById.get(selectedNode.id),
-          kind: selectedNode.data.kind,
-          label: selectedNode.data.label,
-          payload: selectedNode.data.payload,
-          incomingCount: selectedNodeRelations.incomingCount,
-          outgoingCount: selectedNodeRelations.outgoingCount,
-        }, editorT)
+      ? diagramMode.semantic.graph?.resolveNodeSemantic(
+          {
+            diagramRole: nodeRoleById.get(selectedNode.id),
+            kind: selectedNode.data.kind,
+            label: selectedNode.data.label,
+            payload: selectedNode.data.payload,
+            incomingCount: selectedNodeRelations.incomingCount,
+            outgoingCount: selectedNodeRelations.outgoingCount,
+          },
+          editorT,
+        )
       : null;
   const graphSelectedEdgeSemantic =
     isGraphDiagram && selectedEdge
@@ -1860,38 +2007,110 @@ export function EditorShell({
           selectedEdge.data?.kind ?? "flows-to",
           editorT,
         )
+      : null;
+  const inspectorSelectionBadge = graphSelectedNodeSemantic
+    ? graphSelectedNodeSemantic.selectionBadgeLabel
+    : diagramMode.inspector.resolveSelectionBadge({
+        hasSelectedNode: Boolean(selectedNode),
+        hasSelectedEdge: Boolean(selectedEdge),
+        defaultBadge: inspectorSelectionState.badgeLabel,
+        t: editorT,
+      });
+  const graphSelectedNodeKindLabel = graphSelectedNodeSemantic
+    ? graphSelectedNodeSemantic.kindLabel
     : null;
-  const inspectorSelectionBadge =
-    graphSelectedNodeSemantic
-      ? graphSelectedNodeSemantic.selectionBadgeLabel
-      : diagramMode.inspector.resolveSelectionBadge({
-          hasSelectedNode: Boolean(selectedNode),
-          hasSelectedEdge: Boolean(selectedEdge),
-          defaultBadge: inspectorSelectionState.badgeLabel,
-          t: editorT,
-        });
-  const graphSelectedNodeKindLabel =
-    graphSelectedNodeSemantic
-      ? graphSelectedNodeSemantic.kindLabel
-      : null;
-  const graphSelectedNodeKindDescription =
-    graphSelectedNodeSemantic
-      ? graphSelectedNodeSemantic.kindDescription
-      : null;
+  const graphSelectedNodeKindDescription = graphSelectedNodeSemantic
+    ? graphSelectedNodeSemantic.kindDescription
+    : null;
   const isInspectorVisible = !isFocusInspectorCollapsed;
   const shouldShowMetadataPanel = !isCanvasFocusMode;
   const shouldShowPrismaPanel = !isCanvasFocusMode;
   const shouldShowVersionsPanel = !isCanvasFocusMode;
-  const contextualActions = useMemo(
-    () => diagramMode.contextualActions.getSelectionActions(editorT),
-    [diagramMode, editorT],
-  );
+  const processContextualSourceNode = useMemo(() => {
+    if (!isProcessDiagram || !selectedNode) {
+      return selectedNode;
+    }
+
+    const selectedRole = resolveProcessNodeRole({
+      diagramRole: nodeRoleById.get(selectedNode.id),
+      kind: selectedNode.data.kind,
+      label: nodeLabelById.get(selectedNode.id) ?? selectedNode.data.label,
+    });
+
+    if (selectedRole !== "flow-note") {
+      return selectedNode;
+    }
+
+    const hostEdge = edges.find(
+      (edge) =>
+        (edge.data?.kind ?? "flows-to") === "references" &&
+        (edge.source === selectedNode.id || edge.target === selectedNode.id),
+    );
+    const hostNodeId =
+      hostEdge?.source === selectedNode.id ? hostEdge.target : hostEdge?.source;
+
+    return hostNodeId
+      ? (nodes.find((node) => node.id === hostNodeId) ?? selectedNode)
+      : selectedNode;
+  }, [
+    edges,
+    isProcessDiagram,
+    nodeLabelById,
+    nodeRoleById,
+    nodes,
+    selectedNode,
+  ]);
+  const contextualActions = useMemo(() => {
+    if (isProcessDiagram && processContextualSourceNode) {
+      const contextualRole = resolveProcessNodeRole({
+        diagramRole: nodeRoleById.get(processContextualSourceNode.id),
+        kind: processContextualSourceNode.data.kind,
+        label:
+          nodeLabelById.get(processContextualSourceNode.id) ??
+          processContextualSourceNode.data.label,
+      });
+      const existingOutgoingLabels = edges
+        .filter(
+          (edge) =>
+            edge.source === processContextualSourceNode.id &&
+            ((edge.data?.kind ?? "flows-to") === "flows-to" ||
+              (edge.data?.kind ?? "flows-to") === "depends-on"),
+        )
+        .map((edge) => (edge.label ? String(edge.label) : undefined))
+        .filter((label): label is string => Boolean(label));
+
+      return resolveProcessSelectionQuickActions({
+        selectedRole: contextualRole,
+        existingOutgoingLabels,
+        t: editorT,
+      }).map((action) => ({
+        ...action,
+        insertMode:
+          action.id === "flow-add-note"
+            ? ("flow-note" as const)
+            : action.id === "flow-add-branch-path"
+              ? ("flow-branch" as const)
+              : ("flow-next-step" as const),
+      }));
+    }
+
+    return diagramMode.contextualActions.getSelectionActions(editorT);
+  }, [
+    diagramMode,
+    editorT,
+    edges,
+    isProcessDiagram,
+    nodeLabelById,
+    nodeRoleById,
+    processContextualSourceNode,
+  ]);
   const quickAction = useMemo(() => {
     if (contextualActions[0]) {
       return contextualActions[0];
     }
 
-    const fallbackAction = diagramMode.contextualActions.getPrimarySelectionAction(editorT);
+    const fallbackAction =
+      diagramMode.contextualActions.getPrimarySelectionAction(editorT);
     return {
       ...fallbackAction,
       label: quickAddCopy.addPrimary,
@@ -1916,7 +2135,7 @@ export function EditorShell({
   const inlineRenameNode = useMemo(
     () =>
       inlineRenameNodeId
-        ? nodes.find((node) => node.id === inlineRenameNodeId) ?? null
+        ? (nodes.find((node) => node.id === inlineRenameNodeId) ?? null)
         : null,
     [inlineRenameNodeId, nodes],
   );
@@ -1931,6 +2150,39 @@ export function EditorShell({
   const selectionNodeKindPresentation = selectedNode
     ? getNodeKindPresentation(selectedNode.data.kind, editorT)
     : null;
+  const normalizeProcessViewportPresence = useCallback(
+    (
+      instance: ReactFlowInstance<
+        RFNode,
+        RFEdge
+      > | null = reactFlowInstanceRef.current,
+    ) => {
+      if (!isProcessDiagram || !instance) {
+        return;
+      }
+
+      const currentViewport = instance.getViewport();
+      if (currentViewport.zoom >= 0.78) {
+        return;
+      }
+
+      const currentNodes = instance.getNodes();
+      if (currentNodes.length === 0) {
+        return;
+      }
+
+      const bounds = instance.getNodesBounds(currentNodes);
+      instance.setCenter(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+        {
+          zoom: 0.78,
+          duration: 220,
+        },
+      );
+    },
+    [isProcessDiagram],
+  );
   const flowSelectionDismissKey = `${selectedNodeId ?? ""}:${selectedEdgeId ?? ""}:${inspectorMode}:${isCanvasFocusMode}`;
   const isSelectedTreeSubtreeCollapsed = selectedNode
     ? collapsedTreeNodeIdSet.has(selectedNode.id)
@@ -1965,7 +2217,8 @@ export function EditorShell({
     const fallbackHeight = canvasRect?.height ?? 620;
     const topBarOffset = 72;
     const left = inlineRenameNode.position.x * viewport.zoom + viewport.x + 24;
-    const top = inlineRenameNode.position.y * viewport.zoom + viewport.y + topBarOffset;
+    const top =
+      inlineRenameNode.position.y * viewport.zoom + viewport.y + topBarOffset;
 
     return {
       left: `${Math.max(16, Math.min(left, fallbackWidth - 280))}px`,
@@ -2016,8 +2269,8 @@ export function EditorShell({
     return () => {
       delete globalWindow.__mapiaE2eConnectNodes;
     };
-  // E2E hook only depends on the quick-action default kind; runtime refs handle fresh graph state.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // E2E hook only depends on the quick-action default kind; runtime refs handle fresh graph state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickAction.edgeKind]);
 
   useEffect(() => {
@@ -2043,7 +2296,16 @@ export function EditorShell({
   }
 
   function handleFitView() {
-    reactFlowInstanceRef.current?.fitView({ padding: 0.2, duration: 220 });
+    reactFlowInstanceRef.current?.fitView({
+      padding: isProcessDiagram ? 0.04 : 0.2,
+      minZoom: isProcessDiagram ? 0.78 : undefined,
+      duration: 220,
+    });
+    if (isProcessDiagram) {
+      window.setTimeout(() => {
+        normalizeProcessViewportPresence();
+      }, 240);
+    }
   }
 
   function handleCenterView() {
@@ -2062,8 +2324,12 @@ export function EditorShell({
     }
 
     if (selectedEdge) {
-      const source = nodesRef.current.find((node) => node.id === selectedEdge.source);
-      const target = nodesRef.current.find((node) => node.id === selectedEdge.target);
+      const source = nodesRef.current.find(
+        (node) => node.id === selectedEdge.source,
+      );
+      const target = nodesRef.current.find(
+        (node) => node.id === selectedEdge.target,
+      );
       if (source && target) {
         instance.setCenter(
           (source.position.x + target.position.x) / 2,
@@ -2114,25 +2380,38 @@ export function EditorShell({
     }
 
     selectItem({ nodeId: targetNode.id, edgeId: null });
-    reactFlowInstanceRef.current?.setCenter(targetNode.position.x, targetNode.position.y, {
-      zoom: Math.max(viewportRef.current.zoom, 1.05),
-      duration: 220,
-    });
+    reactFlowInstanceRef.current?.setCenter(
+      targetNode.position.x,
+      targetNode.position.y,
+      {
+        zoom: Math.max(viewportRef.current.zoom, 1.05),
+        duration: 220,
+      },
+    );
   }
 
-  function handleOpenRelatedNodeFromRelation(_edgeId: string, relatedNodeId: string) {
+  function handleOpenRelatedNodeFromRelation(
+    _edgeId: string,
+    relatedNodeId: string,
+  ) {
     selectItem({ nodeId: relatedNodeId, edgeId: null });
     setIsFocusInspectorCollapsed(false);
 
-    const relatedNode = nodesRef.current.find((node) => node.id === relatedNodeId);
+    const relatedNode = nodesRef.current.find(
+      (node) => node.id === relatedNodeId,
+    );
     if (!relatedNode) {
       return;
     }
 
-    reactFlowInstanceRef.current?.setCenter(relatedNode.position.x, relatedNode.position.y, {
-      zoom: Math.max(viewportRef.current.zoom, 1.05),
-      duration: 220,
-    });
+    reactFlowInstanceRef.current?.setCenter(
+      relatedNode.position.x,
+      relatedNode.position.y,
+      {
+        zoom: Math.max(viewportRef.current.zoom, 1.05),
+        duration: 220,
+      },
+    );
   }
 
   function handleOpenTransitionFromRelation(edgeId: string) {
@@ -2181,14 +2460,20 @@ export function EditorShell({
     }
 
     if (issue.targetType === "edge" && issue.targetId) {
-      const edge = edgesRef.current.find((candidate) => candidate.id === issue.targetId);
+      const edge = edgesRef.current.find(
+        (candidate) => candidate.id === issue.targetId,
+      );
       if (!edge) {
         return;
       }
 
       selectItem({ nodeId: null, edgeId: edge.id });
-      const sourceNode = nodesRef.current.find((node) => node.id === edge.source);
-      const targetNode = nodesRef.current.find((node) => node.id === edge.target);
+      const sourceNode = nodesRef.current.find(
+        (node) => node.id === edge.source,
+      );
+      const targetNode = nodesRef.current.find(
+        (node) => node.id === edge.target,
+      );
 
       if (sourceNode && targetNode) {
         reactFlowInstanceRef.current?.setCenter(
@@ -2259,6 +2544,58 @@ export function EditorShell({
     });
   }
 
+  function resolvePreferredEdgeLabel(input: {
+    sourceNode: RFNode;
+    targetNode: RFNode;
+    edgeKind: EdgeKind;
+    explicitLabel?: string;
+  }) {
+    if (input.explicitLabel !== undefined) {
+      return input.explicitLabel;
+    }
+
+    if (currentSupportedDiagramType !== "flow") {
+      return getEdgeKindLabel(input.edgeKind, "operational");
+    }
+
+    const sourceRole = resolveProcessNodeRole({
+      diagramRole: input.sourceNode.data.diagramRole,
+      kind: input.sourceNode.data.kind,
+      label: input.sourceNode.data.label,
+    });
+    const targetRole = resolveProcessNodeRole({
+      diagramRole: input.targetNode.data.diagramRole,
+      kind: input.targetNode.data.kind,
+      label: input.targetNode.data.label,
+    });
+    const existingOutgoingLabels = edgesRef.current
+      .filter(
+        (edge) =>
+          edge.source === input.sourceNode.id &&
+          ((edge.data?.kind ?? "flows-to") === "flows-to" ||
+            (edge.data?.kind ?? "flows-to") === "depends-on"),
+      )
+      .map((edge) => (edge.label ? String(edge.label) : undefined))
+      .filter((label): label is string => Boolean(label));
+
+    const processLabel = resolveDefaultProcessEdgeLabel({
+      sourceRole,
+      edgeKind: input.edgeKind,
+      existingOutgoingLabels,
+      t: editorT,
+    });
+
+    if (processLabel !== undefined) {
+      return processLabel;
+    }
+
+    if (sourceRole === "flow-note" || targetRole === "flow-note") {
+      return undefined;
+    }
+
+    return undefined;
+  }
+
   async function createEdgeOnServer(input: {
     sourceNodeId: string;
     targetNodeId: string;
@@ -2267,8 +2604,12 @@ export function EditorShell({
     allowSemanticOverride?: boolean;
     overrideReason?: string;
   }) {
-    const sourceNode = nodesRef.current.find((node) => node.id === input.sourceNodeId);
-    const targetNode = nodesRef.current.find((node) => node.id === input.targetNodeId);
+    const sourceNode = nodesRef.current.find(
+      (node) => node.id === input.sourceNodeId,
+    );
+    const targetNode = nodesRef.current.find(
+      (node) => node.id === input.targetNodeId,
+    );
 
     if (!sourceNode || !targetNode) {
       setGlobalErrorMessage(editorT("shell.errors.connectionNodesNotFound"));
@@ -2282,7 +2623,11 @@ export function EditorShell({
           sourceNodeId: input.sourceNodeId,
           targetNodeId: input.targetNodeId,
           kind: input.edgeKind,
-          label: getEdgeKindLabel(input.edgeKind, "operational"),
+          label: resolvePreferredEdgeLabel({
+            sourceNode,
+            targetNode,
+            edgeKind: input.edgeKind,
+          }),
           data: {},
         },
         semanticMode: inspectorMode,
@@ -2290,7 +2635,9 @@ export function EditorShell({
         overrideReason: input.overrideReason,
       });
       if (!result.ok) {
-        setGlobalErrorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+        setGlobalErrorMessage(
+          editorT("shell.errors.finishPendingSaveBeforeApply"),
+        );
         return false;
       }
 
@@ -2299,10 +2646,14 @@ export function EditorShell({
       return true;
     } catch (error) {
       if (error instanceof EditorQueryError) {
-        if (error.code === "SEMANTIC_VIOLATION" && input.openAssistantOnInvalid) {
+        if (
+          error.code === "SEMANTIC_VIOLATION" &&
+          input.openAssistantOnInvalid
+        ) {
           const allowedKinds = Array.isArray(error.payload?.allowedEdgeKinds)
-            ? error.payload.allowedEdgeKinds.filter((kind): kind is EdgeKind =>
-                EdgeKindSchema.safeParse(kind).success,
+            ? error.payload.allowedEdgeKinds.filter(
+                (kind): kind is EdgeKind =>
+                  EdgeKindSchema.safeParse(kind).success,
               )
             : [];
           const recommendedEdgeKindResult = EdgeKindSchema.safeParse(
@@ -2313,9 +2664,13 @@ export function EditorShell({
             sourceNodeId: input.sourceNodeId,
             targetNodeId: input.targetNodeId,
             sourceLabel:
-              nodeLabelById.get(input.sourceNodeId) ?? sourceNode.data.label ?? sourceNode.id,
+              nodeLabelById.get(input.sourceNodeId) ??
+              sourceNode.data.label ??
+              sourceNode.id,
             targetLabel:
-              nodeLabelById.get(input.targetNodeId) ?? targetNode.data.label ?? targetNode.id,
+              nodeLabelById.get(input.targetNodeId) ??
+              targetNode.data.label ??
+              targetNode.id,
             attemptedEdgeKind: input.edgeKind,
             allowedEdgeKinds: allowedKinds,
             recommendedEdgeKind: recommendedEdgeKindResult.success
@@ -2382,27 +2737,34 @@ export function EditorShell({
     explicitKind: boolean;
     openAssistantOnInvalid: boolean;
   }) {
-    const sourceNode = nodesRef.current.find((node) => node.id === input.sourceNodeId);
-    const targetNode = nodesRef.current.find((node) => node.id === input.targetNodeId);
+    const sourceNode = nodesRef.current.find(
+      (node) => node.id === input.sourceNodeId,
+    );
+    const targetNode = nodesRef.current.find(
+      (node) => node.id === input.targetNodeId,
+    );
 
     if (!sourceNode || !targetNode) {
       setGlobalErrorMessage(editorT("shell.errors.connectionNodesNotFound"));
       return false;
     }
 
-    const validation = validateEdgeCreation({
-      diagramType: semanticDiagramType,
-      sourceNode: diagramMode.semantic.toRoleAwareNodeRef({
-        node: sourceNode,
-        rootNodeName: layoutMetadata.rootNodeName,
-      }),
-      targetNode: diagramMode.semantic.toRoleAwareNodeRef({
-        node: targetNode,
-        rootNodeName: layoutMetadata.rootNodeName,
-      }),
-      edgeKind: input.edgeKind,
-      mode: inspectorMode,
-    }, semanticEngineOptions);
+    const validation = validateEdgeCreation(
+      {
+        diagramType: semanticDiagramType,
+        sourceNode: diagramMode.semantic.toRoleAwareNodeRef({
+          node: sourceNode,
+          rootNodeName: layoutMetadata.rootNodeName,
+        }),
+        targetNode: diagramMode.semantic.toRoleAwareNodeRef({
+          node: targetNode,
+          rootNodeName: layoutMetadata.rootNodeName,
+        }),
+        edgeKind: input.edgeKind,
+        mode: inspectorMode,
+      },
+      semanticEngineOptions,
+    );
 
     let nextEdgeKind = input.edgeKind;
 
@@ -2412,9 +2774,13 @@ export function EditorShell({
           sourceNodeId: sourceNode.id,
           targetNodeId: targetNode.id,
           sourceLabel:
-            nodeLabelById.get(sourceNode.id) ?? sourceNode.data.label ?? sourceNode.id,
+            nodeLabelById.get(sourceNode.id) ??
+            sourceNode.data.label ??
+            sourceNode.id,
           targetLabel:
-            nodeLabelById.get(targetNode.id) ?? targetNode.data.label ?? targetNode.id,
+            nodeLabelById.get(targetNode.id) ??
+            targetNode.data.label ??
+            targetNode.id,
           attemptedEdgeKind: input.edgeKind,
           allowedEdgeKinds: validation.allowedEdgeKinds,
           recommendedEdgeKind: validation.recommendedEdgeKind,
@@ -2434,7 +2800,8 @@ export function EditorShell({
         return false;
       }
 
-      nextEdgeKind = validation.recommendedEdgeKind ?? validation.allowedEdgeKinds[0];
+      nextEdgeKind =
+        validation.recommendedEdgeKind ?? validation.allowedEdgeKinds[0];
       setQuerySyncMessage(
         isProcessDiagram
           ? editorT("shell.messages.transitionAutoAdjusted", {
@@ -2460,7 +2827,12 @@ export function EditorShell({
         sourceNodeId: sourceNode.id,
         targetNodeId: targetNode.id,
         kind: nextEdgeKind,
-        label: input.edgeLabel ?? getEdgeKindLabel(nextEdgeKind, "operational"),
+        label: resolvePreferredEdgeLabel({
+          sourceNode,
+          targetNode,
+          edgeKind: nextEdgeKind,
+          explicitLabel: input.edgeLabel,
+        }),
         data: {},
       },
     });
@@ -2470,9 +2842,13 @@ export function EditorShell({
     await toggleValidationPanelController();
   }
 
-  function buildLayoutNodesFromFlowNodes(inputNodes: RFNode[] = nodesRef.current) {
+  function buildLayoutNodesFromFlowNodes(
+    inputNodes: RFNode[] = nodesRef.current,
+  ) {
     return inputNodes
-      .filter((node) => !hiddenCanvasNodeIdSet.has(node.id) && node.hidden !== true)
+      .filter(
+        (node) => !hiddenCanvasNodeIdSet.has(node.id) && node.hidden !== true,
+      )
       .map((node) => ({
         id: node.id,
         kind: node.data.kind,
@@ -2484,7 +2860,9 @@ export function EditorShell({
       }));
   }
 
-  function buildLayoutEdgesFromFlowEdges(inputEdges: RFEdge[] = edgesRef.current) {
+  function buildLayoutEdgesFromFlowEdges(
+    inputEdges: RFEdge[] = edgesRef.current,
+  ) {
     return inputEdges
       .filter(
         (edge) =>
@@ -2492,10 +2870,10 @@ export function EditorShell({
           !hiddenCanvasNodeIdSet.has(edge.target),
       )
       .map((edge) => ({
-      id: edge.id,
-      sourceNodeId: edge.source,
-      targetNodeId: edge.target,
-      kind: edge.data?.kind ?? "flows-to",
+        id: edge.id,
+        sourceNodeId: edge.source,
+        targetNodeId: edge.target,
+        kind: edge.data?.kind ?? "flows-to",
       }));
   }
 
@@ -2539,7 +2917,9 @@ export function EditorShell({
     });
   }
 
-  function resolveSourceNodeIdForContextAction(action: SelectionHudQuickAction) {
+  function resolveSourceNodeIdForContextAction(
+    action: SelectionHudQuickAction,
+  ) {
     return diagramMode.contextualActions.resolveSourceNodeId({
       action,
       selectedNode,
@@ -2662,18 +3042,19 @@ export function EditorShell({
     insertMode?: ContextualInsertMode;
   }) {
     const referenceNode = input.sourceNodeId
-      ? nodesRef.current.find((node) => node.id === input.sourceNodeId) ?? null
+      ? (nodesRef.current.find((node) => node.id === input.sourceNodeId) ??
+        null)
       : null;
     const nextNodeId = crypto.randomUUID();
     const nextNodeIndex = nodesRef.current.length + 1;
     const title =
       input.draft.title.trim() ||
-      diagramMode.quickAdd.buildDefaultNodeTitle(
-        {
-          kind: input.draft.kind,
-          nextIndex: nextNodeIndex,
-        },
+      buildDefaultNodeTitle(
+        input.draft.kind,
+        nextNodeIndex,
+        currentSupportedDiagramType,
         editorT,
+        input.draft.diagramRole,
       );
     const basePayload =
       inspectorMode === "operational"
@@ -2746,7 +3127,13 @@ export function EditorShell({
       tagsText: "",
     });
     setIsAddNodeDialogOpen(true);
-  }, [diagramMode, personaDefaultNodeKind, quickAction.id, quickAction.nodeKind, selectedNodeId]);
+  }, [
+    diagramMode,
+    personaDefaultNodeKind,
+    quickAction.id,
+    quickAction.nodeKind,
+    selectedNodeId,
+  ]);
 
   function handleStartInlineRename(node: RFNode) {
     setInlineRenameNodeId(node.id);
@@ -2784,7 +3171,7 @@ export function EditorShell({
       return;
     }
 
-      setQuerySyncMessage(editorT("shell.messages.titleUpdated"));
+    setQuerySyncMessage(editorT("shell.messages.titleUpdated"));
     handleCancelInlineRename();
   }
 
@@ -2819,7 +3206,11 @@ export function EditorShell({
       return;
     }
 
-    if (pendingConnectionAssistant || pendingNodeRepair || pendingSemanticOverride) {
+    if (
+      pendingConnectionAssistant ||
+      pendingNodeRepair ||
+      pendingSemanticOverride
+    ) {
       return;
     }
 
@@ -2901,7 +3292,8 @@ export function EditorShell({
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
       event.preventDefault();
-      quickFindReturnFocusRef.current = document.activeElement as HTMLElement | null;
+      quickFindReturnFocusRef.current =
+        document.activeElement as HTMLElement | null;
       setQuickFindQuery("");
       setQuickFindActiveIndex(0);
       setIsQuickFindOpen(true);
@@ -2991,7 +3383,9 @@ export function EditorShell({
         ...addNodeDraft,
         title: normalizedTitle,
       },
-      sourceNodeId: selectedNode ? resolveSourceNodeIdForContextAction(quickAction) : undefined,
+      sourceNodeId: selectedNode
+        ? resolveSourceNodeIdForContextAction(quickAction)
+        : undefined,
       relationKind: selectedNode ? quickAction.edgeKind : undefined,
       relationLabel: selectedNode ? quickAction.edgeLabel : undefined,
       insertMode: selectedNode ? quickAction.insertMode : "default",
@@ -3009,7 +3403,9 @@ export function EditorShell({
     handleOpenAddDialog();
   }
 
-  function handleAddContextualNode(action: SelectionHudQuickAction = quickAction) {
+  function handleAddContextualNode(
+    action: SelectionHudQuickAction = quickAction,
+  ) {
     if (!selectedNode) {
       handleOpenAddDialog();
       return;
@@ -3025,12 +3421,12 @@ export function EditorShell({
       draft: {
         kind: action.nodeKind,
         diagramRole: contextualRole,
-        title: diagramMode.quickAdd.buildDefaultNodeTitle(
-          {
-            kind: action.nodeKind,
-            nextIndex: nextNodeIndex,
-          },
+        title: buildDefaultNodeTitle(
+          action.nodeKind,
+          nextNodeIndex,
+          currentSupportedDiagramType,
           editorT,
+          contextualRole,
         ),
         description: "",
         tagsText: "",
@@ -3051,7 +3447,9 @@ export function EditorShell({
     updater: (payload: ErdEntityPayload) => ErdEntityPayload;
     successMessage?: string;
   }) {
-    const entityNode = nodesRef.current.find((node) => node.id === input.entityId);
+    const entityNode = nodesRef.current.find(
+      (node) => node.id === input.entityId,
+    );
     if (!entityNode || entityNode.data.kind !== "entity") {
       return false;
     }
@@ -3087,7 +3485,11 @@ export function EditorShell({
   }
 
   function handleAddErdField() {
-    if (!selectedErdEntityPayload || !selectedNode || selectedNode.data.kind !== "entity") {
+    if (
+      !selectedErdEntityPayload ||
+      !selectedNode ||
+      selectedNode.data.kind !== "entity"
+    ) {
       setGlobalErrorMessage(editorT("shell.errors.selectErdEntityToAddField"));
       return;
     }
@@ -3274,7 +3676,10 @@ export function EditorShell({
     updater: (payload: ErdRelationPayload) => ErdRelationPayload,
     options?: { successMessage?: string },
   ) {
-    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+    if (
+      !selectedEdge ||
+      (selectedEdge.data?.kind ?? "flows-to") !== "references"
+    ) {
       return false;
     }
 
@@ -3299,7 +3704,10 @@ export function EditorShell({
   }
 
   function updateSelectedErdRelationName(name: string) {
-    if (!selectedEdge || (selectedEdge.data?.kind ?? "flows-to") !== "references") {
+    if (
+      !selectedEdge ||
+      (selectedEdge.data?.kind ?? "flows-to") !== "references"
+    ) {
       return false;
     }
 
@@ -3334,17 +3742,26 @@ export function EditorShell({
       return null;
     }
 
-    const sourceNode = nodesRef.current.find((node) => node.id === selectedEdge.source);
-    const targetNode = nodesRef.current.find((node) => node.id === selectedEdge.target);
+    const sourceNode = nodesRef.current.find(
+      (node) => node.id === selectedEdge.source,
+    );
+    const targetNode = nodesRef.current.find(
+      (node) => node.id === selectedEdge.target,
+    );
     if (!sourceNode || !targetNode) {
       return null;
     }
-    if (sourceNode.data.kind !== "entity" || targetNode.data.kind !== "entity") {
+    if (
+      sourceNode.data.kind !== "entity" ||
+      targetNode.data.kind !== "entity"
+    ) {
       return null;
     }
 
-    const sourceEntity: ErdEntityPayload = normalizeErdEntityPayloadFromNode(sourceNode);
-    const targetEntity: ErdEntityPayload = normalizeErdEntityPayloadFromNode(targetNode);
+    const sourceEntity: ErdEntityPayload =
+      normalizeErdEntityPayloadFromNode(sourceNode);
+    const targetEntity: ErdEntityPayload =
+      normalizeErdEntityPayloadFromNode(targetNode);
 
     return {
       relation: {
@@ -3424,7 +3841,9 @@ export function EditorShell({
         },
       });
       setSemanticPolicy(updated);
-      setQuerySyncMessage(editorT("shell.messages.erdValidationLevelUpdated", { level }));
+      setQuerySyncMessage(
+        editorT("shell.messages.erdValidationLevelUpdated", { level }),
+      );
       setGlobalErrorMessage(null);
     } catch (error) {
       setGlobalErrorMessage(
@@ -3459,21 +3878,32 @@ export function EditorShell({
       });
       setGlobalErrorMessage(null);
     } catch (error) {
-      if (error instanceof EditorQueryError && error.code === "REPAIR_REQUIRED") {
-        const safeFixCount = Array.isArray((error.payload as { suggestedFixes?: unknown })?.suggestedFixes)
-          ? ((error.payload as { suggestedFixes?: unknown[] }).suggestedFixes?.length ?? 0)
+      if (
+        error instanceof EditorQueryError &&
+        error.code === "REPAIR_REQUIRED"
+      ) {
+        const safeFixCount = Array.isArray(
+          (error.payload as { suggestedFixes?: unknown })?.suggestedFixes,
+        )
+          ? ((error.payload as { suggestedFixes?: unknown[] }).suggestedFixes
+              ?.length ?? 0)
           : 0;
         setErdExportFeedback({
           kind: "info",
           message:
             safeFixCount > 0
-              ? editorT("shell.erd.exportBlockedStrictWithSafeFixes", { count: safeFixCount })
+              ? editorT("shell.erd.exportBlockedStrictWithSafeFixes", {
+                  count: safeFixCount,
+                })
               : editorT("shell.erd.exportBlockedStrict"),
         });
       } else {
         setErdExportFeedback({
           kind: "error",
-          message: formatErrorMessage(error, editorT("shell.errors.erdExportPreview")),
+          message: formatErrorMessage(
+            error,
+            editorT("shell.errors.erdExportPreview"),
+          ),
         });
       }
     } finally {
@@ -3490,7 +3920,9 @@ export function EditorShell({
       return;
     }
 
-    const nextPayload = flipErdRelationPayloadDirection(selectedErdRelationPayload);
+    const nextPayload = flipErdRelationPayloadDirection(
+      selectedErdRelationPayload,
+    );
     const commands: ErdEditorCommand[] = [
       {
         type: "removeEdge",
@@ -3618,7 +4050,9 @@ export function EditorShell({
         },
       ]);
       if (result.applied > 0) {
-        setQuerySyncMessage(editorT("shell.messages.relationMaterializedExistingField"));
+        setQuerySyncMessage(
+          editorT("shell.messages.relationMaterializedExistingField"),
+        );
       }
       return;
     }
@@ -3727,12 +4161,18 @@ export function EditorShell({
       return;
     }
 
-    const sourceNode = nodesRef.current.find((node) => node.id === pending.sourceNodeId);
-    const targetNode = nodesRef.current.find((node) => node.id === pending.targetNodeId);
+    const sourceNode = nodesRef.current.find(
+      (node) => node.id === pending.sourceNodeId,
+    );
+    const targetNode = nodesRef.current.find(
+      (node) => node.id === pending.targetNodeId,
+    );
     setPendingErdQuickRelate(null);
 
     if (!sourceNode || !targetNode) {
-      setGlobalErrorMessage(editorT("shell.errors.quickRelationEntityNotFound"));
+      setGlobalErrorMessage(
+        editorT("shell.errors.quickRelationEntityNotFound"),
+      );
       return;
     }
 
@@ -3746,10 +4186,13 @@ export function EditorShell({
           sourceNodeId: sourceNode.id,
           targetNodeId: targetNode.id,
           kind: "references",
-          data: normalizeErdRelationPayload(relationPayload as unknown as Record<string, unknown>, {
-            sourceEntityId: sourceNode.id,
-            targetEntityId: targetNode.id,
-          }) as unknown as Record<string, unknown>,
+          data: normalizeErdRelationPayload(
+            relationPayload as unknown as Record<string, unknown>,
+            {
+              sourceEntityId: sourceNode.id,
+              targetEntityId: targetNode.id,
+            },
+          ) as unknown as Record<string, unknown>,
         },
       },
     ];
@@ -3826,12 +4269,12 @@ export function EditorShell({
       });
       const dependentLabel =
         inferredDependentSide === "source"
-          ? sourceEntityRef.label ?? sourceEntityRef.id
-          : targetEntityRef.label ?? targetEntityRef.id;
+          ? (sourceEntityRef.label ?? sourceEntityRef.id)
+          : (targetEntityRef.label ?? targetEntityRef.id);
       const referencedLabel =
         inferredDependentSide === "source"
-          ? targetEntityRef.label ?? targetEntityRef.id
-          : sourceEntityRef.label ?? sourceEntityRef.id;
+          ? (targetEntityRef.label ?? targetEntityRef.id)
+          : (sourceEntityRef.label ?? sourceEntityRef.id);
       setQuerySyncMessage(
         editorT("shell.messages.quickRelationSuggestMaterialize", {
           dependentLabel,
@@ -3839,7 +4282,9 @@ export function EditorShell({
         }),
       );
     } else {
-      setQuerySyncMessage(editorT("shell.messages.quickRelationMaterializedAutomatically"));
+      setQuerySyncMessage(
+        editorT("shell.messages.quickRelationMaterializedAutomatically"),
+      );
     }
 
     setGlobalErrorMessage(null);
@@ -3855,7 +4300,9 @@ export function EditorShell({
       setPendingConnectionAssistant(null);
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setGlobalErrorMessage(editorT("shell.errors.finishPendingSaveBeforeRelation"));
+        setGlobalErrorMessage(
+          editorT("shell.errors.finishPendingSaveBeforeRelation"),
+        );
         return;
       }
 
@@ -3910,11 +4357,15 @@ export function EditorShell({
     }
 
     setPendingNodeRepair(null);
-      setNodeInspectorMessage(
-        mode === "repair"
-          ? editorT("shell.messages.kindAppliedWithRepair", { count: appliedActions })
-          : editorT("shell.messages.kindAppliedWithRemoval", { count: appliedActions }),
-      );
+    setNodeInspectorMessage(
+      mode === "repair"
+        ? editorT("shell.messages.kindAppliedWithRepair", {
+            count: appliedActions,
+          })
+        : editorT("shell.messages.kindAppliedWithRemoval", {
+            count: appliedActions,
+          }),
+    );
   }
 
   function handleCancelSemanticOverride() {
@@ -3944,7 +4395,10 @@ export function EditorShell({
       setGlobalErrorMessage(null);
     } catch (error) {
       setGlobalErrorMessage(
-        formatErrorMessage(error, editorT("shell.errors.applySemanticOverride")),
+        formatErrorMessage(
+          error,
+          editorT("shell.errors.applySemanticOverride"),
+        ),
       );
     }
   }
@@ -3953,9 +4407,7 @@ export function EditorShell({
     const currentSnapshot = getCurrentSnapshot();
 
     if (currentSnapshot.allowReapplyLayout === false) {
-      setGlobalErrorMessage(
-        editorT("shell.errors.layoutBlockedByAssistant"),
-      );
+      setGlobalErrorMessage(editorT("shell.errors.layoutBlockedByAssistant"));
       return;
     }
 
@@ -3979,9 +4431,7 @@ export function EditorShell({
     const currentSnapshot = getCurrentSnapshot();
 
     if (currentSnapshot.allowReapplyLayout === false) {
-      setGlobalErrorMessage(
-        editorT("shell.errors.layoutBlockedByAssistant"),
-      );
+      setGlobalErrorMessage(editorT("shell.errors.layoutBlockedByAssistant"));
       return;
     }
 
@@ -4051,8 +4501,12 @@ export function EditorShell({
     }
 
     if (isErdDiagram) {
-      const sourceNode = nodesRef.current.find((node) => node.id === connection.source);
-      const targetNode = nodesRef.current.find((node) => node.id === connection.target);
+      const sourceNode = nodesRef.current.find(
+        (node) => node.id === connection.source,
+      );
+      const targetNode = nodesRef.current.find(
+        (node) => node.id === connection.target,
+      );
       if (
         sourceNode &&
         targetNode &&
@@ -4065,7 +4519,9 @@ export function EditorShell({
         const rawLeft =
           targetNode.position.x * viewportState.zoom + viewportState.x + 48;
         const rawTop =
-          targetNode.position.y * viewportState.zoom + viewportState.y + topBarOffset;
+          targetNode.position.y * viewportState.zoom +
+          viewportState.y +
+          topBarOffset;
         const maxLeft = (canvasRect?.width ?? 920) - 240;
         const maxTop = (canvasRect?.height ?? 620) - 220;
         const left = Math.max(12, Math.min(rawLeft, maxLeft));
@@ -4091,7 +4547,9 @@ export function EditorShell({
       setPendingConnectionAssistant(null);
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setGlobalErrorMessage(editorT("shell.errors.finishPendingSaveBeforeRelation"));
+        setGlobalErrorMessage(
+          editorT("shell.errors.finishPendingSaveBeforeRelation"),
+        );
         return;
       }
 
@@ -4256,17 +4714,48 @@ export function EditorShell({
     try {
       const command =
         inspectorMode === "operational" && operationalNodeDraft
-          ? buildUpdateNodeCommandFromInspectorForm({
-              nodeId: selectedNode.id,
-              label: operationalNodeDraft.label,
-              kind: operationalNodeDraft.kind,
-              dataJson: formatInspectorJson(
-                mergeOperationalNodePayload(selectedNode.data.payload, {
+          ? (() => {
+              const processRole =
+                currentSupportedDiagramType === "flow"
+                  ? resolveProcessNodeRole({
+                      diagramRole:
+                        operationalNodeDraft.diagramRole ??
+                        selectedNode.data.diagramRole,
+                      kind: operationalNodeDraft.kind,
+                      label: operationalNodeDraft.label,
+                    })
+                  : undefined;
+              const nextShape = processRole
+                ? resolveProcessNodeShapeForRole(processRole)
+                : {
+                    kind: operationalNodeDraft.kind,
+                    diagramRole: operationalNodeDraft.diagramRole,
+                  };
+              const payload = mergeOperationalNodePayload(
+                selectedNode.data.payload,
+                {
                   description: operationalNodeDraft.description,
                   tagsText: operationalNodeDraft.tagsText,
-                }),
-              ),
-            })
+                  owner: operationalNodeDraft.owner,
+                  area: operationalNodeDraft.area,
+                  channel: operationalNodeDraft.channel,
+                  criticality: operationalNodeDraft.criticality,
+                  sla: operationalNodeDraft.sla,
+                  rule: operationalNodeDraft.rule,
+                  exception: operationalNodeDraft.exception,
+                },
+              );
+              const nextPayload = nextShape.diagramRole
+                ? writeDiagramRoleToPayload(payload, nextShape.diagramRole)
+                : payload;
+
+              return buildUpdateNodeCommandFromInspectorForm({
+                nodeId: selectedNode.id,
+                label: operationalNodeDraft.label,
+                kind: nextShape.kind,
+                dataJson: formatInspectorJson(nextPayload),
+              });
+            })()
           : nodeInspectorDraft
             ? buildUpdateNodeCommandFromInspectorForm({
                 nodeId: selectedNode.id,
@@ -4286,7 +4775,9 @@ export function EditorShell({
 
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setNodeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+        setNodeInspectorMessage(
+          editorT("shell.errors.finishPendingSaveBeforeApply"),
+        );
         return;
       }
 
@@ -4297,7 +4788,9 @@ export function EditorShell({
           semanticMode: inspectorMode,
         });
         if (!result.ok) {
-          setNodeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+          setNodeInspectorMessage(
+            editorT("shell.errors.finishPendingSaveBeforeApply"),
+          );
           return;
         }
 
@@ -4306,7 +4799,9 @@ export function EditorShell({
       } catch (error) {
         if (error instanceof EditorQueryError) {
           if (error.code === "REPAIR_REQUIRED") {
-            const repairPlan = error.payload?.repairPlan as RepairPlan | undefined;
+            const repairPlan = error.payload?.repairPlan as
+              | RepairPlan
+              | undefined;
             const violations = Array.isArray(error.payload?.violations)
               ? (error.payload.violations as SemanticViolation[])
               : [];
@@ -4344,7 +4839,9 @@ export function EditorShell({
                   );
                   return;
                 }
-                setNodeInspectorMessage(editorT("shell.messages.nodeUpdatedWithOverride"));
+                setNodeInspectorMessage(
+                  editorT("shell.messages.nodeUpdatedWithOverride"),
+                );
               },
             });
             return;
@@ -4404,7 +4901,9 @@ export function EditorShell({
 
       const ready = await ensureQueueFlushedBeforeDirectWrite();
       if (!ready) {
-        setEdgeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+        setEdgeInspectorMessage(
+          editorT("shell.errors.finishPendingSaveBeforeApply"),
+        );
         return;
       }
 
@@ -4415,7 +4914,9 @@ export function EditorShell({
           semanticMode: inspectorMode,
         });
         if (!result.ok) {
-          setEdgeInspectorMessage(editorT("shell.errors.finishPendingSaveBeforeApply"));
+          setEdgeInspectorMessage(
+            editorT("shell.errors.finishPendingSaveBeforeApply"),
+          );
           return;
         }
 
@@ -4446,7 +4947,9 @@ export function EditorShell({
                   );
                   return;
                 }
-                setEdgeInspectorMessage(editorT("shell.messages.edgeUpdatedWithOverride"));
+                setEdgeInspectorMessage(
+                  editorT("shell.messages.edgeUpdatedWithOverride"),
+                );
               },
             });
             return;
@@ -4476,9 +4979,7 @@ export function EditorShell({
     <div
       className={`editor-grid ${isCanvasFocusMode ? "editor-grid-focus" : ""} ${
         isProcessDiagram ? "editor-grid-process" : ""
-      } ${
-        isInspectorVisible ? "" : "editor-grid-inspector-hidden"
-      }`}
+      } ${isInspectorVisible ? "" : "editor-grid-inspector-hidden"}`}
     >
       <div
         className={`editor-main-column ${isProcessDiagram ? "editor-main-column-process" : ""}`}
@@ -4489,7 +4990,9 @@ export function EditorShell({
             project={project}
             diagramDefinitionLabel={diagramDefinitionLabel}
             rendererLabel={editorT(`shell.rendererLabels.${renderer.key}`)}
-            isSupportedDiagramType={isSupportedDiagramType(layoutMetadata.diagramType)}
+            isSupportedDiagramType={isSupportedDiagramType(
+              layoutMetadata.diagramType,
+            )}
             layoutPolicyLabel={layoutPolicyLabel}
             isReapplyLayoutBlockedByPolicy={isReapplyLayoutBlockedByPolicy}
             isOpen={panelState.metadata}
@@ -4503,22 +5006,29 @@ export function EditorShell({
             querySyncMessage={querySyncMessage}
             onRemoveSelected={handleRemoveSelected}
             isRemoveSelectedDisabled={
-              saveState.status === "saving" || (!selectedNodeId && !selectedEdgeId)
+              saveState.status === "saving" ||
+              (!selectedNodeId && !selectedEdgeId)
             }
             onManualSave={() => {
               void handleManualSave();
             }}
-            isManualSaveDisabled={saveState.status === "saving" || isCreatingVersion}
+            isManualSaveDisabled={
+              saveState.status === "saving" || isCreatingVersion
+            }
             isSaving={saveState.status === "saving"}
             newVersionName={newVersionName}
             onNewVersionNameChange={setNewVersionName}
             onCreateVersion={() => {
               void handleCreateVersion();
             }}
-            isCreateVersionDisabled={saveState.status === "saving" || isCreatingVersion}
+            isCreateVersionDisabled={
+              saveState.status === "saving" || isCreatingVersion
+            }
             isCreatingVersion={isCreatingVersion}
             onReapplyLayout={handleReapplyLayout}
-            isReapplyLayoutDisabled={saveState.status === "saving" || !canReapplyLayout}
+            isReapplyLayoutDisabled={
+              saveState.status === "saving" || !canReapplyLayout
+            }
             hasDiagramRendererMismatch={hasDiagramRendererMismatch}
             versionCreateFeedback={versionCreateFeedback}
           />
@@ -4593,7 +5103,8 @@ export function EditorShell({
           tabIndex={0}
           data-testid="editor-canvas"
           data-diagram-renderer={
-            renderer.canvasDataAttributes["data-diagram-renderer"] ?? renderer.key
+            renderer.canvasDataAttributes["data-diagram-renderer"] ??
+            renderer.key
           }
         >
           <EditorShellTopBar
@@ -4635,7 +5146,8 @@ export function EditorShell({
                       value={erdPolicy.validationLevel}
                       onChange={(event) => {
                         void handleUpdateErdValidationLevel(
-                          event.target.value as ErdPolicyConfig["validationLevel"],
+                          event.target
+                            .value as ErdPolicyConfig["validationLevel"],
                         );
                       }}
                       data-testid="erd-validation-level-select"
@@ -4691,7 +5203,7 @@ export function EditorShell({
                       selectedItemLabel,
                       kindChipLabel: flowSelectionChipLabel ?? "",
                       kindChipTone: selectedNode
-                        ? selectionNodeKindPresentation?.tone ?? "slate"
+                        ? (selectionNodeKindPresentation?.tone ?? "slate")
                         : null,
                       semanticStatusLabel: selectedSemanticStatusLabel,
                       semanticStatusSeverity: selectedSemanticSeverity,
@@ -4714,7 +5226,9 @@ export function EditorShell({
                         : [],
                       onOpenInspector: handleOpenSelectedItemInInspector,
                       onCenterView: handleCenterView,
-                      onDuplicate: selectedNode ? handleDuplicateSelection : undefined,
+                      onDuplicate: selectedNode
+                        ? handleDuplicateSelection
+                        : undefined,
                       onRemove: handleRemoveSelected,
                     }
                   : undefined
@@ -4749,7 +5263,11 @@ export function EditorShell({
                       }`
                     : null
               }
-              kindChipTone={selectedNode ? selectionNodeKindPresentation?.tone ?? "slate" : null}
+              kindChipTone={
+                selectedNode
+                  ? (selectionNodeKindPresentation?.tone ?? "slate")
+                  : null
+              }
               semanticStatusLabel={selectedSemanticStatusLabel}
               semanticStatusSeverity={selectedSemanticSeverity}
               editLabel={editorT("shell.selection.edit")}
@@ -4800,7 +5318,8 @@ export function EditorShell({
                       {editorT("shell.selection.addField")}
                     </button>
                   ) : null}
-                  {selectedNode && diagramMode.selection.supportsTreeSubtreeVisibility ? (
+                  {selectedNode &&
+                  diagramMode.selection.supportsTreeSubtreeVisibility ? (
                     <button
                       className="btn"
                       type="button"
@@ -4823,10 +5342,23 @@ export function EditorShell({
 
           <ReactFlow<RFNode, RFEdge>
             fitView
+            fitViewOptions={
+              isProcessDiagram
+                ? {
+                    padding: 0.04,
+                    minZoom: 0.78,
+                  }
+                : { padding: 0.18 }
+            }
             nodes={renderedNodes}
             edges={renderedEdges}
             onInit={(instance) => {
               reactFlowInstanceRef.current = instance;
+              if (isProcessDiagram) {
+                window.setTimeout(() => {
+                  normalizeProcessViewportPresence(instance);
+                }, 120);
+              }
             }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -4874,11 +5406,7 @@ export function EditorShell({
               color="var(--canvas-grid-color)"
               className={`editor-canvas-background ${renderer.backgroundConfig.className}`}
             />
-            <MiniMap
-              pannable
-              zoomable
-              className={renderer.minimapClassName}
-            />
+            <MiniMap pannable zoomable className={renderer.minimapClassName} />
           </ReactFlow>
 
           {pendingErdQuickRelate ? (
@@ -4890,21 +5418,24 @@ export function EditorShell({
               <div className="erd-quick-relate-popover-header">
                 <strong>{editorT("shell.quickRelate.title")}</strong>
                 <span className="helper">
-                  {pendingErdQuickRelate.sourceLabel} - {pendingErdQuickRelate.targetLabel}
+                  {pendingErdQuickRelate.sourceLabel} -{" "}
+                  {pendingErdQuickRelate.targetLabel}
                 </span>
               </div>
               <div className="row-actions">
-                {(["1:1", "1:N", "N:1", "N:N"] as ErdCardinalityPreset[]).map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    className="btn"
-                    onClick={() => handleSelectErdQuickRelatePreset(preset)}
-                    data-testid={`erd-quick-relate-preset-${preset.replace(":", "-")}`}
-                  >
-                    {preset}
-                  </button>
-                ))}
+                {(["1:1", "1:N", "N:1", "N:N"] as ErdCardinalityPreset[]).map(
+                  (preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className="btn"
+                      onClick={() => handleSelectErdQuickRelatePreset(preset)}
+                      data-testid={`erd-quick-relate-preset-${preset.replace(":", "-")}`}
+                    >
+                      {preset}
+                    </button>
+                  ),
+                )}
               </div>
               <div className="row-actions">
                 <button
@@ -4929,7 +5460,9 @@ export function EditorShell({
               }}
               data-testid="inline-rename-popover"
             >
-              <label htmlFor="inline-rename-input">{editorT("shell.inlineRename.label")}</label>
+              <label htmlFor="inline-rename-input">
+                {editorT("shell.inlineRename.label")}
+              </label>
               <input
                 id="inline-rename-input"
                 value={inlineRenameDraft}
@@ -4954,7 +5487,11 @@ export function EditorShell({
                 >
                   {editorT("shell.common.cancel")}
                 </button>
-                <button className="btn btn-primary" type="submit" data-testid="inline-rename-confirm">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  data-testid="inline-rename-confirm"
+                >
                   {editorT("shell.common.save")}
                 </button>
               </div>
@@ -4985,11 +5522,15 @@ export function EditorShell({
                 <h3>{quickAddCopy.dialogTitle}</h3>
                 <p className="helper">{quickAddCopy.dialogHint}</p>
                 {selectedNode && quickAddDefaultRelationLabel ? (
-                  <p className="helper" data-testid="quick-add-default-connection">
+                  <p
+                    className="helper"
+                    data-testid="quick-add-default-connection"
+                  >
                     {isProcessDiagram
                       ? editorT("shell.quickAdd.defaultProcessConnection", {
                           nodeLabel: selectedNode.data.label,
-                          relationLabel: quickAddDefaultRelationLabel.toLowerCase(),
+                          relationLabel:
+                            quickAddDefaultRelationLabel.toLowerCase(),
                         })
                       : editorT("shell.quickAdd.defaultConnection", {
                           nodeLabel: selectedNode.data.label,
@@ -5013,16 +5554,26 @@ export function EditorShell({
                         setAddNodeDraft((current) => ({
                           ...current,
                           kind: option.kind,
-                          diagramRole: diagramMode.quickAdd.resolveDefaultRoleForKind(
-                            option.kind,
-                          ),
+                          diagramRole:
+                            diagramMode.quickAdd.resolveDefaultRoleForKind(
+                              option.kind,
+                            ),
                         }))
                       }
                       data-testid={`add-node-kind-${option.kind}`}
                     >
-                      <span className={`badge add-node-kind-chip tone-${presentation.tone}`}>
-                        <svg viewBox={presentation.icon.viewBox} aria-hidden="true" focusable="false">
-                          <path d={presentation.icon.path} fill="currentColor" />
+                      <span
+                        className={`badge add-node-kind-chip tone-${presentation.tone}`}
+                      >
+                        <svg
+                          viewBox={presentation.icon.viewBox}
+                          aria-hidden="true"
+                          focusable="false"
+                        >
+                          <path
+                            d={presentation.icon.path}
+                            fill="currentColor"
+                          />
                         </svg>
                         {diagramMode.presentation.getNodeKindLabel(
                           option.kind,
@@ -5049,7 +5600,8 @@ export function EditorShell({
                   </label>
                   <div className="add-node-kind-grid">
                     {quickAddRoleOptions.map((roleOption) => {
-                      const isSelected = addNodeDraft.diagramRole === roleOption.role;
+                      const isSelected =
+                        addNodeDraft.diagramRole === roleOption.role;
 
                       return (
                         <button
@@ -5066,7 +5618,9 @@ export function EditorShell({
                           data-testid={`quick-add-role-${roleOption.role}`}
                         >
                           <span className="badge">{roleOption.label}</span>
-                          <span className="helper">{roleOption.description}</span>
+                          <span className="helper">
+                            {roleOption.description}
+                          </span>
                         </button>
                       );
                     })}
@@ -5097,6 +5651,7 @@ export function EditorShell({
                       nodes.length + 1,
                       currentSupportedDiagramType,
                       editorT,
+                      addNodeDraft.diagramRole,
                     ),
                   })}
                   required
@@ -5149,7 +5704,11 @@ export function EditorShell({
               ) : null}
 
               {addNodeErrorMessage ? (
-                <div className="error-box" role="alert" data-testid="add-node-error">
+                <div
+                  className="error-box"
+                  role="alert"
+                  data-testid="add-node-error"
+                >
                   {addNodeErrorMessage}
                 </div>
               ) : null}
@@ -5163,7 +5722,11 @@ export function EditorShell({
                 >
                   {editorT("shell.common.cancel")}
                 </button>
-                <button className="btn btn-primary" type="submit" data-testid="add-node-confirm-button">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  data-testid="add-node-confirm-button"
+                >
                   {quickAddCopy.addConfirm}
                 </button>
               </div>
@@ -5174,6 +5737,7 @@ export function EditorShell({
         <ConnectionAssistant
           open={pendingConnectionAssistant !== null}
           mode={inspectorMode}
+          diagramType={currentSupportedDiagramType}
           message={
             pendingConnectionAssistant?.message ??
             editorT("shell.connection.invalidRules")
@@ -5197,13 +5761,18 @@ export function EditorShell({
             pendingNodeRepair
               ? [
                   ...pendingNodeRepair.violations.map(
-                    (violation) => `${violation.severity.toUpperCase()}: ${violation.message}`,
+                    (violation) =>
+                      `${violation.severity.toUpperCase()}: ${violation.message}`,
                   ),
                   ...pendingNodeRepair.repairPlan.actions.map((action) => {
                     if (action.type === "updateEdgeKind") {
                       return editorT("shell.repair.updateRelation", {
                         edgeId: action.edgeId,
-                        nextKind: getEdgeKindLabel(action.nextKind, "operational", editorT),
+                        nextKind: getEdgeKindLabel(
+                          action.nextKind,
+                          "operational",
+                          editorT,
+                        ),
                       });
                     }
                     if (action.type === "removeEdge") {
@@ -5212,7 +5781,11 @@ export function EditorShell({
                       });
                     }
                     return editorT("shell.repair.adjustNodeKind", {
-                      nextKind: getNodeKindLabel(action.nextKind, "operational", editorT),
+                      nextKind: getNodeKindLabel(
+                        action.nextKind,
+                        "operational",
+                        editorT,
+                      ),
                     });
                   }),
                 ].slice(0, 8)
@@ -5258,7 +5831,9 @@ export function EditorShell({
                   id="semantic-override-reason-input"
                   rows={3}
                   value={semanticOverrideReason}
-                  onChange={(event) => setSemanticOverrideReason(event.target.value)}
+                  onChange={(event) =>
+                    setSemanticOverrideReason(event.target.value)
+                  }
                   placeholder={editorT("shell.semanticOverride.placeholder")}
                   data-testid="semantic-override-reason-input"
                 />
@@ -5302,7 +5877,6 @@ export function EditorShell({
           onSelectByIndex={handleSelectQuickFindByIndex}
           onClose={handleCloseQuickFind}
         />
-
       </div>
 
       {isInspectorVisible ? (
@@ -5343,7 +5917,9 @@ export function EditorShell({
                   ? localErdSafeBatchFix.safeFixes
                       .slice(0, 6)
                       .map((fix) =>
-                        fix.description ? `${fix.label}: ${fix.description}` : fix.label,
+                        fix.description
+                          ? `${fix.label}: ${fix.description}`
+                          : fix.label,
                       )
                   : []
               }
@@ -5383,7 +5959,6 @@ export function EditorShell({
             />
           }
         >
-
           {selectedNode || selectedEdge ? (
             <DiagramInspectorAdapter
               editorT={editorT}
@@ -5419,7 +5994,9 @@ export function EditorShell({
               graphSelectedNodeSemantic={graphSelectedNodeSemantic}
               graphSelectedEdgeSemantic={graphSelectedEdgeSemantic}
               graphSelectedNodeKindLabel={graphSelectedNodeKindLabel}
-              graphSelectedNodeKindDescription={graphSelectedNodeKindDescription}
+              graphSelectedNodeKindDescription={
+                graphSelectedNodeKindDescription
+              }
               selectedNodeRelations={selectedNodeRelations}
               selectedNodeRoleLabel={selectedNodeRoleLabel}
               selectedNodeStructureTips={selectedNodeStructureTips}
@@ -5437,7 +6014,9 @@ export function EditorShell({
               erdMaterializeDependentSide={erdMaterializeDependentSide}
               setErdMaterializeDependentSide={setErdMaterializeDependentSide}
               erdMaterializeExistingFieldId={erdMaterializeExistingFieldId}
-              setErdMaterializeExistingFieldId={setErdMaterializeExistingFieldId}
+              setErdMaterializeExistingFieldId={
+                setErdMaterializeExistingFieldId
+              }
               erdMaterializeUnique={erdMaterializeUnique}
               setErdMaterializeUnique={setErdMaterializeUnique}
               selectedErdRelationIssues={selectedErdRelationIssues}
@@ -5466,15 +6045,27 @@ export function EditorShell({
               onToggleErdFieldFlag={handleToggleErdFieldFlag}
               onMoveErdField={handleMoveErdField}
               onErdFieldShortcut={handleErdFieldShortcut}
-              onUpdateSelectedErdRelationPayload={updateSelectedErdRelationPayload}
+              onUpdateSelectedErdRelationPayload={
+                updateSelectedErdRelationPayload
+              }
               onUpdateSelectedErdRelationName={updateSelectedErdRelationName}
               onApplyErdSuggestedFix={handleApplyErdSuggestedFix}
               onFocusSemanticIssue={handleFocusSemanticIssue}
-              onSwapSelectedErdRelationDirection={handleSwapSelectedErdRelationDirection}
-              onMaterializeSelectedErdRelationAsFk={handleMaterializeSelectedErdRelationAsFk}
-              onApplySelectedErdOneToOneUniqueFix={handleApplySelectedErdOneToOneUniqueFix}
-              onConvertSelectedErdRelationToAssociative={handleConvertSelectedErdRelationToAssociative}
-              onMarkSelectedErdRelationConceptual={handleMarkSelectedErdRelationConceptual}
+              onSwapSelectedErdRelationDirection={
+                handleSwapSelectedErdRelationDirection
+              }
+              onMaterializeSelectedErdRelationAsFk={
+                handleMaterializeSelectedErdRelationAsFk
+              }
+              onApplySelectedErdOneToOneUniqueFix={
+                handleApplySelectedErdOneToOneUniqueFix
+              }
+              onConvertSelectedErdRelationToAssociative={
+                handleConvertSelectedErdRelationToAssociative
+              }
+              onMarkSelectedErdRelationConceptual={
+                handleMarkSelectedErdRelationConceptual
+              }
             />
           ) : (
             <EditorInspectorEmptyState

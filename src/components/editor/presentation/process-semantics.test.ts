@@ -4,11 +4,14 @@ import {
   buildProcessNodeOverview,
   buildProcessRelationsViewModel,
   getProcessEdgeCopy,
+  getProcessCriticalityOptions,
   getProcessInspectorCopy,
   getProcessQuickActions,
   getProcessQuickAddRoleOptions,
   getProcessRoleMeta,
+  resolveDefaultProcessEdgeLabel,
   resolveProcessNodeRole,
+  resolveProcessSelectionQuickActions,
 } from "./process-semantics";
 
 describe("process-semantics", () => {
@@ -31,7 +34,7 @@ describe("process-semantics", () => {
     );
 
     expect(getProcessRoleMeta("flow-end")).toMatchObject({
-      badgeLabel: "Fim",
+      badgeLabel: "Encerramento",
       kindLabel: "Encerramento",
     });
     expect(getProcessInspectorCopy()).toMatchObject({
@@ -45,17 +48,17 @@ describe("process-semantics", () => {
     expect(getProcessQuickActions()).toEqual([
       expect.objectContaining({
         id: "flow-add-next-step",
-        label: "Continuar fluxo",
+        label: "Adicionar proxima etapa",
         edgeKind: "flows-to",
       }),
       expect.objectContaining({
-        id: "flow-add-branch",
-        label: "Criar bifurcacao",
-        edgeKind: "depends-on",
+        id: "flow-add-decision",
+        label: "Adicionar decisao",
+        edgeKind: "flows-to",
       }),
       expect.objectContaining({
         id: "flow-add-note",
-        label: "Registrar observacao",
+        label: "Adicionar observacao",
         nodeKind: "note",
         edgeKind: "references",
       }),
@@ -68,9 +71,42 @@ describe("process-semantics", () => {
           label: "Decisao",
         }),
         expect.objectContaining({
+          role: "flow-step",
+          label: "Etapa",
+        }),
+        expect.objectContaining({
           role: "flow-note",
           label: "Observacao",
         }),
+      ]),
+    );
+
+    expect(
+      resolveProcessSelectionQuickActions({
+        selectedRole: "flow-decision",
+        existingOutgoingLabels: ["Sim"],
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "flow-add-branch-path",
+          label: "Abrir caminho da decisao",
+          edgeKind: "depends-on",
+          edgeLabel: "Nao",
+        }),
+      ]),
+    );
+
+    expect(resolveDefaultProcessEdgeLabel({
+      sourceRole: "flow-decision",
+      edgeKind: "depends-on",
+      existingOutgoingLabels: ["Sim", "Nao"],
+    })).toBe("Excecao");
+
+    expect(getProcessCriticalityOptions()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: "", label: "Nao definida" }),
+        expect.objectContaining({ value: "critical", label: "Critica" }),
       ]),
     );
   });
@@ -85,7 +121,6 @@ describe("process-semantics", () => {
           source: "decision",
           target: "approved",
           edgeKind: "depends-on",
-          label: "Aprovado",
           sourceRole: "flow-decision",
           targetRole: "flow-step",
         },
@@ -101,6 +136,10 @@ describe("process-semantics", () => {
       incomingCount: 0,
       outgoingCount: 1,
       relations,
+      operationalContext: {
+        owner: "Operacoes",
+        criticality: "high",
+      },
     });
 
     expect(overview.badgeLabel).toBe("Decisao");
@@ -108,8 +147,15 @@ describe("process-semantics", () => {
     expect(overview.connectivityLabel).toBe("0 entrada(s) e 1 saida(s) no fluxo.");
     expect(overview.guidance).toEqual(
       expect.arrayContaining([
-        "Use rotulos curtos para diferenciar cada desvio da decisao.",
         "Uma decisao fica mais didatica quando explicita pelo menos dois caminhos.",
+        "Este ponto precisa mostrar de onde recebe o fluxo principal para ficar operacionalmente claro.",
+        "Nomeie as saidas da decisao para deixar claro o criterio de cada caminho.",
+      ]),
+    );
+    expect(overview.operationalHighlights).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "owner", label: "Responsavel: Operacoes" }),
+        expect.objectContaining({ id: "criticality", label: "Criticidade alta" }),
       ]),
     );
   });

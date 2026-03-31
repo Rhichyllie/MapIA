@@ -17,8 +17,64 @@ describe("semantics rules engine", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.allowedEdgeKinds).toEqual(["flows-to", "depends-on"]);
+    expect(result.allowedEdgeKinds).toEqual(["flows-to"]);
     expect(result.recommendedEdgeKind).toBe("flows-to");
+  });
+
+  it("permite observacoes em processo apenas como apoio contextual", () => {
+    const result = validateEdgeCreation({
+      diagramType: "flow",
+      mode: "operational",
+      sourceNode: { id: "note", kind: "note", label: "SLA" },
+      targetNode: { id: "step", kind: "flow-step", label: "Analisar solicitacao" },
+      edgeKind: "references",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.allowedEdgeKinds).toEqual(["references"]);
+    expect(result.recommendedEdgeKind).toBe("references");
+  });
+
+  it("bloqueia saidas de encerramento no processo", () => {
+    const result = validateEdgeCreation({
+      diagramType: "flow",
+      mode: "operational",
+      sourceNode: {
+        id: "end",
+        kind: "flow-step",
+        label: "Encerrar processo",
+        payload: { role: "flow-end" },
+      },
+      targetNode: { id: "next", kind: "flow-step", label: "Proxima etapa" },
+      edgeKind: "flows-to",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.allowedEdgeKinds).toEqual([]);
+    expect(result.violation?.details).toContain("encerramento");
+  });
+
+  it("aceita saidas de decisao e recomenda bifurcacao nomeada", () => {
+    const result = validateEdgeCreation({
+      diagramType: "flow",
+      mode: "operational",
+      sourceNode: {
+        id: "decision",
+        kind: "flow-step",
+        label: "Pedido aprovado?",
+        payload: { role: "flow-decision" },
+      },
+      targetNode: {
+        id: "approved",
+        kind: "flow-step",
+        label: "Emitir contrato",
+      },
+      edgeKind: "depends-on",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.allowedEdgeKinds).toEqual(["depends-on", "flows-to"]);
+    expect(result.recommendedEdgeKind).toBe("depends-on");
   });
 
   it("validateEdgeCreation bloqueia conexao erd invalida entre entity e flow-step", () => {
@@ -127,17 +183,62 @@ describe("semantics rules engine", () => {
             id: "e1",
             sourceNodeId: "n1",
             targetNodeId: "n2",
-            kind: "references",
+            kind: "flows-to",
           },
         ],
       },
-      "erd",
+      "flow",
       "operational",
     );
 
     expect(audit.counters.total).toBeGreaterThan(0);
     expect(audit.counters.nodes).toBeGreaterThan(0);
-    expect(audit.counters.edges).toBeGreaterThan(0);
     expect(audit.bySeverity.error).toBeGreaterThan(0);
+  });
+
+  it("sinaliza decisao sem bifurcacao real e etapa sem fechamento", () => {
+    const audit = runGraphAudit(
+      {
+        nodes: [
+          {
+            id: "start",
+            kind: "flow-step",
+            label: "Inicio",
+            payload: { role: "flow-start" },
+          },
+          {
+            id: "decision",
+            kind: "flow-step",
+            label: "Aprovado?",
+            payload: { role: "flow-decision" },
+          },
+          {
+            id: "step",
+            kind: "flow-step",
+            label: "Emitir contrato",
+          },
+        ],
+        edges: [
+          {
+            id: "e1",
+            sourceNodeId: "start",
+            targetNodeId: "decision",
+            kind: "flows-to",
+          },
+          {
+            id: "e2",
+            sourceNodeId: "decision",
+            targetNodeId: "step",
+            kind: "depends-on",
+          },
+        ],
+      },
+      "flow",
+      "operational",
+    );
+
+    const issueCodes = audit.issues.map((issue) => issue.code);
+    expect(issueCodes).toContain("FLOW_DECISION_NEEDS_BRANCHES");
+    expect(issueCodes).toContain("FLOW_NODE_DEAD_END");
   });
 });

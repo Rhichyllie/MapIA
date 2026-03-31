@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useEditorTranslations } from "../use-editor-translations";
 import type { EdgeKind } from "@/src/domain";
-import { getEdgeKindDescription, getEdgeKindLabel } from "../presentation/kinds";
+import {
+  getEdgeKindDescriptionForDiagram,
+  getEdgeKindLabelForDiagram,
+  type ContextualDiagramType,
+} from "../presentation/kinds";
 
 type ConnectionAssistantProps = {
   open: boolean;
   mode: "operational" | "technical";
+  diagramType?: ContextualDiagramType;
   message: string;
   details?: string;
   sourceLabel?: string;
@@ -22,6 +27,7 @@ export function ConnectionAssistant(props: ConnectionAssistantProps) {
   const {
     allowedEdgeKinds,
     details,
+    diagramType,
     message,
     mode,
     onCancel,
@@ -143,10 +149,16 @@ export function ConnectionAssistant(props: ConnectionAssistantProps) {
                 onClick={() => onSelectKind(kind)}
               >
                 <span className="semantic-kind-title">
-                  {getEdgeKindLabel(kind, "operational")}
+                  {getEdgeKindLabelForDiagram(
+                    diagramType,
+                    kind,
+                    "operational",
+                  )}
                   {mode === "technical" ? t("technicalKind", { kind }) : ""}
                 </span>
-                <span className="helper">{getEdgeKindDescription(kind)}</span>
+                <span className="helper">
+                  {getEdgeKindDescriptionForDiagram(diagramType, kind)}
+                </span>
                 {isRecommended ? (
                   <span className="badge badge-soft">{t("recommendedBadge")}</span>
                 ) : null}

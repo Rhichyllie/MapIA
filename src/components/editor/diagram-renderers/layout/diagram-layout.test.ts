@@ -6,6 +6,7 @@ import {
   type DiagramLayoutEdge,
   type DiagramLayoutNode,
 } from "./diagram-layout";
+import { resolveFlowLogicalFootprint } from "./diagram-layout-flow-types";
 
 const FLOW_NOTE_DRIFT_LIMIT = 260;
 
@@ -48,12 +49,13 @@ function createEdge(
 describe("diagram layout engine", () => {
   it("computes insert position for tree below the selected node", () => {
     const reference = createNode("root", { x: 140, y: 90, kind: "page" });
-    const position = computeInsertPosition(
-      "tree",
-      reference,
-      [reference],
-      { x: 0, y: 0, zoom: 1, width: 1200, height: 700 },
-    );
+    const position = computeInsertPosition("tree", reference, [reference], {
+      x: 0,
+      y: 0,
+      zoom: 1,
+      width: 1200,
+      height: 700,
+    });
 
     expect(position.x).toBe(140);
     expect(position.y).toBeGreaterThan(reference.position.y);
@@ -61,14 +63,13 @@ describe("diagram layout engine", () => {
 
   it("computes insert position for flow to the right", () => {
     const reference = createNode("step", { x: 80, y: -20, kind: "flow-step" });
-    const position = computeInsertPosition(
-      "flow",
-      reference,
-      [reference],
-      { x: 0, y: 0, zoom: 1 },
-    );
+    const position = computeInsertPosition("flow", reference, [reference], {
+      x: 0,
+      y: 0,
+      zoom: 1,
+    });
 
-    expect(position.x).toBe(456);
+    expect(position.x).toBe(562);
     expect(position.y).toBe(-20);
   });
 
@@ -83,7 +84,34 @@ describe("diagram layout engine", () => {
     );
 
     expect(position.x).toBe(80);
-    expect(position.y).toBe(260);
+    expect(position.y).toBe(338);
+  });
+
+  it("reserves larger logical footprints for richer process content", () => {
+    const stepFootprint = resolveFlowLogicalFootprint({
+      direction: "left-right",
+      variant: "flow-step",
+    });
+    const decisionFootprint = resolveFlowLogicalFootprint({
+      direction: "left-right",
+      variant: "flow-decision",
+    });
+    const endFootprint = resolveFlowLogicalFootprint({
+      direction: "left-right",
+      variant: "flow-end",
+    });
+
+    expect(stepFootprint).toEqual({
+      primarySpan: 372,
+      secondarySpan: 248,
+      paddingPrimary: 96,
+      paddingSecondary: 104,
+    });
+    expect(decisionFootprint.secondarySpan).toBe(420);
+    expect(decisionFootprint.paddingSecondary).toBeGreaterThan(
+      stepFootprint.paddingSecondary,
+    );
+    expect(endFootprint.secondarySpan).toBe(210);
   });
 
   it("aligns flow insert slots with the inserted node footprint", () => {
@@ -125,9 +153,10 @@ describe("diagram layout engine", () => {
       },
     );
 
-    expect(stepPosition.y).toBe(260);
+    expect(stepPosition.y).toBe(338);
     expect(endPosition.x).toBeGreaterThan(stepPosition.x);
-    expect(decisionPosition.x).toBeLessThan(stepPosition.x);
+    expect(decisionPosition.y).toBeGreaterThan(stepPosition.y);
+    expect(decisionPosition.x).toBeGreaterThanOrEqual(stepPosition.x);
   });
 
   it("computes insert position for flow branch with stronger secondary spacing", () => {
@@ -160,7 +189,11 @@ describe("diagram layout engine", () => {
 
   it("avoids spawning a flow next step in an already occupied slot", () => {
     const reference = createNode("step", { x: 80, y: -20, kind: "flow-step" });
-    const occupied = createNode("occupied", { x: 456, y: -20, kind: "flow-step" });
+    const occupied = createNode("occupied", {
+      x: 456,
+      y: -20,
+      kind: "flow-step",
+    });
     const position = computeInsertPosition(
       "flow",
       reference,
@@ -174,7 +207,11 @@ describe("diagram layout engine", () => {
 
   it("avoids visually tight flow slots even when centers are not identical", () => {
     const reference = createNode("step", { x: 80, y: -20, kind: "flow-step" });
-    const visuallyTight = createNode("tight", { x: 430, y: 10, kind: "flow-step" });
+    const visuallyTight = createNode("tight", {
+      x: 430,
+      y: 10,
+      kind: "flow-step",
+    });
     const position = computeInsertPosition(
       "flow",
       reference,
@@ -188,8 +225,16 @@ describe("diagram layout engine", () => {
 
   it("keeps flow insert slot deterministic when node order changes", () => {
     const reference = createNode("step", { x: 80, y: -20, kind: "flow-step" });
-    const visuallyTight = createNode("tight", { x: 430, y: 10, kind: "flow-step" });
-    const blocker = createNode("blocker", { x: 806, y: -18, kind: "flow-step" });
+    const visuallyTight = createNode("tight", {
+      x: 430,
+      y: 10,
+      kind: "flow-step",
+    });
+    const blocker = createNode("blocker", {
+      x: 806,
+      y: -18,
+      kind: "flow-step",
+    });
 
     const firstPosition = computeInsertPosition(
       "flow",
@@ -209,17 +254,55 @@ describe("diagram layout engine", () => {
 
   it("keeps flow contextual next-step nudge local to the downstream group", () => {
     const nodes = [
-      createNode("start", { x: 0, y: 0, kind: "flow-step", diagramRole: "flow-start" }),
-      createNode("step", { x: 360, y: 0, kind: "flow-step", diagramRole: "flow-step" }),
-      createNode("inserted", { x: 736, y: 0, kind: "flow-step", diagramRole: "flow-step" }),
-      createNode("end", { x: 760, y: 0, kind: "flow-step", diagramRole: "flow-end" }),
-      createNode("branch", { x: 420, y: 340, kind: "flow-step", diagramRole: "flow-decision" }),
-      createNode("end_note", { x: 780, y: -240, kind: "note", diagramRole: "flow-note" }),
+      createNode("start", {
+        x: 0,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-start",
+      }),
+      createNode("step", {
+        x: 360,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-step",
+      }),
+      createNode("inserted", {
+        x: 736,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-step",
+      }),
+      createNode("end", {
+        x: 760,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-end",
+      }),
+      createNode("branch", {
+        x: 420,
+        y: 340,
+        kind: "flow-step",
+        diagramRole: "flow-decision",
+      }),
+      createNode("end_note", {
+        x: 780,
+        y: -240,
+        kind: "note",
+        diagramRole: "flow-note",
+      }),
     ];
     const edges = [
       createEdge("e1", { source: "start", target: "step", kind: "flows-to" }),
-      createEdge("e2", { source: "step", target: "branch", kind: "depends-on" }),
-      createEdge("e3", { source: "end_note", target: "end", kind: "references" }),
+      createEdge("e2", {
+        source: "step",
+        target: "branch",
+        kind: "depends-on",
+      }),
+      createEdge("e3", {
+        source: "end_note",
+        target: "end",
+        kind: "references",
+      }),
     ];
 
     const nextPositions = computeFlowContextualNudgePositions({
@@ -244,21 +327,27 @@ describe("diagram layout engine", () => {
   it("computes insert position for mindmap in free radial angle", () => {
     const root = createNode("root", { x: 0, y: 0, kind: "note" });
     const branch = createNode("branch", { x: 260, y: 0, kind: "note" });
-    const position = computeInsertPosition(
-      "mindmap",
-      root,
-      [root, branch],
-      { x: 0, y: 0, zoom: 1 },
-    );
+    const position = computeInsertPosition("mindmap", root, [root, branch], {
+      x: 0,
+      y: 0,
+      zoom: 1,
+    });
 
-    const distanceFromRoot = Math.hypot(position.x - root.position.x, position.y - root.position.y);
+    const distanceFromRoot = Math.hypot(
+      position.x - root.position.x,
+      position.y - root.position.y,
+    );
     expect(distanceFromRoot).toBeGreaterThan(200);
     expect(distanceFromRoot).toBeLessThan(320);
   });
 
   it("computes insert position for erd avoiding immediate collision", () => {
     const reference = createNode("table_a", { x: 0, y: 0, kind: "entity" });
-    const collidingSlot = createNode("table_b", { x: 340, y: 0, kind: "entity" });
+    const collidingSlot = createNode("table_b", {
+      x: 340,
+      y: 0,
+      kind: "entity",
+    });
     const position = computeInsertPosition(
       "erd",
       reference,
@@ -273,24 +362,26 @@ describe("diagram layout engine", () => {
   it("computes insert position for graph around selected node instead of linear offset", () => {
     const core = createNode("core", { x: 0, y: 0, kind: "note" });
     const existing = createNode("existing", { x: 220, y: 0, kind: "note" });
-    const position = computeInsertPosition(
-      "graph",
-      core,
-      [core, existing],
-      { x: 0, y: 0, zoom: 1 },
-    );
+    const position = computeInsertPosition("graph", core, [core, existing], {
+      x: 0,
+      y: 0,
+      zoom: 1,
+    });
 
-    expect(Math.hypot(position.x - core.position.x, position.y - core.position.y)).toBeGreaterThan(160);
+    expect(
+      Math.hypot(position.x - core.position.x, position.y - core.position.y),
+    ).toBeGreaterThan(160);
     expect(position).not.toEqual({ x: 220, y: 64 });
   });
 
   it("uses viewport center fallback when there is no reference node", () => {
-    const position = computeInsertPosition(
-      "flow",
-      null,
-      [],
-      { x: -180, y: -100, zoom: 1, width: 900, height: 500 },
-    );
+    const position = computeInsertPosition("flow", null, [], {
+      x: -180,
+      y: -100,
+      zoom: 1,
+      width: 900,
+      height: 500,
+    });
 
     expect(position).toEqual({
       x: 630,
@@ -353,16 +444,40 @@ describe("diagram layout engine", () => {
 
   it("computes flow reflow with branch and note on separate lanes", () => {
     const nodes = [
-      createNode("start", { x: 0, y: 0, kind: "flow-step", diagramRole: "flow-start" }),
+      createNode("start", {
+        x: 0,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-start",
+      }),
       createNode("step", { x: 140, y: 30, kind: "flow-step" }),
-      createNode("branch", { x: 220, y: 210, kind: "flow-step", diagramRole: "flow-decision" }),
-      createNode("note", { x: 180, y: -90, kind: "note", diagramRole: "flow-note" }),
-      createNode("end", { x: 500, y: 0, kind: "flow-step", diagramRole: "flow-end" }),
+      createNode("branch", {
+        x: 220,
+        y: 210,
+        kind: "flow-step",
+        diagramRole: "flow-decision",
+      }),
+      createNode("note", {
+        x: 180,
+        y: -90,
+        kind: "note",
+        diagramRole: "flow-note",
+      }),
+      createNode("end", {
+        x: 500,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-end",
+      }),
     ];
     const edges = [
       createEdge("e1", { source: "start", target: "step", kind: "flows-to" }),
       createEdge("e2", { source: "step", target: "end", kind: "flows-to" }),
-      createEdge("e3", { source: "step", target: "branch", kind: "depends-on" }),
+      createEdge("e3", {
+        source: "step",
+        target: "branch",
+        kind: "depends-on",
+      }),
       createEdge("e4", { source: "note", target: "step", kind: "references" }),
     ];
 
@@ -374,26 +489,56 @@ describe("diagram layout engine", () => {
     expect(positions.branch.x).toBeGreaterThan(positions.step.x);
     expect(positions.branch.y).toBeGreaterThan(positions.step.y + 240);
     expect(positions.note.y).toBeLessThan(positions.step.y - 180);
-    expect(Math.abs(positions.note.x - positions.step.x)).toBeLessThan(FLOW_NOTE_DRIFT_LIMIT);
+    expect(Math.abs(positions.note.x - positions.step.x)).toBeLessThan(
+      FLOW_NOTE_DRIFT_LIMIT,
+    );
   });
 
   it("keeps flow reflow deterministic even when node order changes", () => {
     const nodes = [
-      createNode("end", { x: 500, y: 0, kind: "flow-step", diagramRole: "flow-end" }),
-      createNode("note", { x: 180, y: -90, kind: "note", diagramRole: "flow-note" }),
-      createNode("branch", { x: 220, y: 210, kind: "flow-step", diagramRole: "flow-decision" }),
+      createNode("end", {
+        x: 500,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-end",
+      }),
+      createNode("note", {
+        x: 180,
+        y: -90,
+        kind: "note",
+        diagramRole: "flow-note",
+      }),
+      createNode("branch", {
+        x: 220,
+        y: 210,
+        kind: "flow-step",
+        diagramRole: "flow-decision",
+      }),
       createNode("step", { x: 140, y: 30, kind: "flow-step" }),
-      createNode("start", { x: 0, y: 0, kind: "flow-step", diagramRole: "flow-start" }),
+      createNode("start", {
+        x: 0,
+        y: 0,
+        kind: "flow-step",
+        diagramRole: "flow-start",
+      }),
     ];
     const edges = [
       createEdge("e4", { source: "note", target: "step", kind: "references" }),
       createEdge("e2", { source: "step", target: "end", kind: "flows-to" }),
-      createEdge("e3", { source: "step", target: "branch", kind: "depends-on" }),
+      createEdge("e3", {
+        source: "step",
+        target: "branch",
+        kind: "depends-on",
+      }),
       createEdge("e1", { source: "start", target: "step", kind: "flows-to" }),
     ];
 
     const firstPositions = computeReflow("flow", nodes, edges);
-    const secondPositions = computeReflow("flow", [...nodes].reverse(), [...edges].reverse());
+    const secondPositions = computeReflow(
+      "flow",
+      [...nodes].reverse(),
+      [...edges].reverse(),
+    );
 
     expect(secondPositions).toEqual(firstPositions);
   });
@@ -431,8 +576,12 @@ describe("diagram layout engine", () => {
     const positions = computeReflow("mindmap", nodes, edges, "root");
 
     expect(positions.root).toEqual({ x: 0, y: 0 });
-    expect(Math.hypot(positions.sat_1.x, positions.sat_1.y)).toBeGreaterThan(180);
-    expect(Math.hypot(positions.sat_2.x, positions.sat_2.y)).toBeGreaterThan(180);
+    expect(Math.hypot(positions.sat_1.x, positions.sat_1.y)).toBeGreaterThan(
+      180,
+    );
+    expect(Math.hypot(positions.sat_2.x, positions.sat_2.y)).toBeGreaterThan(
+      180,
+    );
   });
 
   it("computes erd reflow in deterministic grid", () => {
@@ -447,31 +596,72 @@ describe("diagram layout engine", () => {
 
     const values = Object.values(positions);
     expect(values.length).toBe(4);
-    expect(new Set(values.map((position) => `${position.x}:${position.y}`)).size).toBe(4);
+    expect(
+      new Set(values.map((position) => `${position.x}:${position.y}`)).size,
+    ).toBe(4);
   });
 
   it("computes graph reflow as a network (non-linear)", () => {
     const nodes = [
-      createNode("core", { x: 0, y: 0, kind: "entity", diagramRole: "graph-core" }),
-      createNode("api", { x: 0, y: 0, kind: "entity", diagramRole: "graph-topic" }),
-      createNode("worker", { x: 0, y: 0, kind: "entity", diagramRole: "graph-topic" }),
-      createNode("db", { x: 0, y: 0, kind: "entity", diagramRole: "graph-topic" }),
-      createNode("cache", { x: 0, y: 0, kind: "page", diagramRole: "graph-supporting" }),
+      createNode("core", {
+        x: 0,
+        y: 0,
+        kind: "entity",
+        diagramRole: "graph-core",
+      }),
+      createNode("api", {
+        x: 0,
+        y: 0,
+        kind: "entity",
+        diagramRole: "graph-topic",
+      }),
+      createNode("worker", {
+        x: 0,
+        y: 0,
+        kind: "entity",
+        diagramRole: "graph-topic",
+      }),
+      createNode("db", {
+        x: 0,
+        y: 0,
+        kind: "entity",
+        diagramRole: "graph-topic",
+      }),
+      createNode("cache", {
+        x: 0,
+        y: 0,
+        kind: "page",
+        diagramRole: "graph-supporting",
+      }),
     ];
     const edges = [
       createEdge("e1", { source: "core", target: "api", kind: "relates-to" }),
-      createEdge("e2", { source: "core", target: "worker", kind: "depends-on" }),
+      createEdge("e2", {
+        source: "core",
+        target: "worker",
+        kind: "depends-on",
+      }),
       createEdge("e3", { source: "core", target: "db", kind: "depends-on" }),
-      createEdge("e4", { source: "worker", target: "cache", kind: "references" }),
+      createEdge("e4", {
+        source: "worker",
+        target: "cache",
+        kind: "references",
+      }),
     ];
 
     const positions = computeReflow("graph", nodes, edges);
     const values = Object.values(positions);
 
     expect(values.length).toBe(5);
-    expect(values.some((position) => position.x === 0 && position.y === 0)).toBe(true);
-    expect(new Set(values.map((position) => Math.round(position.x))).size).toBeGreaterThan(2);
-    expect(new Set(values.map((position) => Math.round(position.y))).size).toBeGreaterThan(2);
+    expect(
+      values.some((position) => position.x === 0 && position.y === 0),
+    ).toBe(true);
+    expect(
+      new Set(values.map((position) => Math.round(position.x))).size,
+    ).toBeGreaterThan(2);
+    expect(
+      new Set(values.map((position) => Math.round(position.y))).size,
+    ).toBeGreaterThan(2);
     expect(positions.cache.y).toBeGreaterThan(positions.api.y);
   });
 

@@ -11,7 +11,10 @@ import type {
 } from "../diagram-renderers/layout/diagram-layout";
 import type { RendererConfig } from "../diagram-renderers";
 import type { DiagramScopedNodeKindOption } from "../presentation/diagram-scoped-options";
-import type { DiagramContextualAction, PresentationMode } from "../presentation/kinds";
+import type {
+  DiagramContextualAction,
+  PresentationMode,
+} from "../presentation/kinds";
 import type {
   ProcessInspectorCopy,
   ProcessRelationsViewModel,
@@ -225,7 +228,9 @@ export type EditorDiagramPresentationStrategy = {
 
 export type EditorDiagramContextualActionsStrategy = {
   getDefinitions(t?: EditorTranslationFn): DiagramContextualAction[];
-  getSelectionActions(t?: EditorTranslationFn): EditorDiagramSelectionQuickAction[];
+  getSelectionActions(
+    t?: EditorTranslationFn,
+  ): EditorDiagramSelectionQuickAction[];
   getPrimarySelectionAction(
     t?: EditorTranslationFn,
   ): EditorDiagramSelectionQuickAction;
@@ -292,6 +297,7 @@ export type EditorDiagramProcessInspectorStrategy =
           diagramRole?: DiagramRole;
           kind: NodeKind;
           label: string;
+          payload?: Record<string, unknown>;
           relations: ProcessRelationsViewModel;
         },
         t?: EditorTranslationFn,
@@ -366,6 +372,11 @@ export type EditorDiagramRenderStrategy = {
     edgeKind: EdgeKind;
     baseLabel?: string;
     payload?: Record<string, unknown>;
+    sourceRole?: DiagramRole;
+    targetRole?: DiagramRole;
+    sourcePosition?: { x: number; y: number };
+    targetPosition?: { x: number; y: number };
+    direction?: "top-down" | "left-right";
   }): {
     label?: string;
     markerEnd?: RFEdge["markerEnd"];

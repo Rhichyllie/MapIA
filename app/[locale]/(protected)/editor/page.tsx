@@ -111,8 +111,12 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
           snapshotDiagramType: workingSnapshot?.snapshot.diagramType,
           template: project.template,
         });
-        scheduleCreationTelemetryOperation(() =>
-          recordCreationLegacyTemplateFallback({
+        const recipe = resolveCreationRecipe({
+          profile: creationContextResolution.context.effectiveProfile,
+          view: creationContextResolution.context.effectiveInitialView,
+        });
+        scheduleCreationTelemetryOperation(async () => {
+          await recordCreationLegacyTemplateFallback({
             projectId: project.id,
             ownerIdentity,
             source: "editor-page",
@@ -133,14 +137,8 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
               initialView: creationContextResolution.context.effectiveInitialView,
               layout: creationContextResolution.context.effectiveLayout,
             },
-          }),
-        );
-        const recipe = resolveCreationRecipe({
-          profile: creationContextResolution.context.effectiveProfile,
-          view: creationContextResolution.context.effectiveInitialView,
-        });
-        scheduleCreationTelemetryOperation(() =>
-          recordCreationRecipeRuntimeResolved({
+          });
+          await recordCreationRecipeRuntimeResolved({
             projectId: project.id,
             ownerIdentity,
             profile: creationContextResolution.context.effectiveProfile,
@@ -149,8 +147,8 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
               recipe?.id ??
               `${creationContextResolution.context.effectiveProfile}:${creationContextResolution.context.effectiveInitialView}`,
             fallbackUsed: !recipe,
-          }),
-        );
+          });
+        });
         span.setAttribute("editor.page.initial_snapshot_present", Boolean(workingSnapshot));
         viewModel = {
           project: {

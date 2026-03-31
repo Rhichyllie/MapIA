@@ -11,7 +11,7 @@ import {
 } from "@/src/modules/diagrams/domain";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import type { EditorTranslationFn } from "../editor-i18n";
-import type { RFNode } from "../editor-graph-mappers";
+import type { RFEdge, RFNode } from "../editor-graph-mappers";
 import { translateEditor } from "../editor-i18n";
 import { getAllowedKindsForDiagram } from "../presentation/diagram-scoped-options";
 import {
@@ -42,6 +42,8 @@ import {
   computeInsertPosition,
   computeReflow,
 } from "../diagram-renderers/layout/diagram-layout";
+import { resolveFlowEdgeVisualSemantics } from "../diagram-renderers/flow-edge-visual-grammar";
+import { formatFlowEdgeCanvasLabel } from "../diagram-renderers/flow-content-state";
 import { resolveFlowEdgeMarker } from "../diagram-renderers/flow-presentation";
 import { resolveDiagramRenderer } from "../diagram-renderers";
 import type {
@@ -72,7 +74,8 @@ const QUICK_ACTION_INSERT_MODE_BY_ACTION_ID: Record<
   "sitemap-add-page": "sitemap-child",
   "sitemap-add-subpage": "sitemap-sibling",
   "flow-add-next-step": "flow-next-step",
-  "flow-add-branch": "flow-branch",
+  "flow-add-decision": "flow-next-step",
+  "flow-add-branch-path": "flow-branch",
   "flow-add-note": "flow-note",
   "mindmap-add-branch": "mindmap-branch",
   "mindmap-add-reference": "mindmap-reference",
@@ -113,13 +116,15 @@ function getMindmapRootNodeId(
     return null;
   }
 
-  return [...nodes]
-    .sort(
-      (nodeA, nodeB) =>
-        Math.hypot(nodeA.position.x, nodeA.position.y) -
-        Math.hypot(nodeB.position.x, nodeB.position.y),
-    )
-    .at(0)?.id ?? null;
+  return (
+    [...nodes]
+      .sort(
+        (nodeA, nodeB) =>
+          Math.hypot(nodeA.position.x, nodeA.position.y) -
+          Math.hypot(nodeB.position.x, nodeB.position.y),
+      )
+      .at(0)?.id ?? null
+  );
 }
 
 export function buildQuickAddCopy(
@@ -128,7 +133,10 @@ export function buildQuickAddCopy(
 ): EditorDiagramQuickAddCopy {
   return {
     addPrimary: translateEditor(t, `shell.quickAdd.copy.${modeId}.addPrimary`),
-    dialogTitle: translateEditor(t, `shell.quickAdd.copy.${modeId}.dialogTitle`),
+    dialogTitle: translateEditor(
+      t,
+      `shell.quickAdd.copy.${modeId}.dialogTitle`,
+    ),
     dialogHint: translateEditor(t, `shell.quickAdd.copy.${modeId}.dialogHint`),
     addConfirm: translateEditor(t, `shell.quickAdd.copy.${modeId}.addConfirm`),
     quickActionHint: translateEditor(
@@ -180,7 +188,7 @@ export function resolveDialogDefaultRole(input: {
   hasSelection: boolean;
 }): DiagramRole | undefined {
   if (input.modeId === "flow" && input.hasSelection) {
-    if (input.actionId === "flow-add-branch") {
+    if (input.actionId === "flow-add-decision") {
       return "flow-decision";
     }
 
@@ -190,6 +198,35 @@ export function resolveDialogDefaultRole(input: {
   }
 
   return resolveDefaultRoleForModeKind(input.modeId, input.kind);
+}
+
+function resolveFlowContextualAnchorNodeId(
+  selectedNode: RFNode,
+  edges: RFEdge[],
+) {
+  const selectedRole = resolveProcessNodeRole({
+    diagramRole: selectedNode.data.diagramRole,
+    kind: selectedNode.data.kind,
+    label: selectedNode.data.label,
+  });
+
+  if (selectedRole !== "flow-note") {
+    return selectedNode.id;
+  }
+
+  const hostEdge = edges.find(
+    (edge) =>
+      (edge.data?.kind ?? "flows-to") === "references" &&
+      (edge.source === selectedNode.id || edge.target === selectedNode.id),
+  );
+
+  if (!hostEdge) {
+    return selectedNode.id;
+  }
+
+  return hostEdge.source === selectedNode.id
+    ? hostEdge.target
+    : hostEdge.source;
 }
 
 export function createPresentationStrategy(
@@ -223,7 +260,9 @@ export function buildSelectionActionsFromDefinitions(
         type: "add-connected-node";
         nodeKind: NodeKind;
         edgeKind: EdgeKind;
-      } => action.type === "add-connected-node" && Boolean(action.nodeKind && action.edgeKind),
+      } =>
+        action.type === "add-connected-node" &&
+        Boolean(action.nodeKind && action.edgeKind),
     )
     .map((action) => ({
       id: action.id,
@@ -239,7 +278,8 @@ export function createContextualActionsStrategy(
   modeId: EditorDiagramModeId,
 ): EditorDiagramContextualActionsStrategy {
   return {
-    getDefinitions: (t?: EditorTranslationFn) => getContextualActionsForDiagram(modeId, t),
+    getDefinitions: (t?: EditorTranslationFn) =>
+      getContextualActionsForDiagram(modeId, t),
     getSelectionActions: (t?: EditorTranslationFn) =>
       buildSelectionActionsFromDefinitions(
         getContextualActionsForDiagram(modeId, t),
@@ -252,7 +292,10 @@ export function createContextualActionsStrategy(
       return (
         actions[0] ?? {
           id: "mindmap-add-branch",
-          label: translateEditor(t, "presentation.contextualActions.defaultAddRelated"),
+          label: translateEditor(
+            t,
+            "presentation.contextualActions.defaultAddRelated",
+          ),
           nodeKind: getDefaultNodeKindForDiagram(modeId),
           edgeKind: getDefaultEdgeKindForDiagram(modeId),
           insertMode: "default",
@@ -277,6 +320,10 @@ export function createContextualActionsStrategy(
         return parentEdge?.source ?? selectedNode.id;
       }
 
+      if (modeId === "flow") {
+        return resolveFlowContextualAnchorNodeId(selectedNode, edges);
+      }
+
       return selectedNode.id;
     },
   };
@@ -284,7 +331,9 @@ export function createContextualActionsStrategy(
 
 export function createQuickAddStrategy(
   modeId: EditorDiagramModeId,
-  getRoleOptions: (t?: EditorTranslationFn) => EditorDiagramQuickAddRoleOption[] = () => [],
+  getRoleOptions: (
+    t?: EditorTranslationFn,
+  ) => EditorDiagramQuickAddRoleOption[] = () => [],
 ): EditorDiagramQuickAddStrategy {
   return {
     getCopy: (t?: EditorTranslationFn) => buildQuickAddCopy(modeId, t),
@@ -391,7 +440,10 @@ export function createSemanticStrategy(
         payload: input.node.data.payload,
       };
     },
-    getDiagramRoleLabel: (role: DiagramRole | undefined, t?: EditorTranslationFn) => {
+    getDiagramRoleLabel: (
+      role: DiagramRole | undefined,
+      t?: EditorTranslationFn,
+    ) => {
       if (!role) {
         return translateEditor(t, "shell.roles.undefined");
       }
@@ -432,7 +484,10 @@ export function createSemanticStrategy(
         "mindmap-root": translateEditor(t, "shell.roles.mindmapRoot"),
         "mindmap-branch": translateEditor(t, "shell.roles.mindmapBranch"),
         "mindmap-reference": translateEditor(t, "shell.roles.mindmapReference"),
-        "timeline-milestone": translateEditor(t, "shell.roles.timelineMilestone"),
+        "timeline-milestone": translateEditor(
+          t,
+          "shell.roles.timelineMilestone",
+        ),
         "erd-entity": translateEditor(t, "shell.roles.erdEntity"),
         "erd-comment": translateEditor(t, "shell.roles.erdComment"),
       };
@@ -455,7 +510,9 @@ export function createSemanticStrategy(
       if (modeId === "flow") {
         const role = resolveProcessNodeRole({
           diagramRole: input.diagramRole,
-          kind: input.nodeKind ?? (input.diagramRole === "flow-note" ? "note" : "flow-step"),
+          kind:
+            input.nodeKind ??
+            (input.diagramRole === "flow-note" ? "note" : "flow-step"),
           label: input.nodeLabel,
         });
         const roleMeta = getProcessRoleMeta(role, t);
@@ -596,8 +653,12 @@ function createDefaultNodeRelations(
   modeId: EditorDiagramModeId,
   input: EditorDiagramNodeRelationsInput,
 ): EditorDiagramNodeRelationsView {
-  const incoming = input.edges.filter((edge) => edge.target === input.selectedNode.id);
-  const outgoing = input.edges.filter((edge) => edge.source === input.selectedNode.id);
+  const incoming = input.edges.filter(
+    (edge) => edge.target === input.selectedNode.id,
+  );
+  const outgoing = input.edges.filter(
+    (edge) => edge.source === input.selectedNode.id,
+  );
 
   return {
     incomingCount: incoming.length,
@@ -605,7 +666,8 @@ function createDefaultNodeRelations(
     summaryChips: [],
     preview: [...incoming, ...outgoing].slice(0, 6).map((edge) => ({
       id: edge.id,
-      direction: edge.target === input.selectedNode.id ? "incoming" : "outgoing",
+      direction:
+        edge.target === input.selectedNode.id ? "incoming" : "outgoing",
       directionLabel:
         modeId === "graph"
           ? edge.target === input.selectedNode.id
@@ -622,7 +684,8 @@ function createDefaultNodeRelations(
       ),
       relationLabel: edge.label ? String(edge.label) : undefined,
       edgeKind: edge.data?.kind ?? "relates-to",
-      otherNodeId: edge.target === input.selectedNode.id ? edge.source : edge.target,
+      otherNodeId:
+        edge.target === input.selectedNode.id ? edge.source : edge.target,
       otherLabel:
         input.nodeLabelById.get(
           edge.target === input.selectedNode.id ? edge.source : edge.target,
@@ -699,7 +762,8 @@ export function createProcessInspectorStrategy(): EditorDiagramInspectorStrategy
             selectedNodeRole: input.nodeRoleById.get(input.selectedNode.id),
             selectedNodeKind: input.selectedNode.data.kind,
             selectedNodeLabel:
-              input.nodeLabelById.get(input.selectedNode.id) ?? input.selectedNode.data.label,
+              input.nodeLabelById.get(input.selectedNode.id) ??
+              input.selectedNode.data.label,
             edges: input.edges.map((edge) => ({
               id: edge.id,
               source: edge.source,
@@ -836,11 +900,9 @@ export function createLayoutStrategy(
     applyPostInsertLayout: (options) => {
       if (
         modeId === "flow" &&
-        (
-          options.insertMode === "flow-next-step" ||
+        (options.insertMode === "flow-next-step" ||
           options.insertMode === "flow-branch" ||
-          options.insertMode === "flow-note"
-        )
+          options.insertMode === "flow-note")
       ) {
         return {
           kind: "positions" as const,
@@ -857,23 +919,18 @@ export function createLayoutStrategy(
 
       if (
         (modeId === "tree" &&
-          (options.insertMode === "tree-child" || options.insertMode === "tree-sibling")) ||
+          (options.insertMode === "tree-child" ||
+            options.insertMode === "tree-sibling")) ||
         (modeId === "sitemap" &&
-          (
-            options.insertMode === "sitemap-child" ||
-            options.insertMode === "sitemap-sibling"
-          )) ||
+          (options.insertMode === "sitemap-child" ||
+            options.insertMode === "sitemap-sibling")) ||
         (modeId === "timeline" &&
-          (
-            options.insertMode === "timeline-next" ||
-            options.insertMode === "timeline-dependency"
-          )) ||
+          (options.insertMode === "timeline-next" ||
+            options.insertMode === "timeline-dependency")) ||
         (modeId === "graph" &&
-          (
-            options.insertMode === "graph-neighbor" ||
+          (options.insertMode === "graph-neighbor" ||
             options.insertMode === "graph-dependency" ||
-            options.insertMode === "graph-supporting"
-          ))
+            options.insertMode === "graph-supporting"))
       ) {
         return { kind: "reflow" as const };
       }
@@ -940,30 +997,53 @@ export function createRenderStrategy(
 ): EditorDiagramRenderStrategy {
   return {
     resolveEdgePresentation: (input) => {
+      const resolvedLabel = resolveErdEdgeLabel({
+        baseLabel: input.baseLabel,
+        edgeKind: input.edgeKind,
+        payload: input.payload,
+        modeId,
+      });
       const basePresentation = getEdgeKindPresentation(input.edgeKind);
       const graphSemantic =
         modeId === "graph" ? resolveGraphEdgeSemantic(input.edgeKind) : null;
-      const erdCardinalityClassSuffix = resolveErdEdgeClassSuffix(input.payload);
+      const flowEdgeVisualSemantics =
+        modeId === "flow"
+          ? resolveFlowEdgeVisualSemantics({
+              edgeKind: input.edgeKind,
+              label: resolvedLabel,
+              sourceRole: input.sourceRole,
+              targetRole: input.targetRole,
+              sourcePosition: input.sourcePosition,
+              targetPosition: input.targetPosition,
+              direction: input.direction,
+            })
+          : null;
+      const erdCardinalityClassSuffix = resolveErdEdgeClassSuffix(
+        input.payload,
+      );
 
       return {
-        label: resolveErdEdgeLabel({
-          baseLabel: input.baseLabel,
-          edgeKind: input.edgeKind,
-          payload: input.payload,
-          modeId,
-        }),
+        label:
+          modeId === "flow"
+            ? formatFlowEdgeCanvasLabel(resolvedLabel)
+            : resolvedLabel,
         markerEnd:
           modeId === "flow"
             ? basePresentation.arrowStyle === "none"
               ? undefined
-              : resolveFlowEdgeMarker(input.edgeKind) ??
-                ({
-                  type:
-                    basePresentation.arrowStyle === "open"
-                      ? MarkerType.Arrow
-                      : MarkerType.ArrowClosed,
-                  color: "var(--flow-edge-main)",
-                } as const)
+              : flowEdgeVisualSemantics
+                ? ({
+                    type: flowEdgeVisualSemantics.markerType,
+                    color: flowEdgeVisualSemantics.markerColor,
+                  } as const)
+                : (resolveFlowEdgeMarker(input.edgeKind) ??
+                  ({
+                    type:
+                      basePresentation.arrowStyle === "open"
+                        ? MarkerType.Arrow
+                        : MarkerType.ArrowClosed,
+                    color: "var(--flow-edge-main)",
+                  } as const))
             : modeId === "graph"
               ? graphSemantic?.markerStyle === "none"
                 ? undefined
@@ -989,26 +1069,14 @@ export function createRenderStrategy(
                   } as const),
         labelStyle:
           modeId === "flow"
-            ? input.edgeKind === "depends-on"
+            ? flowEdgeVisualSemantics
               ? {
-                  fill: "#9a3412",
-                  fontWeight: 800,
-                  fontSize: "0.7rem",
-                  letterSpacing: "0.02em",
+                  fill: flowEdgeVisualSemantics.labelTextColor,
+                  fontWeight: flowEdgeVisualSemantics.labelFontWeight,
+                  fontSize: flowEdgeVisualSemantics.labelFontSize,
+                  letterSpacing: flowEdgeVisualSemantics.labelLetterSpacing,
                 }
-              : input.edgeKind === "references"
-                ? {
-                    fill: "#5b21b6",
-                    fontWeight: 700,
-                    fontSize: "0.68rem",
-                  }
-                : {
-                    fill: "#14532d",
-                    fontWeight: 800,
-                    fontSize: "0.7rem",
-                    letterSpacing: "0.04em",
-                    textTransform: "uppercase",
-                  }
+              : undefined
             : modeId === "graph"
               ? graphSemantic?.emphasis === "primary"
                 ? {
@@ -1032,20 +1100,12 @@ export function createRenderStrategy(
               : undefined,
         labelBgStyle:
           modeId === "flow"
-            ? input.edgeKind === "depends-on"
+            ? flowEdgeVisualSemantics
               ? {
-                  fill: "rgba(255, 247, 237, 0.94)",
-                  stroke: "rgba(194, 65, 12, 0.18)",
+                  fill: flowEdgeVisualSemantics.labelBackgroundColor,
+                  stroke: flowEdgeVisualSemantics.labelBorderColor,
                 }
-              : input.edgeKind === "references"
-                ? {
-                    fill: "rgba(248, 245, 255, 0.94)",
-                    stroke: "rgba(109, 40, 217, 0.14)",
-                  }
-                : {
-                    fill: "rgba(240, 253, 244, 0.94)",
-                    stroke: "rgba(21, 128, 61, 0.14)",
-                  }
+              : undefined
             : modeId === "graph"
               ? graphSemantic?.emphasis === "primary"
                 ? {
@@ -1067,31 +1127,22 @@ export function createRenderStrategy(
         labelShowBg: modeId === "graph" || modeId === "flow" ? true : undefined,
         labelBgPadding:
           modeId === "flow"
-            ? input.edgeKind === "references"
-              ? [8, 4]
-              : input.edgeKind === "depends-on"
-                ? [10, 5]
-                : [9, 4]
+            ? flowEdgeVisualSemantics?.labelBgPadding
             : modeId === "graph"
               ? [10, 5]
               : undefined,
         labelBgBorderRadius:
           modeId === "flow"
-            ? input.edgeKind === "references"
-              ? 12
-              : 999
+            ? flowEdgeVisualSemantics?.labelBgBorderRadius
             : modeId === "graph"
               ? 10
               : undefined,
         strokeDasharray:
           modeId === "flow"
-            ? input.edgeKind === "depends-on"
-              ? "12 8"
-              : input.edgeKind === "references"
-                ? "4 10"
-                : undefined
+            ? flowEdgeVisualSemantics?.strokeDasharray
             : modeId === "erd" && input.edgeKind === "references"
-              ? erdCardinalityClassSuffix === "1-n" || erdCardinalityClassSuffix === "n-1"
+              ? erdCardinalityClassSuffix === "1-n" ||
+                erdCardinalityClassSuffix === "n-1"
                 ? "7 4"
                 : erdCardinalityClassSuffix === "n-n"
                   ? "2 5"
@@ -1107,9 +1158,12 @@ export function createRenderStrategy(
                   : basePresentation.lineStyle === "dotted"
                     ? "2 7"
                     : undefined,
-        classNameTokens: erdCardinalityClassSuffix
-          ? [`editor-edge-erd-cardinality-${erdCardinalityClassSuffix}`]
-          : undefined,
+        classNameTokens: [
+          ...(flowEdgeVisualSemantics?.classNameTokens ?? []),
+          ...(erdCardinalityClassSuffix
+            ? [`editor-edge-erd-cardinality-${erdCardinalityClassSuffix}`]
+            : []),
+        ],
       };
     },
   };

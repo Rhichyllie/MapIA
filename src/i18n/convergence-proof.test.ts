@@ -29,8 +29,10 @@ describe("i18n convergence proof", () => {
     const metadataSource = readRepoFile("src/i18n/metadata.ts");
 
     expect(rootLayoutSource).not.toContain("generateMetadata");
+    expect(rootLayoutSource).not.toContain("NextIntlClientProvider");
     expect(localeLayoutSource).toContain("generateMetadata");
     expect(localeLayoutSource).toContain("buildLocalizedLayoutMetadata");
+    expect(localeLayoutSource).toContain("NextIntlClientProvider");
     expect(metadataSource).toContain("Metadata.routes");
     expect(metadataSource).toContain("buildLocalizedPathname");
   });
@@ -51,12 +53,17 @@ describe("i18n convergence proof", () => {
 
   it("keeps visible editor quick-add copy in the catalog layer instead of domain personas", () => {
     const shellSource = readRepoFile("src/components/editor/editor-shell.tsx");
+    const diagramModeHelperSource = readRepoFile(
+      "src/components/editor/diagram-modes/helpers.ts",
+    );
     const recipeSource = readRepoFile(
       "src/modules/creation-assistant/domain/recipes/recipe-registry.ts",
     );
     const personaSource = readRepoFile("src/modules/editor/domain/editor-personas.ts");
 
-    expect(shellSource).toContain("shell.quickAdd.copy.");
+    expect(`${shellSource}\n${diagramModeHelperSource}`).toContain(
+      "shell.quickAdd.copy.",
+    );
     expect(shellSource).not.toContain("editorPersona.labels");
     expect(recipeSource).not.toContain("addPrimary:");
     expect(recipeSource).not.toContain("addDialogTitle");

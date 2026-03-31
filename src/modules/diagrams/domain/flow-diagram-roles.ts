@@ -24,23 +24,38 @@ function inferFlowDiagramRoleFromLabel(label: string | undefined): FlowDiagramRo
 
   if (
     normalized === "inicio" ||
+    normalized === "start" ||
+    normalized === "iniciar" ||
+    normalized === "abertura" ||
     normalized.startsWith("inicio ") ||
-    normalized.startsWith("inicio:")
+    normalized.startsWith("inicio:") ||
+    normalized.startsWith("start ")
   ) {
     return "flow-start";
   }
 
   if (
     normalized === "fim" ||
+    normalized === "end" ||
+    normalized === "encerramento" ||
+    normalized === "fechamento" ||
+    normalized === "conclusao" ||
     normalized.startsWith("fim ") ||
     normalized.startsWith("fim:") ||
     normalized === "final" ||
-    normalized.startsWith("final ")
+    normalized.startsWith("final ") ||
+    normalized.startsWith("end ")
   ) {
     return "flow-end";
   }
 
-  if (normalized.includes("decis")) {
+  if (
+    normalized.includes("decis") ||
+    normalized.includes("aprov") ||
+    normalized.includes("valida") ||
+    normalized.includes("condic") ||
+    normalized.endsWith("?")
+  ) {
     return "flow-decision";
   }
 

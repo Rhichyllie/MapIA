@@ -95,6 +95,15 @@ async function readVisibleErrorBoxMessage(page: Page) {
   return (await errorBox.textContent())?.trim() || null;
 }
 
+function isDashboardUrl(url: string) {
+  try {
+    const pathname = new URL(url).pathname;
+    return /\/(?:[a-z]{2}-[A-Z]{2}\/)?dashboard(?:\/)?$/.test(pathname);
+  } catch {
+    return /\/dashboard(?:\/)?$/.test(url);
+  }
+}
+
 export async function ensureLoggedIn(page: Page, credentials: DevCredentials) {
   await page.goto("/dashboard");
   await page.waitForLoadState("domcontentloaded");
@@ -104,14 +113,22 @@ export async function ensureLoggedIn(page: Page, credentials: DevCredentials) {
     await page.getByTestId("login-email-input").fill(credentials.email);
     await page.getByTestId("login-password-input").fill(credentials.password);
     await page.getByTestId("login-submit-button").click();
-    await page.waitForURL(/\/dashboard/, {
-      timeout: 60_000,
-      waitUntil: "domcontentloaded",
-    });
+    await Promise.race([
+      page.waitForURL((url) => isDashboardUrl(url.toString()), {
+        timeout: 60_000,
+        waitUntil: "domcontentloaded",
+      }),
+      page.getByTestId("workspace-toolbar").waitFor({
+        state: "visible",
+        timeout: 60_000,
+      }),
+    ]);
   }
 
   try {
-    await expect(page).toHaveURL(/\/dashboard/);
+    await expect
+      .poll(() => page.url(), { timeout: 60_000 })
+      .toMatch(/\/(?:[a-z]{2}-[A-Z]{2}\/)?dashboard(?:\?.*)?$/);
     await page.waitForLoadState("networkidle");
   } catch (error) {
     const loginErrorMessage = await readVisibleErrorBoxMessage(page);

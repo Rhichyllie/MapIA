@@ -244,7 +244,7 @@
       },
       "flow": {
         "label": "Process",
-        "description": "Process steps in sequence."
+        "description": "Process map with steps, decisions and endings."
       },
       "mindmap": {
         "label": "Mind map",
@@ -269,7 +269,7 @@
       "flowchart": {
         "operationalLabel": "Flowchart",
         "technicalLabel": "flowchart (legacy)",
-        "description": "Classic process flowchart."
+        "description": "Legacy process template kept for compatibility."
       },
       "erd": {
         "operationalLabel": "Data model",
@@ -403,10 +403,10 @@
         "suggestIndexes": "Suggest initial indexes"
       },
       "flow": {
-        "autoCreateStartEnd": "Create start and end automatically",
-        "allowDecisions": "Allow decisions",
-        "directionLabel": "Flow direction",
-        "allowMultipleOutputs": "Allow multiple outputs per step"
+        "autoCreateStartEnd": "Prepare start and ending points",
+        "allowDecisions": "Prepare decision points",
+        "directionLabel": "Main process direction",
+        "allowMultipleOutputs": "Allow parallel paths from a decision"
       },
       "sitemap": {
         "autoCreateHome": "Create Home automatically",
@@ -541,8 +541,8 @@
         },
         "process": {
           "title": "Process",
-          "description": "Steps and decisions.",
-          "summary": "process"
+          "description": "Map real steps, decisions, rules and endings.",
+          "summary": "process mapping"
         },
         "data-model": {
           "title": "Data model",
@@ -606,7 +606,7 @@
       },
       "templatePresets": {
         "erd-basic": "Basic ERD",
-        "process-basic": "Basic process",
+        "process-basic": "Starter process",
         "sitemap-basic": "Basic sitemap",
         "architecture-basic": "Basic architecture",
         "blank-canvas": "Blank canvas"
@@ -621,8 +621,8 @@
           "description": "Layered structure for parent-child organization."
         },
         "flow": {
-          "label": "Flow",
-          "description": "Flow of steps with transitions and decisions."
+          "label": "Flowchart / Process",
+          "description": "Process map with start, steps, decisions, endings and supporting notes."
         },
         "graph": {
           "label": "Graph",
@@ -956,10 +956,10 @@
         "openBranch": "Open branch",
         "openNote": "Open note",
         "openNext": "Open next step",
-        "flowReadingTitle": "Flow reading",
+        "flowReadingTitle": "Process reading",
         "positionLabel": "Position",
         "connectivityLabel": "Connectivity",
-        "generalHelper": "Adjust the name and role of the focused segment.",
+        "generalHelper": "Adjust the name and role of this process point.",
         "outOfProfile": " (out of profile)",
         "detailsHelper": "Use operational context and tags only when they improve understanding.",
         "relationsHelper": "{incomingCount} incoming, {outgoingCount} outgoing and {previewCount} highlighted relation(s).",
@@ -1086,7 +1086,7 @@
       "canvasAriaLabel": "Editor canvas",
       "rendererLabels": {
         "tree": "Hierarchy",
-        "flow": "Flow",
+        "flow": "Process",
         "sitemap": "Sitemap",
         "erd": "ERD",
         "graph": "Graph",
@@ -1138,15 +1138,15 @@
         "label": "Rename node"
       },
       "addNode": {
-        "roleLabelFlow": "Flow role",
+        "roleLabelFlow": "Process role",
         "roleLabelDefault": "Node role",
         "titleLabelGraph": "Item name",
-        "titleLabelFlow": "Visible flow name",
+        "titleLabelFlow": "Point name",
         "titleLabelDefault": "Title",
         "titlePlaceholder": "E.g. {title}",
-        "descriptionLabelFlow": "Operational reading (optional)",
+        "descriptionLabelFlow": "Operational context (optional)",
         "descriptionLabelDefault": "Description (optional)",
-        "tagsLabelFlow": "Operational tags (optional)",
+        "tagsLabelFlow": "Process tags (optional)",
         "tagsLabelDefault": "Tags (optional)",
         "tagsPlaceholder": "E.g. onboarding, approval"
       },
@@ -1181,7 +1181,7 @@
           "flowEdge": "Review the transition before changing its reading.",
           "defaultEdge": "Adjust the details of the selected connection.",
           "graphNode": "Understand the component's role in the network before editing.",
-          "flowNode": "Review the process segment and then refine its details.",
+          "flowNode": "Review this process point and then refine the details.",
           "sitemap": "Review this item's navigation and hierarchy.",
           "tree": "Review this node's structural role.",
           "erd": "Adjust the entity, fields and relationships with consistency in mind.",
@@ -1455,8 +1455,8 @@
       "errors": {
         "applyChange": "The change could not be applied.",
         "saveChanges": "Pending changes could not be saved.",
-        "saveSnapshot": "The working snapshot could not be saved.",
-        "connectionNodesNotFound": "The nodes involved in the connection could not be found on the canvas.",
+        "saveSnapshot": "The current map could not be saved.",
+        "connectionNodesNotFound": "The elements involved in the connection could not be found on the map.",
         "createTransitionOnServer": "The transition could not be created on the server.",
         "createRelationOnServer": "The relationship could not be created on the server.",
         "invalidConnectionForDiagram": "The selected connection is not allowed for this diagram type.",
@@ -1573,11 +1573,11 @@
             "quickActionHint": "Suggestion: start with the main item and connect the next relation."
           },
           "flow": {
-            "addPrimary": "Add activity",
-            "dialogTitle": "Flow quick add",
-            "dialogHint": "Add activities, decisions, endings and notes to the operational flow.",
-            "addConfirm": "Insert into flow",
-            "quickActionHint": "Suggestion: continue the flow or open a branch when a rule applies."
+            "addPrimary": "Add step",
+            "dialogTitle": "Add process point",
+            "dialogHint": "Build a process with start, steps, decisions, endings and supporting notes.",
+            "addConfirm": "Insert into process",
+            "quickActionHint": "Suggestion: move to the next step, open a decision or attach a note."
           },
           "erd": {
             "addPrimary": "Add entity",
@@ -1645,7 +1645,7 @@
           }
         },
         "defaultProcessConnection": "Initial connection: {nodeLabel} {relationLabel} the new point.",
-        "defaultConnection": "Default connection: {nodeLabel} -[{relationLabel}]- new node."
+        "defaultConnection": "Default connection: {nodeLabel} -[{relationLabel}]- new element."
       },
       "connection": {
         "invalidRules": "Invalid connection for the diagram rules."
@@ -1696,11 +1696,17 @@
         "untitledItem": "Untitled item"
       },
       "guidance": {
+        "needsIncomingPath": "This point should show where the main flow comes from to make the operation clear.",
+        "startNeedsNext": "Connect the first step so the process leaves the start with a clear path.",
+        "stepNeedsNext": "Define the next transition to avoid a loose step with no continuity.",
         "decisionNeedsPaths": "A decision is clearer when it explicitly shows at least two paths.",
+        "decisionNeedsNamedPaths": "Name the decision outputs so each path has an explicit criterion.",
         "decisionNeedsShortLabels": "Use short labels to differentiate each branch of the decision.",
         "noteNeedsAnchor": "Connect the note to the point it explains to avoid loose noise on the canvas.",
         "endShouldTerminate": "Review extra outputs. Strong endings usually terminate the path.",
-        "startHasIncoming": "Inputs reaching the start usually indicate an earlier point is still missing from the map."
+        "startHasIncoming": "Inputs reaching the start usually indicate an earlier point is still missing from the map.",
+        "multipleOutputsNeedDecision": "When a point opens more than one main path, it usually should become a decision.",
+        "addOperationalContext": "Add operational context such as owner, area, channel or SLA when it improves the reading."
       },
       "lanes": {
         "before": "Comes before",
@@ -1716,36 +1722,49 @@
       },
       "nodeKinds": {
         "flow-step": {
-          "labelOperational": "Activity",
-          "description": "Executable work unit inside the process."
+          "labelOperational": "Step",
+          "description": "Clear action, validation or handoff inside the process."
         },
         "note": {
           "labelOperational": "Note",
-          "description": "Context, risk or exception that supports the flow reading."
+          "description": "Context, risk or exception that supports the process reading."
         }
       },
       "quickActions": {
         "flow-add-next-step": {
-          "label": "Continue flow"
+          "label": "Add next step",
+          "fromStartLabel": "Open first step"
         },
-        "flow-add-branch": {
-          "label": "Create branch",
-          "edgeLabel": "Condition"
+        "flow-add-decision": {
+          "label": "Add decision"
+        },
+        "flow-add-branch-path": {
+          "label": "Open new path",
+          "fromDecisionLabel": "Open decision path"
         },
         "flow-add-note": {
-          "label": "Record note",
-          "edgeLabel": "Note"
+          "label": "Add note",
+          "edgeLabel": "Note",
+          "fromDecisionLabel": "Add note to this decision",
+          "fromEndLabel": "Add note to the closure"
         }
+      },
+      "branchLabels": {
+        "yes": "Yes",
+        "no": "No",
+        "exception": "Exception",
+        "manualReview": "Manual review",
+        "alternative": "Path {index}"
       },
       "inspector": {
         "selectionBadgeLabel": "Segment in focus",
-        "emptyTitle": "Flow reading",
+        "emptyTitle": "Process reading",
         "emptySummary": "Select a process point to review role, continuity and context.",
-        "emptyGuidance": "Prefer opening the start, activity, decision or end to review the operational sequence.",
-        "titleLabel": "Flow name",
-        "kindLabel": "Flow shape",
+        "emptyGuidance": "Prefer opening the start, step, decision or closure to review the operational sequence.",
+        "titleLabel": "Point name",
+        "kindLabel": "Process role",
         "descriptionLabel": "Operational reading",
-        "descriptionPlaceholder": "Describe what happens at this point, which criterion decides the transition and what leaves this point.",
+        "descriptionPlaceholder": "Describe what happens at this process point, which criterion decides the transition and what leaves this point.",
         "tagsLabel": "Operational tags",
         "tagsPlaceholder": "E.g. SLA, exception, approval, channel, queue",
         "tagsHelper": "Use short tags for risk, channel, shift, rule or criticality.",
@@ -1758,9 +1777,45 @@
         "edgeKindLabel": "Transition type",
         "edgeSourceLabel": "Leaves from",
         "edgeTargetLabel": "Arrives at",
-        "nodeSubtitle": "Understand the role of this point in the flow before editing the text.",
+        "nodeSubtitle": "Understand the role of this point in the process before editing the text.",
         "edgeSubtitle": "Read the transition first and refine the detail only when necessary.",
-        "relationsEmptyState": "There are no transitions or notes connected to this point yet."
+        "relationsEmptyState": "There are no links or notes connected to this point yet.",
+        "ownerLabel": "Owner",
+        "ownerPlaceholder": "E.g. Registration team",
+        "areaLabel": "Area",
+        "areaPlaceholder": "E.g. Commercial operations",
+        "channelLabel": "Channel",
+        "channelPlaceholder": "E.g. Portal, email, service desk",
+        "criticalityLabel": "Criticality",
+        "slaLabel": "SLA or deadline",
+        "slaPlaceholder": "E.g. 24 business hours",
+        "ruleLabel": "Main rule",
+        "rulePlaceholder": "E.g. Only requests with valid approval move forward",
+        "exceptionLabel": "Exception or deviation",
+        "exceptionPlaceholder": "E.g. If there is a mismatch, escalate to manual review",
+        "operationsSummaryTitle": "Operational context",
+        "operationsSummaryEmpty": "No operational context recorded for this point."
+      },
+      "operational": {
+        "criticalityOptions": {
+          "none": "Not defined",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "critical": "Critical"
+        },
+        "summary": {
+          "owner": "Owner: {value}",
+          "area": "Area: {value}",
+          "channel": "Channel: {value}",
+          "sla": "SLA: {value}",
+          "criticality": {
+            "low": "Low criticality",
+            "medium": "Medium criticality",
+            "high": "High criticality",
+            "critical": "Critical path"
+          }
+        }
       },
       "edgeOverview": {
         "currentLabel": "Current label: {relationLabel}."
@@ -1840,8 +1895,8 @@
           "description": "Marks where the operation begins."
         },
         "flow-step": {
-          "label": "Activity",
-          "description": "Executes a clear action inside the process."
+          "label": "Step",
+          "description": "Executes a clear action, validation or handoff inside the process."
         },
         "flow-decision": {
           "label": "Decision",
@@ -1852,24 +1907,24 @@
           "description": "Records context, risk or exception without becoming another step."
         },
         "flow-end": {
-          "label": "End",
+          "label": "Closure",
           "description": "Indicates where this path ends."
         }
       },
       "roles": {
         "flow-start": {
           "badgeLabel": "Start",
-          "kindLabel": "Starting point",
+          "kindLabel": "Process start",
           "canvasHint": "Triggers the process and frames the first pass.",
           "summary": "Marks where the operation begins and what pace it sets for the rest of the flow.",
           "positionEmptyLabel": "No previous incoming transitions, as expected for the start of the flow.",
           "positionConnectedLabel": "It already receives incoming transitions. Review whether this is still the correct start.",
-          "guidanceWhenSparse": "Connect the first activity to keep the path legible.",
+          "guidanceWhenSparse": "Connect the first step to keep the path legible.",
           "guidanceWhenConnected": "Confirm whether the incoming transitions should point to an earlier step instead."
         },
         "flow-step": {
           "badgeLabel": "Step",
-          "kindLabel": "Activity",
+          "kindLabel": "Process step",
           "canvasHint": "Performs observable work within the operation.",
           "summary": "Represents an executable activity with a clear responsibility before moving forward.",
           "positionEmptyLabel": "Still isolated. Show where this activity comes from and where it goes next.",
@@ -1888,7 +1943,7 @@
           "guidanceWhenConnected": "Use short labels to differentiate each branch of the decision."
         },
         "flow-end": {
-          "badgeLabel": "End",
+          "badgeLabel": "Closure",
           "kindLabel": "Closure",
           "canvasHint": "Consolidates the operational outcome of this flow.",
           "summary": "Closes the path and communicates the final result or state of the operation.",
@@ -1899,7 +1954,7 @@
         },
         "flow-note": {
           "badgeLabel": "Note",
-          "kindLabel": "Operational note",
+          "kindLabel": "Supporting note",
           "canvasHint": "Records risk, exception or context without moving the flow.",
           "summary": "Documents agreements, alerts or supporting context without turning into another step.",
           "positionEmptyLabel": "Still loose on the canvas. Attach the note to the segment it explains.",

@@ -586,7 +586,15 @@ export function areOperationalNodeDraftValuesEqual(
   return (
     baseline.label === draft.label &&
     baseline.kind === draft.kind &&
+    baseline.diagramRole === draft.diagramRole &&
     baseline.description.trim() === draft.description.trim() &&
+    baseline.owner.trim() === draft.owner.trim() &&
+    baseline.area.trim() === draft.area.trim() &&
+    baseline.channel.trim() === draft.channel.trim() &&
+    baseline.criticality === draft.criticality &&
+    baseline.sla.trim() === draft.sla.trim() &&
+    baseline.rule.trim() === draft.rule.trim() &&
+    baseline.exception.trim() === draft.exception.trim() &&
     baselineTags === draftTags
   );
 }

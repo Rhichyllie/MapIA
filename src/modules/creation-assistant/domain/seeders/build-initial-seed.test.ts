@@ -115,6 +115,32 @@ describe("buildInitialSeedGraph", () => {
     );
   });
 
+  it("builds a process seed with explicit process roles and supporting context", () => {
+    const flow = buildDraftAndSettings({
+      initialView: "flow",
+      objective: "Mapear processo operacional",
+    });
+
+    const flowSeed = buildInitialSeedGraph({
+      projectId: "00000000-0000-0000-0000-000000000001",
+      draft: flow.draft,
+      settings: flow.settings,
+    });
+
+    expect(flowSeed.nodes.some((node) => node.data?.role === "flow-start")).toBe(true);
+    expect(flowSeed.nodes.some((node) => node.data?.role === "flow-decision")).toBe(
+      true,
+    );
+    expect(flowSeed.nodes.some((node) => node.data?.role === "flow-note")).toBe(true);
+    expect(flowSeed.nodes.some((node) => node.data?.role === "flow-end")).toBe(true);
+    expect(
+      flowSeed.edges.some((edge) => edge.kind === "depends-on" && edge.label === "Sim"),
+    ).toBe(true);
+    expect(
+      flowSeed.edges.some((edge) => edge.kind === "references" && edge.label === "Regra"),
+    ).toBe(true);
+  });
+
   it("creates a non-linear graph native seed layout", () => {
     const graph = buildDraftAndSettings({
       initialView: "graph",

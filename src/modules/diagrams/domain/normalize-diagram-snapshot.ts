@@ -59,6 +59,41 @@ function isMetaNodeKind(kind: Node["kind"]) {
   return kind === "workspace" || kind === "project";
 }
 
+function shouldAttachResolvedDiagramRole(
+  diagramType: DiagramTypeEffective,
+  node: Pick<Node, "kind">,
+) {
+  if (isMetaNodeKind(node.kind)) {
+    return true;
+  }
+
+  if (diagramType === "flow") {
+    return node.kind === "flow-step" || node.kind === "note";
+  }
+
+  if (diagramType === "mindmap") {
+    return node.kind === "note";
+  }
+
+  if (diagramType === "erd") {
+    return node.kind === "entity" || node.kind === "note";
+  }
+
+  if (diagramType === "sitemap" || diagramType === "tree") {
+    return node.kind === "page";
+  }
+
+  if (diagramType === "graph") {
+    return node.kind === "entity" || node.kind === "page" || node.kind === "note";
+  }
+
+  if (diagramType === "timeline") {
+    return node.kind === "note" || node.kind === "flow-step";
+  }
+
+  return false;
+}
+
 function pickProjectId(snapshot: GraphSnapshot) {
   const nodeProjectId = snapshot.nodes[0]?.projectId;
   if (nodeProjectId) {
@@ -260,6 +295,24 @@ export function normalizeDiagramSnapshot(
     data: { ...(edge.data ?? {}) },
     externalRefs: [...(edge.externalRefs ?? [])],
   }));
+
+  for (const node of nextNodes) {
+    if (!shouldAttachResolvedDiagramRole(diagramType, node)) {
+      continue;
+    }
+
+    const diagramRole = resolveDiagramRole({
+      diagramType,
+      nodeKind: node.kind,
+      nodePayload: node.data,
+      layoutMetadata: {
+        rootNodeName: input.rootNodeName ?? input.snapshot.rootNodeName ?? null,
+      },
+      nodeLabel: node.label,
+    });
+
+    node.data = writeDiagramRoleToPayload(node.data, diagramRole);
+  }
 
   if (
     diagramType === "flow" ||

@@ -44,6 +44,7 @@ describe("visible multilingual surfaces", () => {
     expect(dashboardSource).not.toContain("Hub da area de trabalho");
 
     expect(createSource).toContain('getTranslations("Create.page")');
+    expect(createSource).toContain("scheduleCreationTelemetryOperation(async () => {");
     expect(createSource).not.toContain("Assistente de criacao");
     expect(createSource).not.toContain("Creation assistant");
 

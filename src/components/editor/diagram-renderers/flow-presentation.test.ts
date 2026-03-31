@@ -32,7 +32,9 @@ describe("flow presentation", () => {
     });
 
     expect(presentation.variant).toBe("flow-start");
-    expect(presentation.badgeLabel).toBe("Start");
+    expect(presentation.eyebrowLabel).toBe("Start");
+    expect(presentation.roleLabel).toBe("Process start");
+    expect(presentation.notation).toBe("start-event");
     expect(presentation.summary).toBe(
       "Triggers the process and frames the first pass.",
     );

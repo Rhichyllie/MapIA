@@ -380,13 +380,13 @@ const recipeList = [
     contextBlocks: ["setup", "flow"],
     validationRules: {
       draft: [
-        "Aceita criacao manual/template para fluxos simples.",
+        "Prepara um mapa de processo com foco em etapas, decisoes e encerramentos.",
       ],
       guided: [
-        "Recomenda inicio/fim automatico para acelerar o primeiro mapa.",
+        "Explica quando vale comecar com inicio e encerramento ja posicionados.",
       ],
       strict: [
-        "Com inicio/fim automatico ativo, deve existir plano real para gerar esses nos.",
+        "Se o assistente prometer inicio e encerramento iniciais, precisa haver seed coerente para isso.",
       ],
     },
     persona: {

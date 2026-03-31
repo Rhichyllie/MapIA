@@ -1,23 +1,19 @@
 "use client";
 
 import { useEditorTranslations } from "../use-editor-translations";
-import type { NodeKind } from "@/src/domain";
 import type { EditorTranslationFn } from "../editor-i18n";
 import type { OperationalNodeDraft } from "../editor-inspector-personas";
-import {
-  getNodeKindDescriptionForDiagram,
-  getNodeKindLabelForDiagram,
-} from "../presentation/kinds";
 import type {
   ProcessInspectorCopy,
   ProcessNodeOverview,
+  ProcessNodeRole,
   ProcessRelationsViewModel,
 } from "../presentation/process-semantics";
-
-type ProcessNodeKindOption = {
-  kind: NodeKind;
-  outOfProfile: boolean;
-};
+import {
+  getProcessCriticalityOptions,
+  getProcessQuickAddRoleOptions,
+  getProcessRoleMeta,
+} from "../presentation/process-semantics";
 
 type ProcessInspectorAction = {
   id: string;
@@ -57,7 +53,7 @@ export function ProcessOperationalNodeInspector({
   overview,
   relations,
   draft,
-  nodeKindOptions,
+  selectedRole,
   sections,
   tagPreview,
   nodeInspectorErrors,
@@ -68,9 +64,16 @@ export function ProcessOperationalNodeInspector({
   secondaryActions,
   onToggleSection,
   onLabelChange,
-  onKindChange,
+  onRoleChange,
   onDescriptionChange,
   onTagsChange,
+  onOwnerChange,
+  onAreaChange,
+  onChannelChange,
+  onCriticalityChange,
+  onSlaChange,
+  onRuleChange,
+  onExceptionChange,
   onOpenRelatedNode,
   onOpenTransition,
   onRemoveRelation,
@@ -81,7 +84,7 @@ export function ProcessOperationalNodeInspector({
   overview: ProcessNodeOverview;
   relations: ProcessRelationsViewModel;
   draft: OperationalNodeDraft;
-  nodeKindOptions: ProcessNodeKindOption[];
+  selectedRole: ProcessNodeRole;
   sections: InspectorSectionState;
   tagPreview: string[];
   nodeInspectorErrors: {
@@ -95,9 +98,16 @@ export function ProcessOperationalNodeInspector({
   secondaryActions: ProcessInspectorAction[];
   onToggleSection: (section: keyof InspectorSectionState) => void;
   onLabelChange: (value: string) => void;
-  onKindChange: (kind: OperationalNodeDraft["kind"]) => void;
+  onRoleChange: (role: ProcessNodeRole) => void;
   onDescriptionChange: (value: string) => void;
   onTagsChange: (value: string) => void;
+  onOwnerChange: (value: string) => void;
+  onAreaChange: (value: string) => void;
+  onChannelChange: (value: string) => void;
+  onCriticalityChange: (value: string) => void;
+  onSlaChange: (value: string) => void;
+  onRuleChange: (value: string) => void;
+  onExceptionChange: (value: string) => void;
   onOpenRelatedNode: (relationId: string, otherNodeId: string) => void;
   onOpenTransition: (relationId: string) => void;
   onRemoveRelation: (relationId: string) => void;
@@ -105,6 +115,9 @@ export function ProcessOperationalNodeInspector({
   onReset: () => void;
 }) {
   const t = useEditorTranslations() as unknown as EditorTranslationFn;
+  const processRoleOptions = getProcessQuickAddRoleOptions(t);
+  const criticalityOptions = getProcessCriticalityOptions(t);
+  const selectedRoleMeta = getProcessRoleMeta(selectedRole, t);
 
   return (
     <div className="stack-sm inspector-process-stack inspector-process-node">
@@ -125,6 +138,22 @@ export function ProcessOperationalNodeInspector({
           <div className="inspector-process-overview__copy">
             <h4>{t("processInspector.node.flowReadingTitle")}</h4>
             <p className="helper inspector-process-overview__summary">{overview.summary}</p>
+            <div className="row-actions inspector-process-overview__operations">
+              {overview.operationalHighlights.length > 0 ? (
+                overview.operationalHighlights.map((highlight) => (
+                  <span
+                    key={highlight.id}
+                    className={`badge badge-process-${highlight.tone}`}
+                  >
+                    {highlight.label}
+                  </span>
+                ))
+              ) : (
+                <span className="helper">
+                  {copy.operationsSummaryEmpty}
+                </span>
+              )}
+            </div>
           </div>
           <dl className="inspector-meta-list inspector-meta-list--process">
             <div>
@@ -220,21 +249,18 @@ export function ProcessOperationalNodeInspector({
             <select
               id="node-kind-operational-input"
               data-testid="inspector-node-kind"
-              value={draft.kind}
+              value={selectedRole}
               onChange={(event) =>
-                onKindChange(event.target.value as OperationalNodeDraft["kind"])
+                onRoleChange(event.target.value as ProcessNodeRole)
               }
             >
-              {nodeKindOptions.map((option) => (
-                <option key={option.kind} value={option.kind}>
-                  {getNodeKindLabelForDiagram("flow", option.kind, "operational", t)}
-                  {option.outOfProfile ? t("processInspector.node.outOfProfile") : ""}
+              {processRoleOptions.map((option) => (
+                <option key={option.role} value={option.role}>
+                  {option.label}
                 </option>
               ))}
             </select>
-            <span className="helper">
-              {getNodeKindDescriptionForDiagram("flow", draft.kind, t)}
-            </span>
+            <span className="helper">{selectedRoleMeta.summary}</span>
           </div>
         </section>
       ) : null}
@@ -273,6 +299,85 @@ export function ProcessOperationalNodeInspector({
               data-testid="inspector-node-tags"
             />
             <span className="helper">{copy.tagsHelper}</span>
+          </div>
+
+          <div className="inspector-process-grid">
+            <div className="field field--process">
+              <label htmlFor="process-owner-input">{copy.ownerLabel}</label>
+              <input
+                id="process-owner-input"
+                value={draft.owner}
+                onChange={(event) => onOwnerChange(event.target.value)}
+                placeholder={copy.ownerPlaceholder}
+              />
+            </div>
+
+            <div className="field field--process">
+              <label htmlFor="process-area-input">{copy.areaLabel}</label>
+              <input
+                id="process-area-input"
+                value={draft.area}
+                onChange={(event) => onAreaChange(event.target.value)}
+                placeholder={copy.areaPlaceholder}
+              />
+            </div>
+
+            <div className="field field--process">
+              <label htmlFor="process-channel-input">{copy.channelLabel}</label>
+              <input
+                id="process-channel-input"
+                value={draft.channel}
+                onChange={(event) => onChannelChange(event.target.value)}
+                placeholder={copy.channelPlaceholder}
+              />
+            </div>
+
+            <div className="field field--process">
+              <label htmlFor="process-criticality-input">{copy.criticalityLabel}</label>
+              <select
+                id="process-criticality-input"
+                value={draft.criticality}
+                onChange={(event) => onCriticalityChange(event.target.value)}
+              >
+                {criticalityOptions.map((option) => (
+                  <option key={option.value || "none"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field field--process">
+              <label htmlFor="process-sla-input">{copy.slaLabel}</label>
+              <input
+                id="process-sla-input"
+                value={draft.sla}
+                onChange={(event) => onSlaChange(event.target.value)}
+                placeholder={copy.slaPlaceholder}
+              />
+            </div>
+          </div>
+
+          <div className="field field--process">
+            <label htmlFor="process-rule-input">{copy.ruleLabel}</label>
+            <textarea
+              id="process-rule-input"
+              rows={3}
+              value={draft.rule}
+              onChange={(event) => onRuleChange(event.target.value)}
+              placeholder={copy.rulePlaceholder}
+            />
+          </div>
+
+          <div className="field field--process">
+            <label htmlFor="process-exception-input">{copy.exceptionLabel}</label>
+            <textarea
+              id="process-exception-input"
+              rows={3}
+              value={draft.exception}
+              onChange={(event) => onExceptionChange(event.target.value)}
+              placeholder={copy.exceptionPlaceholder}
+            />
           </div>
 
           {tagPreview.length > 0 ? (

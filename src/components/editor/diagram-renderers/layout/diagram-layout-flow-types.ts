@@ -1,9 +1,14 @@
 import type { NodeKind } from "@/src/domain";
 import type { DiagramRole } from "@/src/modules/diagrams/domain";
+import { getFlowNodeReservedFootprint } from "../flow-content-policy";
 import type { DiagramLayoutNode } from "./diagram-layout";
 
 export type FlowDirection = "top-down" | "left-right";
-export type FlowInsertMode = "default" | "flow-next-step" | "flow-branch" | "flow-note";
+export type FlowInsertMode =
+  | "default"
+  | "flow-next-step"
+  | "flow-branch"
+  | "flow-note";
 export type FlowContextualInsertMode = Exclude<FlowInsertMode, "default">;
 
 export type FlowNodeVariant =
@@ -85,54 +90,53 @@ export type FlowNudgeState = FlowLogicalState & {
   nextPositions: Record<string, { x: number; y: number }>;
 };
 
+function createFlowFootprint(variant: FlowNodeVariant): FlowFootprint {
+  const footprint = getFlowNodeReservedFootprint(variant);
+
+  return {
+    width: footprint.width,
+    height: footprint.height,
+    paddingPrimary: footprint.paddingPrimary,
+    paddingSecondary: footprint.paddingSecondary,
+  };
+}
+
 export const FLOW_NODE_FOOTPRINTS: Record<FlowNodeVariant, FlowFootprint> = {
-  "flow-start": {
-    width: 208,
-    height: 112,
-    paddingPrimary: 118,
-    paddingSecondary: 76,
-  },
-  "flow-step": {
-    width: 236,
-    height: 140,
-    paddingPrimary: 132,
-    paddingSecondary: 84,
-  },
-  "flow-decision": {
-    width: 244,
-    height: 148,
-    paddingPrimary: 136,
-    paddingSecondary: 102,
-  },
-  "flow-end": {
-    width: 208,
-    height: 112,
-    paddingPrimary: 120,
-    paddingSecondary: 76,
-  },
-  "flow-note": {
-    width: 248,
-    height: 132,
-    paddingPrimary: 102,
-    paddingSecondary: 104,
-  },
+  "flow-start": createFlowFootprint("flow-start"),
+  "flow-step": createFlowFootprint("flow-step"),
+  "flow-decision": createFlowFootprint("flow-decision"),
+  "flow-end": createFlowFootprint("flow-end"),
+  "flow-note": createFlowFootprint("flow-note"),
 };
 
 export const FLOW_INSERT_LAYOUT = {
-  trunkPrimaryGap: 140,
-  trunkSecondaryGap: 92,
-  branchForwardOffset: 114,
-  branchSecondaryGap: 132,
-  branchLaneGap: 104,
-  branchColumnGap: 86,
-  noteForwardOffset: 108,
-  noteSecondaryGap: 118,
-  noteLaneGap: 86,
-  noteClusterGap: 74,
+  trunkPrimaryGap: 110,
+  trunkSecondaryGap: 84,
+  branchForwardOffset: 118,
+  branchSecondaryGap: 154,
+  branchLaneGap: 128,
+  branchColumnGap: 74,
+  noteForwardOffset: 96,
+  noteSecondaryGap: 116,
+  noteLaneGap: 88,
+  noteClusterGap: 68,
 } as const;
 
+export function resolveBalancedFlowLane(index: number) {
+  if (index <= 0) {
+    return 1;
+  }
+
+  const band = Math.floor(index / 2) + 1;
+  return index % 2 === 0 ? band : -band;
+}
+
 export function resolveFlowDirection(layoutOptions: unknown): FlowDirection {
-  if (!layoutOptions || typeof layoutOptions !== "object" || Array.isArray(layoutOptions)) {
+  if (
+    !layoutOptions ||
+    typeof layoutOptions !== "object" ||
+    Array.isArray(layoutOptions)
+  ) {
     return "left-right";
   }
 
@@ -145,7 +149,11 @@ export function resolveFlowDirection(layoutOptions: unknown): FlowDirection {
 }
 
 export function resolveFlowInsertMode(layoutOptions: unknown): FlowInsertMode {
-  if (!layoutOptions || typeof layoutOptions !== "object" || Array.isArray(layoutOptions)) {
+  if (
+    !layoutOptions ||
+    typeof layoutOptions !== "object" ||
+    Array.isArray(layoutOptions)
+  ) {
     return "default";
   }
 
@@ -161,7 +169,9 @@ export function resolveFlowInsertMode(layoutOptions: unknown): FlowInsertMode {
   return "default";
 }
 
-export function isFlowNoteNode(node: Pick<DiagramLayoutNode, "kind" | "diagramRole">) {
+export function isFlowNoteNode(
+  node: Pick<DiagramLayoutNode, "kind" | "diagramRole">,
+) {
   return node.kind === "note" || node.diagramRole === "flow-note";
 }
 
@@ -202,12 +212,18 @@ export function resolveFlowVariantFromInsertMode(
 }
 
 export function readFlowInsertNodeDescriptor(layoutOptions: unknown) {
-  if (!layoutOptions || typeof layoutOptions !== "object" || Array.isArray(layoutOptions)) {
+  if (
+    !layoutOptions ||
+    typeof layoutOptions !== "object" ||
+    Array.isArray(layoutOptions)
+  ) {
     return null;
   }
 
-  const insertNodeKind = (layoutOptions as { insertNodeKind?: unknown }).insertNodeKind;
-  const insertDiagramRole = (layoutOptions as { insertDiagramRole?: unknown }).insertDiagramRole;
+  const insertNodeKind = (layoutOptions as { insertNodeKind?: unknown })
+    .insertNodeKind;
+  const insertDiagramRole = (layoutOptions as { insertDiagramRole?: unknown })
+    .insertDiagramRole;
   const hasKind = typeof insertNodeKind === "string";
   const hasRole = typeof insertDiagramRole === "string";
 

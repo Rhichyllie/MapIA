@@ -6,6 +6,7 @@ import {
   buildProcessNodeOverview,
   getProcessInspectorCopy,
   getProcessRoleMeta,
+  readProcessOperationalContext,
   resolveProcessNodeRole,
   type ProcessEdgeOverview,
   type ProcessInspectorCopy,
@@ -30,6 +31,7 @@ export function resolveProcessNodeInspectorViewModel(input: {
   diagramRole?: DiagramRole;
   kind: NodeKind;
   label: string;
+  payload?: Record<string, unknown>;
   relations: ProcessRelationsViewModel;
 }, t?: EditorTranslationFn): ProcessNodeInspectorViewModel {
   const copy = getProcessInspectorCopy(t);
@@ -49,6 +51,7 @@ export function resolveProcessNodeInspectorViewModel(input: {
       incomingCount: input.relations.incomingCount,
       outgoingCount: input.relations.outgoingCount,
       relations: input.relations,
+      operationalContext: readProcessOperationalContext(input.payload),
     }, t),
   };
 }

@@ -35,6 +35,31 @@ export type DiagramRoleDiagramType =
   | "timeline"
   | undefined;
 
+const DIAGRAM_ROLES = [
+  "meta-workspace",
+  "meta-project",
+  "tree-root",
+  "tree-node",
+  "hierarchy-root",
+  "hierarchy-node",
+  "sitemap-home",
+  "sitemap-section",
+  "flow-start",
+  "flow-step",
+  "flow-note",
+  "flow-end",
+  "flow-decision",
+  "mindmap-root",
+  "mindmap-branch",
+  "mindmap-reference",
+  "graph-core",
+  "graph-topic",
+  "graph-supporting",
+  "timeline-milestone",
+  "erd-entity",
+  "erd-comment",
+] as const satisfies readonly DiagramRole[];
+
 type ResolveDiagramRoleInput = {
   diagramType: DiagramRoleDiagramType;
   nodeKind: NodeKind;
@@ -63,39 +88,29 @@ function readMapiaPayload(
   return rawMapia as MapiaPayload;
 }
 
+function normalizeDiagramRole(value: unknown): DiagramRole | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  return (DIAGRAM_ROLES as readonly string[]).includes(value)
+    ? (value as DiagramRole)
+    : undefined;
+}
+
+function readLegacyDiagramRoleFromPayload(
+  payload: Record<string, unknown> | null | undefined,
+) {
+  return normalizeDiagramRole(payload?.role);
+}
+
 export function readDiagramRoleFromPayload(
   payload: Record<string, unknown> | null | undefined,
 ): DiagramRole | undefined {
-  const role = readMapiaPayload(payload)?.role;
-
-  if (
-    role === "meta-workspace" ||
-    role === "meta-project" ||
-    role === "tree-root" ||
-    role === "tree-node" ||
-    role === "hierarchy-root" ||
-    role === "hierarchy-node" ||
-    role === "sitemap-home" ||
-    role === "sitemap-section" ||
-    role === "flow-start" ||
-    role === "flow-step" ||
-    role === "flow-note" ||
-    role === "flow-end" ||
-    role === "flow-decision" ||
-    role === "mindmap-root" ||
-    role === "mindmap-branch" ||
-    role === "mindmap-reference" ||
-    role === "graph-core" ||
-    role === "graph-topic" ||
-    role === "graph-supporting" ||
-    role === "timeline-milestone" ||
-    role === "erd-entity" ||
-    role === "erd-comment"
-  ) {
-    return role;
-  }
-
-  return undefined;
+  return (
+    normalizeDiagramRole(readMapiaPayload(payload)?.role) ??
+    readLegacyDiagramRoleFromPayload(payload)
+  );
 }
 
 export function writeDiagramRoleToPayload(
@@ -108,8 +123,10 @@ export function writeDiagramRoleToPayload(
 
   if (role) {
     nextMapia.role = role;
+    nextPayload.role = role;
   } else {
     delete nextMapia.role;
+    delete nextPayload.role;
   }
 
   if (Object.keys(nextMapia).length === 0) {

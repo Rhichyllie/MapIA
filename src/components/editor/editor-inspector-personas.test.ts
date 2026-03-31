@@ -27,8 +27,16 @@ describe("editor-inspector-personas", () => {
     expect(draft).toEqual({
       label: "Cadastro",
       kind: "page",
+      diagramRole: undefined,
       description: "Fluxo de cadastro",
       tagsText: "onboarding, portal",
+      owner: "",
+      area: "",
+      channel: "",
+      criticality: "",
+      sla: "",
+      rule: "",
+      exception: "",
     });
   });
 
@@ -38,10 +46,23 @@ describe("editor-inspector-personas", () => {
         custom: { level: 2 },
         owner: "time-a",
         tags: ["old"],
+        __mapia: {
+          process: {
+            owner: "time-a",
+            channel: "portal",
+          },
+        },
       },
       {
         description: "Novo resumo",
         tagsText: "onboarding, portal, onboarding",
+        owner: "time-a",
+        area: "cadastro",
+        channel: "portal",
+        criticality: "high",
+        sla: "24h",
+        rule: "validar documentos",
+        exception: "",
       },
     );
 
@@ -50,6 +71,16 @@ describe("editor-inspector-personas", () => {
       owner: "time-a",
       description: "Novo resumo",
       tags: ["onboarding", "portal"],
+      __mapia: {
+        process: {
+          owner: "time-a",
+          area: "cadastro",
+          channel: "portal",
+          criticality: "high",
+          sla: "24h",
+          rule: "validar documentos",
+        },
+      },
     });
   });
 
@@ -63,6 +94,13 @@ describe("editor-inspector-personas", () => {
       {
         description: "   ",
         tagsText: " ,  , ",
+        owner: "",
+        area: "",
+        channel: "",
+        criticality: "",
+        sla: "",
+        rule: "",
+        exception: "",
       },
     );
 

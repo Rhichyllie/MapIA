@@ -28,7 +28,7 @@ export const flowDiagramMode: EditorDiagramModule = {
   contextualActions: createContextualActionsStrategy("flow"),
   quickAdd: createQuickAddStrategy("flow", processQuickAddRoleOptions),
   layout: createLayoutStrategy("flow", {
-    reapplyStrategy: "snapshot-native",
+    reapplyStrategy: "local-reflow",
   }),
   inspector: createProcessInspectorStrategy(),
   semantic: createSemanticStrategy("flow"),

@@ -244,7 +244,7 @@
       },
       "flow": {
         "label": "Processo",
-        "description": "Etapas de processo com sequencia."
+        "description": "Mapa de processo com etapas, decisoes e encerramentos."
       },
       "mindmap": {
         "label": "Mapa mental",
@@ -269,7 +269,7 @@
       "flowchart": {
         "operationalLabel": "Fluxograma",
         "technicalLabel": "flowchart (legado)",
-        "description": "Fluxograma classico de processos."
+        "description": "Modelo legado de processo mantido por compatibilidade."
       },
       "erd": {
         "operationalLabel": "Modelo de dados",
@@ -403,10 +403,10 @@
         "suggestIndexes": "Sugerir indices iniciais"
       },
       "flow": {
-        "autoCreateStartEnd": "Criar inicio e fim automaticamente",
-        "allowDecisions": "Permitir decisoes",
-        "directionLabel": "Direcao do fluxo",
-        "allowMultipleOutputs": "Permitir multiplas saidas por etapa"
+        "autoCreateStartEnd": "Preparar inicio e encerramento iniciais",
+        "allowDecisions": "Preparar pontos de decisao",
+        "directionLabel": "Direcao principal do processo",
+        "allowMultipleOutputs": "Permitir caminhos paralelos a partir de uma decisao"
       },
       "sitemap": {
         "autoCreateHome": "Criar Home automaticamente",
@@ -541,8 +541,8 @@
         },
         "process": {
           "title": "Processo",
-          "description": "Etapas e decisoes.",
-          "summary": "processo"
+          "description": "Mapeie etapas, decisoes, regras e encerramentos reais.",
+          "summary": "mapeamento de processo"
         },
         "data-model": {
           "title": "Modelo de dados",
@@ -606,7 +606,7 @@
       },
       "templatePresets": {
         "erd-basic": "ERD basico",
-        "process-basic": "Processo basico",
+        "process-basic": "Processo inicial",
         "sitemap-basic": "Sitemap basico",
         "architecture-basic": "Arquitetura basica",
         "blank-canvas": "Canvas em branco"
@@ -621,8 +621,8 @@
           "description": "Estrutura em niveis para organizacao pai-filho."
         },
         "flow": {
-          "label": "Fluxo",
-          "description": "Fluxo de etapas com transicoes e decisoes."
+          "label": "Fluxograma / Processo",
+          "description": "Mapa de processo com inicio, etapas, decisoes, encerramento e observacoes."
         },
         "graph": {
           "label": "Grafo",
@@ -955,11 +955,17 @@
         "untitledItem": "Item sem titulo"
       },
       "guidance": {
+        "needsIncomingPath": "Este ponto precisa mostrar de onde recebe o fluxo principal para ficar operacionalmente claro.",
+        "startNeedsNext": "Conecte a primeira etapa para que o processo saia do inicio com um caminho claro.",
+        "stepNeedsNext": "Defina a proxima passagem para evitar uma etapa solta ou sem continuidade.",
         "decisionNeedsPaths": "Uma decisao fica mais didatica quando explicita pelo menos dois caminhos.",
+        "decisionNeedsNamedPaths": "Nomeie as saidas da decisao para deixar claro o criterio de cada caminho.",
         "decisionNeedsShortLabels": "Use rotulos curtos para diferenciar cada caminho da decisao.",
         "noteNeedsAnchor": "Conecte a observacao ao ponto que ela explica para evitar ruido solto no canvas.",
         "endShouldTerminate": "Revise saidas extras. Encerramentos fortes normalmente terminam o percurso.",
-        "startHasIncoming": "Entradas no inicio costumam sinalizar um ponto anterior que ainda falta no mapa."
+        "startHasIncoming": "Entradas no inicio costumam sinalizar um ponto anterior que ainda falta no mapa.",
+        "multipleOutputsNeedDecision": "Quando um ponto abre mais de um caminho principal, vale transformar esse trecho em uma decisao.",
+        "addOperationalContext": "Adicione contexto operacional como responsavel, area, canal ou SLA quando isso ajudar a leitura."
       },
       "lanes": {
         "before": "Vem antes",
@@ -975,36 +981,49 @@
       },
       "nodeKinds": {
         "flow-step": {
-          "labelOperational": "Atividade",
-          "description": "Unidade de trabalho executavel dentro do processo."
+          "labelOperational": "Etapa",
+          "description": "Acao, validacao ou passagem clara dentro do processo."
         },
         "note": {
           "labelOperational": "Observacao",
-          "description": "Contexto, risco ou excecao que apoia a leitura do fluxo."
+          "description": "Contexto, risco ou excecao que apoia a leitura do processo."
         }
       },
       "quickActions": {
         "flow-add-next-step": {
-          "label": "Continuar fluxo"
+          "label": "Adicionar proxima etapa",
+          "fromStartLabel": "Abrir primeira etapa"
         },
-        "flow-add-branch": {
-          "label": "Criar bifurcacao",
-          "edgeLabel": "Condicao"
+        "flow-add-decision": {
+          "label": "Adicionar decisao"
+        },
+        "flow-add-branch-path": {
+          "label": "Abrir novo caminho",
+          "fromDecisionLabel": "Abrir caminho da decisao"
         },
         "flow-add-note": {
-          "label": "Registrar observacao",
-          "edgeLabel": "Observacao"
+          "label": "Adicionar observacao",
+          "edgeLabel": "Observacao",
+          "fromDecisionLabel": "Adicionar observacao a esta decisao",
+          "fromEndLabel": "Adicionar observacao ao encerramento"
         }
+      },
+      "branchLabels": {
+        "yes": "Sim",
+        "no": "Nao",
+        "exception": "Excecao",
+        "manualReview": "Revisao manual",
+        "alternative": "Caminho {index}"
       },
       "inspector": {
         "selectionBadgeLabel": "Trecho em foco",
-        "emptyTitle": "Leitura do fluxo",
+        "emptyTitle": "Leitura do processo",
         "emptySummary": "Selecione um ponto do processo para ver papel, continuidade e contexto.",
-        "emptyGuidance": "Prefira abrir inicio, atividade, decisao ou fim para revisar o encadeamento operacional.",
-        "titleLabel": "Nome no fluxo",
-        "kindLabel": "Formato no fluxo",
+        "emptyGuidance": "Prefira abrir inicio, etapa, decisao ou encerramento para revisar o encadeamento operacional.",
+        "titleLabel": "Nome do ponto",
+        "kindLabel": "Papel no processo",
         "descriptionLabel": "Leitura operacional",
-        "descriptionPlaceholder": "Descreva o que acontece neste ponto, qual criterio decide a passagem e o que sai daqui.",
+        "descriptionPlaceholder": "Descreva o que acontece neste ponto do processo, o que decide a passagem e o que sai daqui.",
         "tagsLabel": "Marcadores operacionais",
         "tagsPlaceholder": "Ex.: SLA, excecao, aprovacao, canal, fila",
         "tagsHelper": "Use marcadores curtos para risco, canal, turno, regra ou criticidade.",
@@ -1017,9 +1036,45 @@
         "edgeKindLabel": "Tipo de passagem",
         "edgeSourceLabel": "Sai de",
         "edgeTargetLabel": "Chega em",
-        "nodeSubtitle": "Entenda o papel deste ponto no fluxo antes de editar o texto.",
+        "nodeSubtitle": "Entenda o papel deste ponto no processo antes de editar o texto.",
         "edgeSubtitle": "Leia a transicao primeiro e ajuste o detalhe so quando necessario.",
-        "relationsEmptyState": "Ainda nao ha transicoes ou observacoes ligadas a este ponto."
+        "relationsEmptyState": "Ainda nao ha ligacoes ou observacoes ligadas a este ponto.",
+        "ownerLabel": "Responsavel",
+        "ownerPlaceholder": "Ex.: Time de cadastro",
+        "areaLabel": "Area",
+        "areaPlaceholder": "Ex.: Operacoes comerciais",
+        "channelLabel": "Canal",
+        "channelPlaceholder": "Ex.: Portal, e-mail, atendimento",
+        "criticalityLabel": "Criticidade",
+        "slaLabel": "SLA ou prazo",
+        "slaPlaceholder": "Ex.: 24 horas uteis",
+        "ruleLabel": "Regra principal",
+        "rulePlaceholder": "Ex.: Somente pedidos com aprovacao valida seguem adiante",
+        "exceptionLabel": "Excecao ou desvio",
+        "exceptionPlaceholder": "Ex.: Em caso de divergencia, escalar para analise manual",
+        "operationsSummaryTitle": "Contexto operacional",
+        "operationsSummaryEmpty": "Sem contexto operacional registrado neste ponto."
+      },
+      "operational": {
+        "criticalityOptions": {
+          "none": "Nao definida",
+          "low": "Baixa",
+          "medium": "Media",
+          "high": "Alta",
+          "critical": "Critica"
+        },
+        "summary": {
+          "owner": "Responsavel: {value}",
+          "area": "Area: {value}",
+          "channel": "Canal: {value}",
+          "sla": "SLA: {value}",
+          "criticality": {
+            "low": "Criticidade baixa",
+            "medium": "Criticidade media",
+            "high": "Criticidade alta",
+            "critical": "Criticidade critica"
+          }
+        }
       },
       "edgeOverview": {
         "currentLabel": "Rotulo atual: {relationLabel}."
@@ -1099,8 +1154,8 @@
           "description": "Marca onde a operacao comeca."
         },
         "flow-step": {
-          "label": "Atividade",
-          "description": "Executa uma acao clara dentro do processo."
+          "label": "Etapa",
+          "description": "Executa uma acao, validacao ou passagem clara dentro do processo."
         },
         "flow-decision": {
           "label": "Decisao",
@@ -1111,24 +1166,24 @@
           "description": "Registra contexto, risco ou excecao sem virar mais uma etapa."
         },
         "flow-end": {
-          "label": "Fim",
+          "label": "Encerramento",
           "description": "Indica onde este percurso se encerra."
         }
       },
       "roles": {
         "flow-start": {
           "badgeLabel": "Inicio",
-          "kindLabel": "Ponto de partida",
+          "kindLabel": "Inicio do processo",
           "canvasHint": "Dispara o processo e orienta a primeira passagem.",
           "summary": "Marca onde a operacao comeca e qual ritmo ela imprime ao restante do fluxo.",
           "positionEmptyLabel": "Sem entradas anteriores, como esperado para a abertura do fluxo.",
           "positionConnectedLabel": "Ja recebe entradas. Vale revisar se este ponto ainda e o inicio correto.",
-          "guidanceWhenSparse": "Conecte a primeira atividade para deixar a trilha legivel.",
+          "guidanceWhenSparse": "Conecte a primeira etapa para deixar a trilha legivel.",
           "guidanceWhenConnected": "Confirme se as entradas nao deveriam apontar para uma etapa anterior."
         },
         "flow-step": {
           "badgeLabel": "Etapa",
-          "kindLabel": "Atividade",
+          "kindLabel": "Etapa do processo",
           "canvasHint": "Executa um trabalho observavel dentro da operacao.",
           "summary": "Representa uma atividade executavel, com responsabilidade clara antes de seguir adiante.",
           "positionEmptyLabel": "Ainda isolada. Falta indicar de onde esta atividade vem e para onde segue.",
@@ -1147,7 +1202,7 @@
           "guidanceWhenConnected": "Use rotulos curtos para diferenciar cada desvio da decisao."
         },
         "flow-end": {
-          "badgeLabel": "Fim",
+          "badgeLabel": "Encerramento",
           "kindLabel": "Encerramento",
           "canvasHint": "Consolida o desfecho operacional deste fluxo.",
           "summary": "Fecha o percurso e comunica o resultado ou estado final da operacao.",
@@ -1158,7 +1213,7 @@
         },
         "flow-note": {
           "badgeLabel": "Observacao",
-          "kindLabel": "Anotacao operacional",
+          "kindLabel": "Observacao de apoio",
           "canvasHint": "Registra risco, excecao ou contexto sem mover o fluxo.",
           "summary": "Documenta combinados, alertas ou contexto de apoio sem virar mais uma etapa.",
           "positionEmptyLabel": "Ainda solta no canvas. Anexe a observacao ao trecho que ela explica.",
@@ -1174,10 +1229,10 @@
         "openBranch": "Abrir desvio",
         "openNote": "Abrir observacao",
         "openNext": "Abrir proxima etapa",
-        "flowReadingTitle": "Leitura do fluxo",
+        "flowReadingTitle": "Leitura do processo",
         "positionLabel": "Posicao",
         "connectivityLabel": "Conectividade",
-        "generalHelper": "Ajuste o nome e o papel do trecho em foco.",
+        "generalHelper": "Ajuste o nome e o papel deste ponto do processo.",
         "outOfProfile": " (fora do perfil)",
         "detailsHelper": "Use contexto operacional e marcadores apenas quando acrescentarem leitura.",
         "relationsHelper": "{incomingCount} entrada(s), {outgoingCount} saida(s) e {previewCount} relacao(oes) em destaque.",
@@ -1304,7 +1359,7 @@
       "canvasAriaLabel": "Canvas do editor",
       "rendererLabels": {
         "tree": "Hierarquia",
-        "flow": "Fluxo",
+        "flow": "Processo",
         "sitemap": "Sitemap",
         "erd": "ERD",
         "graph": "Grafo",
@@ -1356,15 +1411,15 @@
         "label": "Renomear no"
       },
       "addNode": {
-        "roleLabelFlow": "Papel no fluxo",
+        "roleLabelFlow": "Papel no processo",
         "roleLabelDefault": "Papel do no",
         "titleLabelGraph": "Nome do item",
-        "titleLabelFlow": "Nome visivel no fluxo",
+        "titleLabelFlow": "Nome do ponto",
         "titleLabelDefault": "Titulo",
         "titlePlaceholder": "Ex.: {title}",
-        "descriptionLabelFlow": "Leitura operacional (opcional)",
+        "descriptionLabelFlow": "Contexto operacional (opcional)",
         "descriptionLabelDefault": "Descricao (opcional)",
-        "tagsLabelFlow": "Marcadores operacionais (opcional)",
+        "tagsLabelFlow": "Marcadores do processo (opcional)",
         "tagsLabelDefault": "Tags (opcional)",
         "tagsPlaceholder": "Ex.: onboarding, aprovacao"
       },
@@ -1378,11 +1433,11 @@
             "quickActionHint": "Sugestao: comece pelo item principal e conecte a proxima relacao."
           },
           "flow": {
-            "addPrimary": "Adicionar atividade",
-            "dialogTitle": "QuickAdd de processo",
-            "dialogHint": "Adicione atividades, decisoes, encerramentos e observacoes do fluxo operacional.",
-            "addConfirm": "Inserir no fluxo",
-            "quickActionHint": "Sugestao: continue o fluxo ou abra uma bifurcacao quando houver regra."
+            "addPrimary": "Adicionar etapa",
+            "dialogTitle": "Adicionar ponto do processo",
+            "dialogHint": "Monte um processo com inicio, etapas, decisoes, encerramentos e observacoes de apoio.",
+            "addConfirm": "Inserir no processo",
+            "quickActionHint": "Sugestao: avance para a proxima etapa, abra uma decisao ou registre uma observacao."
           },
           "erd": {
             "addPrimary": "Adicionar entidade",
@@ -1450,7 +1505,7 @@
           }
         },
         "defaultProcessConnection": "Ligacao inicial: {nodeLabel} {relationLabel} o novo ponto.",
-        "defaultConnection": "Conexao padrao: {nodeLabel} -[{relationLabel}]- novo no."
+        "defaultConnection": "Ligacao padrao: {nodeLabel} -[{relationLabel}]- novo elemento."
       },
       "quickRelate": {
         "title": "Relacionar entidades"
@@ -1493,7 +1548,7 @@
           "flowEdge": "Revise a transicao antes de alterar sua leitura.",
           "defaultEdge": "Ajuste os detalhes da conexao selecionada.",
           "graphNode": "Entenda o papel do componente na rede antes de editar.",
-          "flowNode": "Revise o trecho do processo e depois refine os detalhes.",
+          "flowNode": "Revise o papel deste ponto do processo e depois refine os detalhes.",
           "sitemap": "Revise a navegacao e a hierarquia deste item.",
           "tree": "Revise o papel estrutural deste no.",
           "erd": "Ajuste entidade, campos e relacoes com foco em consistencia.",
@@ -1800,8 +1855,8 @@
       "errors": {
         "applyChange": "Nao foi possivel aplicar a alteracao.",
         "saveChanges": "Nao foi possivel salvar as alteracoes pendentes.",
-        "saveSnapshot": "Nao foi possivel salvar o snapshot de trabalho.",
-        "connectionNodesNotFound": "Os nos envolvidos na conexao nao foram encontrados no canvas.",
+        "saveSnapshot": "Nao foi possivel salvar o mapa atual.",
+        "connectionNodesNotFound": "Os elementos envolvidos na ligacao nao foram encontrados no mapa.",
         "createTransitionOnServer": "Nao foi possivel criar a transicao no servidor.",
         "createRelationOnServer": "Nao foi possivel criar a relacao no servidor.",
         "invalidConnectionForDiagram": "A conexao selecionada nao e permitida para este tipo de diagrama.",

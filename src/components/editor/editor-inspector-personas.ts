@@ -1,4 +1,11 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
+import {
+  readDiagramRoleFromPayload,
+  readProcessOperationalContextFromPayload,
+  writeProcessOperationalContextToPayload,
+  type DiagramRole,
+  type ProcessCriticality,
+} from "@/src/modules/diagrams/domain";
 import type { EditorTranslationFn } from "./editor-i18n";
 import {
   getEdgeKindDescription,
@@ -19,8 +26,16 @@ type NodeInspectorSource = {
 export type OperationalNodeDraft = {
   label: string;
   kind: NodeKind;
+  diagramRole?: DiagramRole;
   description: string;
   tagsText: string;
+  owner: string;
+  area: string;
+  channel: string;
+  criticality: ProcessCriticality | "";
+  sla: string;
+  rule: string;
+  exception: string;
 };
 
 export function getFriendlyNodeKindLabel(kind: NodeKind, t?: EditorTranslationFn) {
@@ -50,6 +65,7 @@ export function createOperationalNodeDraft(
   const tagsArray = Array.isArray(rawTags)
     ? rawTags.filter((tag): tag is string => typeof tag === "string")
     : [];
+  const processContext = readProcessOperationalContextFromPayload(source.payload);
 
   return {
     label: getOperationalDisplayLabel({
@@ -57,8 +73,16 @@ export function createOperationalNodeDraft(
       payload: source.payload,
     }, t),
     kind: source.kind,
+    diagramRole: readDiagramRoleFromPayload(source.payload),
     description,
     tagsText: tagsArray.join(", "),
+    owner: processContext.owner ?? "",
+    area: processContext.area ?? "",
+    channel: processContext.channel ?? "",
+    criticality: processContext.criticality ?? "",
+    sla: processContext.sla ?? "",
+    rule: processContext.rule ?? "",
+    exception: processContext.exception ?? "",
   };
 }
 
@@ -73,7 +97,18 @@ export function normalizeTagsInput(tagsText: string) {
 
 export function mergeOperationalNodePayload(
   currentPayload: Record<string, unknown>,
-  draft: Pick<OperationalNodeDraft, "description" | "tagsText">,
+  draft: Pick<
+    OperationalNodeDraft,
+    | "description"
+    | "tagsText"
+    | "owner"
+    | "area"
+    | "channel"
+    | "criticality"
+    | "sla"
+    | "rule"
+    | "exception"
+  >,
 ) {
   const nextPayload: Record<string, unknown> = {
     ...currentPayload,
@@ -93,5 +128,13 @@ export function mergeOperationalNodePayload(
     delete nextPayload.tags;
   }
 
-  return nextPayload;
+  return writeProcessOperationalContextToPayload(nextPayload, {
+    owner: draft.owner,
+    area: draft.area,
+    channel: draft.channel,
+    criticality: draft.criticality || undefined,
+    sla: draft.sla,
+    rule: draft.rule,
+    exception: draft.exception,
+  });
 }

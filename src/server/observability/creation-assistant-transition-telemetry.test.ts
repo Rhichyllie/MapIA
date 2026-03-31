@@ -861,6 +861,58 @@ describe("creation transition telemetry enterprise hardening", () => {
     expect(after.length).toBe(0);
   });
 
+  it("keeps observational runtime telemetry from auto-triggering gate evaluation", async () => {
+    const sharedStore = new MemoryCreationTransitionTelemetryStore();
+    __setCreationTransitionTelemetryStoreForTests(sharedStore);
+    __setCreationTransitionTelemetryRuntimeConfigForTests({
+      sinkTimeoutMs: 120,
+      gateEvaluationIntervalMs: 1,
+    });
+
+    await recordCreationLegacyTemplateFallback({
+      projectId: "78787878-7878-4878-8878-787878787878",
+      ownerIdentity: "ops@mapia.local",
+      source: "create-page",
+      fallbackMode: "partial",
+      fallbackReason: "migration_gap",
+      fieldsFromTemplate: {
+        profile: true,
+        initialView: true,
+        layout: false,
+        contextDefaults: false,
+      },
+      riskTier: "high",
+      effectiveResult: {
+        profile: "data-model",
+        initialView: "erd",
+        layout: "relational",
+      },
+    });
+    await recordCreationRecipeRuntimeResolved({
+      projectId: "78787878-7878-4878-8878-787878787878",
+      ownerIdentity: "ops@mapia.local",
+      profile: "data-model",
+      view: "erd",
+      recipeId: "data-model:erd",
+      fallbackUsed: false,
+    });
+    await __flushCreationTransitionTelemetryForTests();
+
+    const ticks = await sharedStore.listByEventName({
+      eventName: "creation_transition_gate_evaluation_tick",
+      windowStart: new Date("2026-07-01T00:00:00.000Z"),
+      windowEnd: new Date("2026-09-01T00:00:00.000Z"),
+    });
+    const warnings = await sharedStore.listByEventName({
+      eventName: "creation_transition_gate_warning",
+      windowStart: new Date("2026-07-01T00:00:00.000Z"),
+      windowEnd: new Date("2026-09-01T00:00:00.000Z"),
+    });
+
+    expect(ticks.length).toBe(0);
+    expect(warnings.length).toBe(0);
+  });
+
   it("keeps evaluator idempotent under burst calls", async () => {
     const sharedStore = new MemoryCreationTransitionTelemetryStore();
     __setCreationTransitionTelemetryStoreForTests(sharedStore);

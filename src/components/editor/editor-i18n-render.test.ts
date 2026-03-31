@@ -47,6 +47,21 @@ function buildProcessInspectorCopy(messages: AppMessages) {
     nodeSubtitle: inspector.nodeSubtitle,
     edgeSubtitle: inspector.edgeSubtitle,
     relationsEmptyState: inspector.relationsEmptyState,
+    ownerLabel: inspector.ownerLabel,
+    ownerPlaceholder: inspector.ownerPlaceholder,
+    areaLabel: inspector.areaLabel,
+    areaPlaceholder: inspector.areaPlaceholder,
+    channelLabel: inspector.channelLabel,
+    channelPlaceholder: inspector.channelPlaceholder,
+    criticalityLabel: inspector.criticalityLabel,
+    slaLabel: inspector.slaLabel,
+    slaPlaceholder: inspector.slaPlaceholder,
+    ruleLabel: inspector.ruleLabel,
+    rulePlaceholder: inspector.rulePlaceholder,
+    exceptionLabel: inspector.exceptionLabel,
+    exceptionPlaceholder: inspector.exceptionPlaceholder,
+    operationsSummaryTitle: inspector.operationsSummaryTitle,
+    operationsSummaryEmpty: inspector.operationsSummaryEmpty,
   };
 }
 

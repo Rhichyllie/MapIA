@@ -1,5 +1,6 @@
 import { ProcessOperationalEdgeInspector } from "../../process-inspector/process-operational-edge-inspector";
 import { ProcessOperationalNodeInspector } from "../../process-inspector/process-operational-node-inspector";
+import { resolveProcessNodeShapeForRole } from "../../presentation/process-semantics";
 import {
   TechnicalEdgeInspector,
   TechnicalNodeInspector,
@@ -20,7 +21,7 @@ export function FlowInspectorAdapter(props: EditorDiagramInspectorAdapterProps) 
         overview={props.processNodeInspectorModel.overview}
         relations={props.processSelectedNodeRelations}
         draft={props.operationalNodeDraft}
-        nodeKindOptions={props.nodeKindOptions}
+        selectedRole={props.processNodeInspectorModel.role}
         sections={{
           general: props.inspectorSections.general,
           details: props.inspectorSections.details,
@@ -47,9 +48,14 @@ export function FlowInspectorAdapter(props: EditorDiagramInspectorAdapterProps) 
             current ? { ...current, label: value } : current,
           )
         }
-        onKindChange={(kind) =>
+        onRoleChange={(role) =>
           props.setOperationalNodeDraft((current) =>
-            current ? { ...current, kind } : current,
+            current
+              ? {
+                  ...current,
+                  ...resolveProcessNodeShapeForRole(role),
+                }
+              : current,
           )
         }
         onDescriptionChange={(value) =>
@@ -60,6 +66,46 @@ export function FlowInspectorAdapter(props: EditorDiagramInspectorAdapterProps) 
         onTagsChange={(value) =>
           props.setOperationalNodeDraft((current) =>
             current ? { ...current, tagsText: value } : current,
+          )
+        }
+        onOwnerChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current ? { ...current, owner: value } : current,
+          )
+        }
+        onAreaChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current ? { ...current, area: value } : current,
+          )
+        }
+        onChannelChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current ? { ...current, channel: value } : current,
+          )
+        }
+        onCriticalityChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current
+              ? {
+                  ...current,
+                  criticality: value as typeof current.criticality,
+                }
+              : current,
+          )
+        }
+        onSlaChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current ? { ...current, sla: value } : current,
+          )
+        }
+        onRuleChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current ? { ...current, rule: value } : current,
+          )
+        }
+        onExceptionChange={(value) =>
+          props.setOperationalNodeDraft((current) =>
+            current ? { ...current, exception: value } : current,
           )
         }
         onOpenRelatedNode={props.onOpenRelatedNodeFromRelation}

@@ -78,11 +78,14 @@ describe("editor diagram mode registry", () => {
     expect(resolved.source).toBe("diagram-type");
     expect(resolved.mode.id).toBe("flow");
     expect(resolved.renderer.key).toBe("flow");
-    expect(hasEditorDiagramCapability(resolved.mode, "specialized-selection-hud")).toBe(true);
+    expect(
+      hasEditorDiagramCapability(resolved.mode, "specialized-selection-hud"),
+    ).toBe(true);
     expect(resolved.mode.inspector.kind).toBe("process");
-    expect(resolved.mode.contextualActions.getPrimarySelectionAction().insertMode).toBe(
-      "flow-next-step",
-    );
+    expect(resolved.mode.layout.reapplyStrategy).toBe("local-reflow");
+    expect(
+      resolved.mode.contextualActions.getPrimarySelectionAction().insertMode,
+    ).toBe("flow-next-step");
     expect(
       resolved.mode.layout.computeReflow({
         nodes: [
@@ -101,7 +104,7 @@ describe("editor diagram mode registry", () => {
       }),
     ).toMatchObject({
       a: { y: 0 },
-      b: { y: 280 },
+      b: { y: 358 },
     });
   });
 
@@ -114,7 +117,9 @@ describe("editor diagram mode registry", () => {
     expect(resolved.source).toBe("legacy-alias");
     expect(resolved.mode.id).toBe("graph");
     expect(resolved.renderer.key).toBe("graph");
-    expect(hasEditorDiagramCapability(resolved.mode, "graph-semantic-copy")).toBe(true);
+    expect(
+      hasEditorDiagramCapability(resolved.mode, "graph-semantic-copy"),
+    ).toBe(true);
 
     const semantic = resolved.mode.semantic.graph?.resolveNodeSemantic({
       diagramRole: "graph-core",
@@ -124,9 +129,9 @@ describe("editor diagram mode registry", () => {
     });
 
     expect(semantic?.kindLabel).toBeTruthy();
-    expect(resolved.mode.contextualActions.getPrimarySelectionAction().insertMode).toBe(
-      "graph-neighbor",
-    );
+    expect(
+      resolved.mode.contextualActions.getPrimarySelectionAction().insertMode,
+    ).toBe("graph-neighbor");
   });
 
   it("resolves ERD mode from template fallback with field and export capabilities", () => {
@@ -137,9 +142,15 @@ describe("editor diagram mode registry", () => {
     expect(resolved.source).toBe("template");
     expect(resolved.mode.id).toBe("erd");
     expect(resolved.renderer.key).toBe("erd");
-    expect(hasEditorDiagramCapability(resolved.mode, "contextual-add-field")).toBe(true);
-    expect(hasEditorDiagramCapability(resolved.mode, "erd-export-preview")).toBe(true);
-    expect(hasEditorDiagramCapability(resolved.mode, "erd-validation-controls")).toBe(true);
+    expect(
+      hasEditorDiagramCapability(resolved.mode, "contextual-add-field"),
+    ).toBe(true);
+    expect(
+      hasEditorDiagramCapability(resolved.mode, "erd-export-preview"),
+    ).toBe(true);
+    expect(
+      hasEditorDiagramCapability(resolved.mode, "erd-validation-controls"),
+    ).toBe(true);
 
     const edgePresentation = resolved.mode.render.resolveEdgePresentation({
       edgeKind: "references",
@@ -153,7 +164,9 @@ describe("editor diagram mode registry", () => {
     });
 
     expect(edgePresentation.label).toContain("1:N");
-    expect(edgePresentation.classNameTokens).toContain("editor-edge-erd-cardinality-1-n");
+    expect(edgePresentation.classNameTokens).toContain(
+      "editor-edge-erd-cardinality-1-n",
+    );
   });
 
   it("builds node relations through the resolved inspector contract for flow", () => {
@@ -182,7 +195,9 @@ describe("editor diagram mode registry", () => {
     const relations = mode.inspector.buildNodeRelations({
       selectedNode: nodes[1],
       edges,
-      nodeLabelById: new Map(nodes.map((node) => [node.id, node.data.label] as const)),
+      nodeLabelById: new Map(
+        nodes.map((node) => [node.id, node.data.label] as const),
+      ),
       nodeRoleById: new Map(
         nodes.map((node) => [node.id, node.data.diagramRole] as const),
       ),
@@ -201,7 +216,9 @@ describe("editor diagram mode registry", () => {
       expect(mode.resolveRenderer({}).key).toBe(modeId);
       expect(mode.quickAdd.getCopy().addPrimary.length).toBeGreaterThan(0);
       expect(mode.inspector.getCopy().nodeTitleLabel.length).toBeGreaterThan(0);
-      expect(mode.contextualActions.getPrimarySelectionAction().insertMode).toBeTruthy();
+      expect(
+        mode.contextualActions.getPrimarySelectionAction().insertMode,
+      ).toBeTruthy();
       expect(
         mode.layout.computeInsertPosition({
           referenceNode: null,

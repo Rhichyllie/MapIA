@@ -1,11 +1,7 @@
 import localFont from "next/font/local";
-import { NextIntlClientProvider } from "next-intl";
-import { getLocale, getMessages } from "next-intl/server";
+import { getLocale } from "next-intl/server";
 import "@xyflow/react/dist/style.css";
-import { IntlErrorHandlingProvider } from "@/src/i18n/intl-error-handling-provider";
-import { formats } from "@/src/i18n/request";
 import "./globals.css";
-import { AppProviders } from "./providers";
 
 const THEME_INIT_SCRIPT = `
 (() => {
@@ -60,7 +56,6 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const locale = await getLocale();
-  const messages = await getMessages();
 
   return (
     <html lang={locale} data-theme="light" suppressHydrationWarning>
@@ -71,11 +66,7 @@ export default async function RootLayout({
         />
       </head>
       <body className={`${manrope.variable} ${ibmPlexMono.variable}`}>
-        <NextIntlClientProvider locale={locale} messages={messages} formats={formats}>
-          <IntlErrorHandlingProvider>
-            <AppProviders>{children}</AppProviders>
-          </IntlErrorHandlingProvider>
-        </NextIntlClientProvider>
+        {children}
       </body>
     </html>
   );

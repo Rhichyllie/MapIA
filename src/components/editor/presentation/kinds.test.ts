@@ -61,16 +61,15 @@ describe("editor kinds presentation", () => {
     expect(getDefaultNodeKindForDiagram("flow")).toBe("flow-step");
     expect(getDefaultEdgeKindForDiagram("flow")).toBe("flows-to");
     expect(getContextualAddActionForDiagram("flow")).toEqual({
-      label: "Continuar fluxo",
+      label: "Adicionar proxima etapa",
       nodeKind: "flow-step",
       edgeKind: "flows-to",
     });
     expect(getContextualActionsForDiagram("flow")).toContainEqual(
       expect.objectContaining({
-        id: "flow-add-branch",
+        id: "flow-add-decision",
         type: "add-connected-node",
-        edgeKind: "depends-on",
-        edgeLabel: "Condicao",
+        edgeKind: "flows-to",
       }),
     );
     expect(getContextualActionsForDiagram("flow")).toContainEqual(
@@ -176,7 +175,7 @@ describe("editor kinds presentation", () => {
 
   it("uses process-specific contextual labels for flow semantics", () => {
     expect(getNodeKindLabelForDiagram("flow", "flow-step", "operational")).toBe(
-      "Atividade",
+      "Etapa",
     );
     expect(getNodeKindDescriptionForDiagram("flow", "note")).toContain("risco");
     expect(getEdgeKindLabelForDiagram("flow", "flows-to", "operational")).toBe(

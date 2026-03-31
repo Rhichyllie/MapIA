@@ -1,16 +1,22 @@
 import type { EdgeKind, NodeKind } from "@/src/domain";
 import {
+  getProcessRoleSemantics,
+  isProcessMainEdgeKind,
+  readProcessOperationalContextFromPayload,
   resolveFlowDiagramRole,
   type DiagramRole,
-  type FlowDiagramRole,
+  type ProcessCriticality,
+  type ProcessNodeRole as DomainProcessNodeRole,
+  type ProcessOperationalContext,
 } from "@/src/modules/diagrams/domain";
 import { translateEditor, type EditorTranslationFn } from "../editor-i18n";
 
-export type ProcessNodeRole = FlowDiagramRole;
+export type ProcessNodeRole = DomainProcessNodeRole;
 
 export type ProcessQuickActionId =
   | "flow-add-next-step"
-  | "flow-add-branch"
+  | "flow-add-decision"
+  | "flow-add-branch-path"
   | "flow-add-note";
 
 export type ProcessQuickActionDefinition = {
@@ -46,6 +52,11 @@ export type ProcessRelationPreview = {
 export type ProcessRelationsViewModel = {
   incomingCount: number;
   outgoingCount: number;
+  mainIncomingCount: number;
+  mainOutgoingCount: number;
+  namedOutgoingCount: number;
+  branchOutgoingCount: number;
+  supportingCount: number;
   summaryChips: Array<{
     id: "before" | "after" | "branch" | "note";
     label: string;
@@ -54,12 +65,19 @@ export type ProcessRelationsViewModel = {
   preview: ProcessRelationPreview[];
 };
 
+export type ProcessOperationalHighlight = {
+  id: string;
+  label: string;
+  tone: "neutral" | "attention" | "critical";
+};
+
 export type ProcessNodeOverview = {
   badgeLabel: string;
   kindLabel: string;
   summary: string;
   positionLabel: string;
   connectivityLabel: string;
+  operationalHighlights: ProcessOperationalHighlight[];
   guidance: string[];
 };
 
@@ -94,6 +112,21 @@ export type ProcessInspectorCopy = {
   nodeSubtitle: string;
   edgeSubtitle: string;
   relationsEmptyState: string;
+  ownerLabel: string;
+  ownerPlaceholder: string;
+  areaLabel: string;
+  areaPlaceholder: string;
+  channelLabel: string;
+  channelPlaceholder: string;
+  criticalityLabel: string;
+  slaLabel: string;
+  slaPlaceholder: string;
+  ruleLabel: string;
+  rulePlaceholder: string;
+  exceptionLabel: string;
+  exceptionPlaceholder: string;
+  operationsSummaryTitle: string;
+  operationsSummaryEmpty: string;
 };
 
 type ProcessRoleMeta = {
@@ -126,30 +159,41 @@ const PROCESS_EDGE_GUIDANCE_INDEXES: Record<EdgeKind, number[]> = {
   "relates-to": [0],
 };
 
-const PROCESS_QUICK_ACTIONS: Array<
+const PROCESS_ACTION_LIBRARY: Record<
+  ProcessQuickActionId,
   Omit<ProcessQuickActionDefinition, "label" | "edgeLabel">
-> = [
-  {
+> = {
+  "flow-add-next-step": {
     id: "flow-add-next-step",
     nodeKind: "flow-step",
     edgeKind: "flows-to",
   },
-  {
-    id: "flow-add-branch",
+  "flow-add-decision": {
+    id: "flow-add-decision",
+    nodeKind: "flow-step",
+    edgeKind: "flows-to",
+  },
+  "flow-add-branch-path": {
+    id: "flow-add-branch-path",
     nodeKind: "flow-step",
     edgeKind: "depends-on",
   },
-  {
+  "flow-add-note": {
     id: "flow-add-note",
     nodeKind: "note",
     edgeKind: "references",
   },
+};
+
+const DEFAULT_PROCESS_QUICK_ACTION_IDS: ProcessQuickActionId[] = [
+  "flow-add-next-step",
+  "flow-add-decision",
+  "flow-add-note",
 ];
 
 const PROCESS_QUICK_ACTION_EDGE_LABEL_IDS: Partial<
   Record<ProcessQuickActionId, string>
 > = {
-  "flow-add-branch": "process.quickActions.flow-add-branch.edgeLabel",
   "flow-add-note": "process.quickActions.flow-add-note.edgeLabel",
 };
 
@@ -183,6 +227,14 @@ function formatRelationLabel(label: string | undefined) {
   return normalized ? normalized : undefined;
 }
 
+function normalizeLabelComparison(label: string | undefined) {
+  return label
+    ?.normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
+
 function formatProcessConnectivityLabel(
   incomingCount: number,
   outgoingCount: number,
@@ -196,6 +248,129 @@ function formatProcessConnectivityLabel(
     incomingCount,
     outgoingCount,
   });
+}
+
+function buildQuickAction(
+  id: ProcessQuickActionId,
+  t?: EditorTranslationFn,
+  edgeLabel?: string,
+): ProcessQuickActionDefinition {
+  const action = PROCESS_ACTION_LIBRARY[id];
+  const defaultEdgeLabelId = PROCESS_QUICK_ACTION_EDGE_LABEL_IDS[id];
+
+  return {
+    ...action,
+    label: translateEditor(t, `process.quickActions.${id}.label`),
+    ...((edgeLabel ?? (defaultEdgeLabelId ? translateEditor(t, defaultEdgeLabelId) : undefined))
+      ? {
+          edgeLabel:
+            edgeLabel ??
+            (defaultEdgeLabelId ? translateEditor(t, defaultEdgeLabelId) : undefined),
+        }
+      : {}),
+  };
+}
+
+function buildCriticalityHighlight(
+  criticality: ProcessCriticality | undefined,
+  t?: EditorTranslationFn,
+): ProcessOperationalHighlight | null {
+  if (!criticality) {
+    return null;
+  }
+
+  return {
+    id: "criticality",
+    label: translateEditor(t, `process.operational.summary.criticality.${criticality}`),
+    tone:
+      criticality === "critical"
+        ? "critical"
+        : criticality === "high"
+          ? "attention"
+          : "neutral",
+  };
+}
+
+function buildProcessOperationalHighlights(
+  context: ProcessOperationalContext | undefined,
+  t?: EditorTranslationFn,
+) {
+  if (!context) {
+    return [] as ProcessOperationalHighlight[];
+  }
+
+  const highlights: ProcessOperationalHighlight[] = [];
+
+  if (context.owner) {
+    highlights.push({
+      id: "owner",
+      label: translateEditor(t, "process.operational.summary.owner", {
+        value: context.owner,
+      }),
+      tone: "neutral",
+    });
+  }
+
+  if (context.area) {
+    highlights.push({
+      id: "area",
+      label: translateEditor(t, "process.operational.summary.area", {
+        value: context.area,
+      }),
+      tone: "neutral",
+    });
+  }
+
+  if (context.channel) {
+    highlights.push({
+      id: "channel",
+      label: translateEditor(t, "process.operational.summary.channel", {
+        value: context.channel,
+      }),
+      tone: "neutral",
+    });
+  }
+
+  const criticalityHighlight = buildCriticalityHighlight(context.criticality, t);
+  if (criticalityHighlight) {
+    highlights.push(criticalityHighlight);
+  }
+
+  if (context.sla) {
+    highlights.push({
+      id: "sla",
+      label: translateEditor(t, "process.operational.summary.sla", {
+        value: context.sla,
+      }),
+      tone: "attention",
+    });
+  }
+
+  return highlights;
+}
+
+function resolveProcessRelationLane(input: {
+  edgeKind: EdgeKind;
+  direction: "incoming" | "outgoing";
+  otherRole?: DiagramRole;
+  selectedRole: ProcessNodeRole;
+}) {
+  if (
+    input.edgeKind === "references" ||
+    input.otherRole === "flow-note" ||
+    input.selectedRole === "flow-note"
+  ) {
+    return "note" as const;
+  }
+
+  if (
+    input.edgeKind === "depends-on" ||
+    (input.direction === "outgoing" && input.selectedRole === "flow-decision")
+  ) {
+    return "branch" as const;
+  }
+
+  return input.direction === "incoming" ? ("before" as const) : ("after" as const);
 }
 
 export function resolveProcessNodeRole(input: {
@@ -230,6 +405,25 @@ export function getProcessRoleMeta(role: ProcessNodeRole, t?: EditorTranslationF
       `process.roles.${role}.guidanceWhenConnected`,
     ),
   } satisfies ProcessRoleMeta;
+}
+
+export function resolveProcessNodeKindForRole(role: ProcessNodeRole): NodeKind {
+  return role === "flow-note" ? "note" : "flow-step";
+}
+
+export function resolveProcessNodeShapeForRole(role: ProcessNodeRole) {
+  return {
+    kind: resolveProcessNodeKindForRole(role),
+    diagramRole: role,
+  } as const;
+}
+
+export function buildDefaultProcessNodeTitle(
+  role: ProcessNodeRole,
+  nextIndex: number,
+  t?: EditorTranslationFn,
+) {
+  return `${getProcessRoleMeta(role, t).badgeLabel} ${nextIndex}`;
 }
 
 export function getProcessNodeKindCopy(kind: NodeKind, t?: EditorTranslationFn) {
@@ -271,18 +465,109 @@ export function getProcessEdgeCopy(kind: EdgeKind, t?: EditorTranslationFn) {
 }
 
 export function getProcessQuickActions(t?: EditorTranslationFn) {
-  return PROCESS_QUICK_ACTIONS.map((action) => ({
-    ...action,
-    label: translateEditor(t, `process.quickActions.${action.id}.label`),
-    ...(PROCESS_QUICK_ACTION_EDGE_LABEL_IDS[action.id]
-      ? {
-          edgeLabel: translateEditor(
-            t,
-            PROCESS_QUICK_ACTION_EDGE_LABEL_IDS[action.id]!,
-          ),
-        }
-      : {}),
-  }));
+  return DEFAULT_PROCESS_QUICK_ACTION_IDS.map((id) => buildQuickAction(id, t));
+}
+
+export function buildSuggestedProcessTransitionLabel(input: {
+  sourceRole?: ProcessNodeRole;
+  edgeKind: EdgeKind;
+  existingOutgoingLabels?: string[];
+  t?: EditorTranslationFn;
+}) {
+  if (input.sourceRole !== "flow-decision" || !isProcessMainEdgeKind(input.edgeKind)) {
+    return undefined;
+  }
+
+  const existingLabels = new Set(
+    (input.existingOutgoingLabels ?? [])
+      .map((label) => normalizeLabelComparison(label))
+      .filter((label): label is string => Boolean(label)),
+  );
+  const candidateLabels = [
+    translateEditor(input.t, "process.branchLabels.yes"),
+    translateEditor(input.t, "process.branchLabels.no"),
+    translateEditor(input.t, "process.branchLabels.exception"),
+    translateEditor(input.t, "process.branchLabels.manualReview"),
+  ];
+
+  for (const candidate of candidateLabels) {
+    const normalizedCandidate = normalizeLabelComparison(candidate);
+    if (!normalizedCandidate || !existingLabels.has(normalizedCandidate)) {
+      return candidate;
+    }
+  }
+
+  return translateEditor(input.t, "process.branchLabels.alternative", {
+    index: existingLabels.size + 1,
+  });
+}
+
+export function resolveDefaultProcessEdgeLabel(input: {
+  sourceRole?: ProcessNodeRole;
+  edgeKind: EdgeKind;
+  existingOutgoingLabels?: string[];
+  t?: EditorTranslationFn;
+}) {
+  if (input.edgeKind === "references") {
+    return undefined;
+  }
+
+  return buildSuggestedProcessTransitionLabel({
+    sourceRole: input.sourceRole,
+    edgeKind: input.edgeKind,
+    existingOutgoingLabels: input.existingOutgoingLabels,
+    t: input.t,
+  });
+}
+
+export function resolveProcessSelectionQuickActions(input: {
+  selectedRole: ProcessNodeRole;
+  existingOutgoingLabels?: string[];
+  t?: EditorTranslationFn;
+}) {
+  if (input.selectedRole === "flow-decision") {
+    return [
+      {
+        ...buildQuickAction(
+          "flow-add-branch-path",
+          input.t,
+          buildSuggestedProcessTransitionLabel({
+            sourceRole: input.selectedRole,
+            edgeKind: "depends-on",
+            existingOutgoingLabels: input.existingOutgoingLabels,
+            t: input.t,
+          }),
+        ),
+        label: translateEditor(input.t, "process.quickActions.flow-add-branch-path.fromDecisionLabel"),
+      },
+      {
+        ...buildQuickAction("flow-add-note", input.t),
+        label: translateEditor(input.t, "process.quickActions.flow-add-note.fromDecisionLabel"),
+      },
+    ];
+  }
+
+  if (input.selectedRole === "flow-end") {
+    return [
+      {
+        ...buildQuickAction("flow-add-note", input.t),
+        label: translateEditor(input.t, "process.quickActions.flow-add-note.fromEndLabel"),
+      },
+    ];
+  }
+
+  if (input.selectedRole === "flow-start") {
+    return [
+      {
+        ...buildQuickAction("flow-add-next-step", input.t),
+        label: translateEditor(input.t, "process.quickActions.flow-add-next-step.fromStartLabel"),
+      },
+      buildQuickAction("flow-add-decision", input.t),
+      buildQuickAction("flow-add-note", input.t),
+    ];
+  }
+
+  return getProcessQuickActions(input.t);
 }
 
 export function getProcessQuickAddRoleOptions(t?: EditorTranslationFn) {
@@ -291,6 +576,31 @@ export function getProcessQuickAddRoleOptions(t?: EditorTranslationFn) {
     label: translateEditor(t, `process.quickAddRoles.${option.role}.label`),
     description: translateEditor(t, `process.quickAddRoles.${option.role}.description`),
   }));
+}
+
+export function getProcessCriticalityOptions(t?: EditorTranslationFn) {
+  return [
+    {
+      value: "",
+      label: translateEditor(t, "process.operational.criticalityOptions.none"),
+    },
+    {
+      value: "low",
+      label: translateEditor(t, "process.operational.criticalityOptions.low"),
+    },
+    {
+      value: "medium",
+      label: translateEditor(t, "process.operational.criticalityOptions.medium"),
+    },
+    {
+      value: "high",
+      label: translateEditor(t, "process.operational.criticalityOptions.high"),
+    },
+    {
+      value: "critical",
+      label: translateEditor(t, "process.operational.criticalityOptions.critical"),
+    },
+  ] as const;
 }
 
 export function getProcessInspectorCopy(t?: EditorTranslationFn) {
@@ -324,6 +634,21 @@ export function getProcessInspectorCopy(t?: EditorTranslationFn) {
     nodeSubtitle: translateEditor(t, "process.inspector.nodeSubtitle"),
     edgeSubtitle: translateEditor(t, "process.inspector.edgeSubtitle"),
     relationsEmptyState: translateEditor(t, "process.inspector.relationsEmptyState"),
+    ownerLabel: translateEditor(t, "process.inspector.ownerLabel"),
+    ownerPlaceholder: translateEditor(t, "process.inspector.ownerPlaceholder"),
+    areaLabel: translateEditor(t, "process.inspector.areaLabel"),
+    areaPlaceholder: translateEditor(t, "process.inspector.areaPlaceholder"),
+    channelLabel: translateEditor(t, "process.inspector.channelLabel"),
+    channelPlaceholder: translateEditor(t, "process.inspector.channelPlaceholder"),
+    criticalityLabel: translateEditor(t, "process.inspector.criticalityLabel"),
+    slaLabel: translateEditor(t, "process.inspector.slaLabel"),
+    slaPlaceholder: translateEditor(t, "process.inspector.slaPlaceholder"),
+    ruleLabel: translateEditor(t, "process.inspector.ruleLabel"),
+    rulePlaceholder: translateEditor(t, "process.inspector.rulePlaceholder"),
+    exceptionLabel: translateEditor(t, "process.inspector.exceptionLabel"),
+    exceptionPlaceholder: translateEditor(t, "process.inspector.exceptionPlaceholder"),
+    operationsSummaryTitle: translateEditor(t, "process.inspector.operationsSummaryTitle"),
+    operationsSummaryEmpty: translateEditor(t, "process.inspector.operationsSummaryEmpty"),
   } satisfies ProcessInspectorCopy;
 }
 
@@ -332,14 +657,16 @@ export function buildProcessNodeOverview(input: {
   incomingCount: number;
   outgoingCount: number;
   relations: ProcessRelationsViewModel;
+  operationalContext?: ProcessOperationalContext;
 }, t?: EditorTranslationFn) {
   const meta = getProcessRoleMeta(input.role, t);
+  const semantics = getProcessRoleSemantics(input.role);
   const hasAnyRelation = input.incomingCount + input.outgoingCount > 0;
-  const branchCount =
-    input.relations.summaryChips.find((chip) => chip.id === "branch")?.count ?? 0;
-  const noteCount =
-    input.relations.summaryChips.find((chip) => chip.id === "note")?.count ?? 0;
   const guidance: string[] = [];
+  const operationalHighlights = buildProcessOperationalHighlights(
+    input.operationalContext,
+    t,
+  );
 
   if (!hasAnyRelation) {
     guidance.push(meta.guidanceWhenSparse);
@@ -347,39 +674,66 @@ export function buildProcessNodeOverview(input: {
     guidance.push(meta.guidanceWhenConnected);
   }
 
-  if (input.role === "flow-decision" && branchCount < 2) {
+  if (
+    semantics.mainFlow.minIncoming > 0 &&
+    input.relations.mainIncomingCount < semantics.mainFlow.minIncoming
+  ) {
+    guidance.push(translateEditor(t, "process.guidance.needsIncomingPath"));
+  }
+
+  if (
+    semantics.mainFlow.minOutgoing > 0 &&
+    input.relations.mainOutgoingCount < semantics.mainFlow.minOutgoing
+  ) {
     guidance.push(
-      translateEditor(
-        t,
-        "process.guidance.decisionNeedsPaths",
-      ),
+      input.role === "flow-decision"
+        ? translateEditor(t, "process.guidance.decisionNeedsPaths")
+        : input.role === "flow-start"
+          ? translateEditor(t, "process.guidance.startNeedsNext")
+          : translateEditor(t, "process.guidance.stepNeedsNext"),
     );
   }
 
-  if (input.role === "flow-note" && noteCount === 0) {
+  if (
+    input.role === "flow-decision" &&
+    input.relations.namedOutgoingCount < Math.min(input.relations.mainOutgoingCount, 2)
+  ) {
     guidance.push(
-      translateEditor(
-        t,
-        "process.guidance.noteNeedsAnchor",
-      ),
+      translateEditor(t, "process.guidance.decisionNeedsNamedPaths"),
     );
   }
 
-  if (input.role === "flow-end" && input.outgoingCount > 0) {
+  if (input.role === "flow-note" && input.relations.supportingCount === 0) {
     guidance.push(
-      translateEditor(
-        t,
-        "process.guidance.endShouldTerminate",
-      ),
+      translateEditor(t, "process.guidance.noteNeedsAnchor"),
     );
   }
 
-  if (input.role === "flow-start" && input.incomingCount > 0) {
+  if (input.role === "flow-end" && input.relations.mainOutgoingCount > 0) {
     guidance.push(
-      translateEditor(
-        t,
-        "process.guidance.startHasIncoming",
-      ),
+      translateEditor(t, "process.guidance.endShouldTerminate"),
+    );
+  }
+
+  if (input.role === "flow-start" && input.relations.mainIncomingCount > 0) {
+    guidance.push(
+      translateEditor(t, "process.guidance.startHasIncoming"),
+    );
+  }
+
+  if (
+    input.role !== "flow-decision" &&
+    semantics.mainFlow.maxOutgoing !== null &&
+    input.relations.mainOutgoingCount > semantics.mainFlow.maxOutgoing
+  ) {
+    guidance.push(
+      translateEditor(t, "process.guidance.multipleOutputsNeedDecision"),
+    );
+  }
+
+  if (operationalHighlights.length === 0) {
+    guidance.push(
+      translateEditor(t, "process.guidance.addOperationalContext"),
     );
   }
 
@@ -388,15 +742,16 @@ export function buildProcessNodeOverview(input: {
     kindLabel: meta.kindLabel,
     summary: meta.summary,
     positionLabel:
-      hasAnyRelation && input.incomingCount > 0
+      input.relations.mainIncomingCount + input.relations.mainOutgoingCount > 0
         ? meta.positionConnectedLabel
         : meta.positionEmptyLabel,
     connectivityLabel: formatProcessConnectivityLabel(
-      input.incomingCount,
-      input.outgoingCount,
+      input.relations.mainIncomingCount,
+      input.relations.mainOutgoingCount,
       t,
     ),
-    guidance,
+    operationalHighlights,
+    guidance: [...new Set(guidance)],
   } satisfies ProcessNodeOverview;
 }
 
@@ -452,6 +807,52 @@ export function buildProcessRelationsViewModel(input: {
   });
   const incoming = input.edges.filter((edge) => edge.target === input.selectedNodeId);
   const outgoing = input.edges.filter((edge) => edge.source === input.selectedNodeId);
+  const allRelations = [...incoming, ...outgoing].map((edge) => {
+    const direction = edge.target === input.selectedNodeId ? "incoming" : "outgoing";
+    const otherNodeId =
+      direction === "incoming" ? edge.source : edge.target;
+    const otherLabel =
+      input.nodeLabelById.get(otherNodeId) ??
+      translateEditor(t, "process.fallbacks.untitledItem");
+    const sourceLabel = input.nodeLabelById.get(edge.source) ?? edge.source;
+    const targetLabel = input.nodeLabelById.get(edge.target) ?? edge.target;
+    const otherRole =
+      direction === "incoming" ? edge.sourceRole : edge.targetRole;
+    const lane = resolveProcessRelationLane({
+      edgeKind: edge.edgeKind,
+      direction,
+      otherRole,
+      selectedRole,
+    });
+    const edgeMeta = getProcessEdgeCopy(edge.edgeKind, t);
+    const relationLabel = formatRelationLabel(edge.label ?? undefined);
+
+    return {
+      id: edge.id,
+      edgeKind: edge.edgeKind,
+      otherNodeId,
+      otherLabel,
+      sourceLabel,
+      targetLabel,
+      direction,
+      lane,
+      laneLabel:
+        lane === "before"
+          ? translateEditor(t, "process.lanes.before")
+          : lane === "after"
+            ? translateEditor(t, "process.lanes.after")
+            : lane === "branch"
+              ? translateEditor(t, "process.lanes.branch")
+              : translateEditor(t, "process.lanes.note"),
+      transitionLabel:
+        direction === "incoming"
+          ? edgeMeta.incomingLaneLabel
+          : edgeMeta.outgoingLaneLabel,
+      supportingLabel: edgeMeta.supportingLabel,
+      ...(relationLabel ? { relationLabel } : {}),
+    } satisfies ProcessRelationPreview;
+  });
+
   const counters = {
     before: 0,
     after: 0,
@@ -459,69 +860,9 @@ export function buildProcessRelationsViewModel(input: {
     note: 0,
   };
 
-  const preview = [...incoming, ...outgoing]
-    .slice(0, input.limit ?? 6)
-    .map((edge) => {
-      const direction = edge.target === input.selectedNodeId ? "incoming" : "outgoing";
-      const otherNodeId =
-        direction === "incoming" ? edge.source : edge.target;
-      const otherLabel =
-        input.nodeLabelById.get(otherNodeId) ??
-        translateEditor(t, "process.fallbacks.untitledItem");
-      const sourceLabel = input.nodeLabelById.get(edge.source) ?? edge.source;
-      const targetLabel = input.nodeLabelById.get(edge.target) ?? edge.target;
-      const otherRole =
-        direction === "incoming" ? edge.sourceRole : edge.targetRole;
-
-      let lane: ProcessRelationPreview["lane"];
-      if (
-        edge.edgeKind === "references" ||
-        otherRole === "flow-note" ||
-        selectedRole === "flow-note"
-      ) {
-        lane = "note";
-      } else if (
-        edge.edgeKind === "depends-on" ||
-        otherRole === "flow-decision" ||
-        selectedRole === "flow-decision"
-      ) {
-        lane = "branch";
-      } else if (direction === "incoming") {
-        lane = "before";
-      } else {
-        lane = "after";
-      }
-
-      counters[lane] += 1;
-
-      const edgeMeta = getProcessEdgeCopy(edge.edgeKind, t);
-      const relationLabel = formatRelationLabel(edge.label ?? undefined);
-
-      return {
-        id: edge.id,
-        edgeKind: edge.edgeKind,
-        otherNodeId,
-        otherLabel,
-        sourceLabel,
-        targetLabel,
-        direction,
-        lane,
-        laneLabel:
-          lane === "before"
-            ? translateEditor(t, "process.lanes.before")
-            : lane === "after"
-              ? translateEditor(t, "process.lanes.after")
-              : lane === "branch"
-                ? translateEditor(t, "process.lanes.branch")
-                : translateEditor(t, "process.lanes.note"),
-        transitionLabel:
-          direction === "incoming"
-            ? edgeMeta.incomingLaneLabel
-            : edgeMeta.outgoingLaneLabel,
-        supportingLabel: edgeMeta.supportingLabel,
-        ...(relationLabel ? { relationLabel } : {}),
-      } satisfies ProcessRelationPreview;
-    });
+  for (const relation of allRelations) {
+    counters[relation.lane] += 1;
+  }
 
   const summaryChips = [
     {
@@ -549,7 +890,24 @@ export function buildProcessRelationsViewModel(input: {
   return {
     incomingCount: incoming.length,
     outgoingCount: outgoing.length,
+    mainIncomingCount: incoming.filter((edge) => isProcessMainEdgeKind(edge.edgeKind)).length,
+    mainOutgoingCount: outgoing.filter((edge) => isProcessMainEdgeKind(edge.edgeKind)).length,
+    namedOutgoingCount: outgoing.filter(
+      (edge) => isProcessMainEdgeKind(edge.edgeKind) && Boolean(formatRelationLabel(edge.label ?? undefined)),
+    ).length,
+    branchOutgoingCount: outgoing.filter(
+      (edge) =>
+        edge.edgeKind === "depends-on" ||
+        (selectedRole === "flow-decision" && isProcessMainEdgeKind(edge.edgeKind)),
+    ).length,
+    supportingCount: allRelations.filter((relation) => relation.lane === "note").length,
     summaryChips,
-    preview,
+    preview: allRelations.slice(0, input.limit ?? 6),
   } satisfies ProcessRelationsViewModel;
+}
+
+export function readProcessOperationalContext(
+  payload: Record<string, unknown> | undefined,
+) {
+  return readProcessOperationalContextFromPayload(payload);
 }

@@ -13,6 +13,7 @@ import {
   validateNodeKindChange,
   type SemanticEngineOptions,
   type SemanticMode,
+  type SemanticViolation,
 } from "@/src/modules/semantics/domain";
 import type {
   SemanticEventLogRepository,
@@ -477,100 +478,184 @@ async function enforceCommandSemantics(input: {
     }
 
     case "updateNode": {
-      if (!command.patch.kind) {
-        return;
-      }
-
       const currentNode = input.snapshot.nodes.find(
         (node) => node.id === command.nodeId,
       );
 
-      if (!currentNode || currentNode.kind === command.patch.kind) {
+      if (!currentNode) {
         return;
       }
 
-      const validation = validateNodeKindChange({
-        diagramType,
-        // Technical mode only permits an explicit override at backend level.
-        // Validation itself stays strict so 409/422 is deterministic.
-        mode: "operational",
-        nodeId: command.nodeId,
-        nextKind: command.patch.kind,
-        nodes: input.snapshot.nodes.map((node) => ({
-          id: node.id,
-          kind: node.kind,
-          label: node.label,
-          payload: node.data,
-        })),
-        edges: input.snapshot.edges.map((edge) => ({
-          id: edge.id,
-          sourceNodeId: edge.sourceNodeId,
-          targetNodeId: edge.targetNodeId,
-          kind: edge.kind,
-          label: edge.label,
-          payload: edge.data,
-        })),
-      }, engineOptions);
+      if (command.patch.kind && currentNode.kind !== command.patch.kind) {
+        const validation = validateNodeKindChange({
+          diagramType,
+          // Technical mode only permits an explicit override at backend level.
+          // Validation itself stays strict so 409/422 is deterministic.
+          mode: "operational",
+          nodeId: command.nodeId,
+          nextKind: command.patch.kind,
+          nodes: input.snapshot.nodes.map((node) => ({
+            id: node.id,
+            kind: node.kind,
+            label: node.label,
+            payload: node.data,
+          })),
+          edges: input.snapshot.edges.map((edge) => ({
+            id: edge.id,
+            sourceNodeId: edge.sourceNodeId,
+            targetNodeId: edge.targetNodeId,
+            kind: edge.kind,
+            label: edge.label,
+            payload: edge.data,
+          })),
+        }, engineOptions);
 
-      if (validation.violations.length === 0) {
-        return;
+        if (validation.violations.length > 0) {
+          if (canOverride) {
+            await appendSemanticEvent(input.deps, {
+              projectId: input.projectId,
+              actorIdentity: input.actorIdentity,
+              eventType: "semantic_override_applied",
+              severity: "warning",
+              payloadJson: {
+                mode: input.mode,
+                commandType: command.type,
+                reason: overrideReason,
+                violations: validation.violations,
+              },
+            });
+            return;
+          }
+
+          const hasRepairPlan =
+            Boolean(validation.repairPlan) &&
+            (validation.repairPlan?.actions.length ?? 0) > 0;
+
+          await appendSemanticEvent(input.deps, {
+            projectId: input.projectId,
+            actorIdentity: input.actorIdentity,
+            eventType: "semantic_violation_blocked",
+            severity: "error",
+            payloadJson: {
+              mode: input.mode,
+              commandType: command.type,
+              violations: validation.violations,
+              repairPlan: validation.repairPlan,
+            },
+          });
+
+          if (hasRepairPlan) {
+            throw new AppError("Alteracao exige reparo semantico antes de aplicar.", {
+              code: "REPAIR_REQUIRED",
+              status: 409,
+              details: {
+                repairPlan: validation.repairPlan,
+                violations: validation.violations,
+                overrideAllowed: policy.allowTechOverride,
+                requireOverrideReason: policy.requireOverrideReason,
+              },
+            });
+          }
+
+          throw new AppError("Alteracao de tipo viola regras semanticas do diagrama.", {
+            code: "SEMANTIC_VIOLATION",
+            status: 422,
+            details: {
+              violations: validation.violations,
+              overrideAllowed: policy.allowTechOverride,
+              requireOverrideReason: policy.requireOverrideReason,
+            },
+          });
+        }
       }
 
-      if (canOverride) {
-        await appendSemanticEvent(input.deps, {
-          projectId: input.projectId,
-          actorIdentity: input.actorIdentity,
-          eventType: "semantic_override_applied",
-          severity: "warning",
-          payloadJson: {
-            mode: input.mode,
-            commandType: command.type,
-            reason: overrideReason,
-            violations: validation.violations,
-          },
-        });
-        return;
+      if (
+        diagramType === "flow" &&
+        (command.patch.kind !== undefined ||
+          command.patch.label !== undefined ||
+          command.patch.data !== undefined)
+      ) {
+        const projectedSnapshot = applyEditorCommandToSnapshot(
+          input.snapshot,
+          input.projectId,
+          command,
+        );
+        const nodeById = new Map(
+          projectedSnapshot.nodes.map((node) => [
+            node.id,
+            {
+              id: node.id,
+              kind: node.kind,
+              label: node.label,
+              payload: node.data,
+            },
+          ] as const),
+        );
+        const relatedViolations = projectedSnapshot.edges
+          .filter(
+            (edge) =>
+              edge.sourceNodeId === command.nodeId || edge.targetNodeId === command.nodeId,
+          )
+          .map((edge) =>
+            validateEdgeCreation(
+              {
+                diagramType,
+                mode: "operational",
+                sourceNode: nodeById.get(edge.sourceNodeId),
+                targetNode: nodeById.get(edge.targetNodeId),
+                edgeKind: edge.kind,
+              },
+              engineOptions,
+            ).violation,
+          )
+          .filter((violation): violation is SemanticViolation => Boolean(violation));
+
+        if (relatedViolations.length > 0) {
+          if (canOverride) {
+            await appendSemanticEvent(input.deps, {
+              projectId: input.projectId,
+              actorIdentity: input.actorIdentity,
+              eventType: "semantic_override_applied",
+              severity: "warning",
+              payloadJson: {
+                mode: input.mode,
+                commandType: command.type,
+                reason: overrideReason,
+                violations: relatedViolations,
+              },
+            });
+            return;
+          }
+
+          await appendSemanticEvent(input.deps, {
+            projectId: input.projectId,
+            actorIdentity: input.actorIdentity,
+            eventType: "semantic_violation_blocked",
+            severity: "error",
+            payloadJson: {
+              mode: input.mode,
+              commandType: command.type,
+              violations: relatedViolations,
+            },
+          });
+
+          throw new AppError(
+            relatedViolations[0]?.message ??
+              "Alteracao deixa ligacoes do processo inconsistentes.",
+            {
+              code: "SEMANTIC_VIOLATION",
+              status: 422,
+              details: {
+                violations: relatedViolations,
+                overrideAllowed: policy.allowTechOverride,
+                requireOverrideReason: policy.requireOverrideReason,
+              },
+            },
+          );
+        }
       }
 
-      const hasRepairPlan =
-        Boolean(validation.repairPlan) &&
-        (validation.repairPlan?.actions.length ?? 0) > 0;
-
-      await appendSemanticEvent(input.deps, {
-        projectId: input.projectId,
-        actorIdentity: input.actorIdentity,
-        eventType: "semantic_violation_blocked",
-        severity: "error",
-        payloadJson: {
-          mode: input.mode,
-          commandType: command.type,
-          violations: validation.violations,
-          repairPlan: validation.repairPlan,
-        },
-      });
-
-      if (hasRepairPlan) {
-        throw new AppError("Alteracao exige reparo semantico antes de aplicar.", {
-          code: "REPAIR_REQUIRED",
-          status: 409,
-          details: {
-            repairPlan: validation.repairPlan,
-            violations: validation.violations,
-            overrideAllowed: policy.allowTechOverride,
-            requireOverrideReason: policy.requireOverrideReason,
-          },
-        });
-      }
-
-      throw new AppError("Alteracao de tipo viola regras semanticas do diagrama.", {
-        code: "SEMANTIC_VIOLATION",
-        status: 422,
-        details: {
-          violations: validation.violations,
-          overrideAllowed: policy.allowTechOverride,
-          requireOverrideReason: policy.requireOverrideReason,
-        },
-      });
+      return;
     }
 
     default:

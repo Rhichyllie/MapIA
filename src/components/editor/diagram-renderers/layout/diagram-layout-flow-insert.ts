@@ -2,6 +2,7 @@ import type { DiagramLayoutNode } from "./diagram-layout";
 import {
   FLOW_INSERT_LAYOUT,
   readFlowInsertNodeDescriptor,
+  resolveBalancedFlowLane,
   resolveFlowDirection,
   resolveFlowInsertMode,
   resolveFlowLogicalFootprint,
@@ -49,20 +50,28 @@ function resolveFlowInsertionSlot(input: {
         anchorFootprint.primarySpan * 0.68,
         FLOW_INSERT_LAYOUT.branchForwardOffset + anchorFootprint.primarySpan * 0.4,
       );
-    const baseSecondary =
-      anchorLogicalPosition.secondary +
-      anchorFootprint.secondarySpan +
-      FLOW_INSERT_LAYOUT.branchSecondaryGap;
+    const baseSecondary = alignFlowSecondaryStarts({
+      anchorPosition: anchorLogicalPosition,
+      anchorFootprint,
+      targetFootprint,
+    });
     const columnStep =
       Math.max(targetFootprint.primarySpan * 0.72, FLOW_INSERT_LAYOUT.branchColumnGap);
-    const laneStep =
-      targetFootprint.secondarySpan + FLOW_INSERT_LAYOUT.branchLaneGap;
+    const initialOffset =
+      Math.max(anchorFootprint.secondarySpan, targetFootprint.secondarySpan) / 2 +
+      FLOW_INSERT_LAYOUT.branchSecondaryGap;
+    const laneStep = targetFootprint.secondarySpan + FLOW_INSERT_LAYOUT.branchLaneGap;
 
     for (let lane = 0; lane < 4; lane += 1) {
+      const laneValue = resolveBalancedFlowLane(lane);
+      const secondaryOffset =
+        Math.sign(laneValue) *
+        (initialOffset + (Math.abs(laneValue) - 1) * laneStep);
+
       for (let column = 0; column < 3; column += 1) {
         candidates.push({
           primary: basePrimary + column * columnStep,
-          secondary: baseSecondary + lane * laneStep,
+          secondary: baseSecondary + secondaryOffset,
         });
       }
     }

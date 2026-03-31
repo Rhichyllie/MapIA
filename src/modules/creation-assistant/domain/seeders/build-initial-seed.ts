@@ -1,5 +1,9 @@
 import type { EdgeKind, GraphSnapshot, NodeKind } from "@/src/domain";
-import { resolveGraphEdgeSemantic } from "@/src/modules/diagrams/domain";
+import {
+  resolveGraphEdgeSemantic,
+  writeDiagramRoleToPayload,
+  type DiagramRole,
+} from "@/src/modules/diagrams/domain";
 import type {
   AssistantCreationSettings,
   AssistantDraft,
@@ -112,6 +116,19 @@ function appendTimestampFields(
       flags: ["NOT_NULL"],
     },
   ];
+}
+
+function buildSeedPayload(input: {
+  role?: DiagramRole;
+  data?: Record<string, unknown>;
+}) {
+  const baseData = { ...(input.data ?? {}) };
+
+  if (!input.role) {
+    return baseData;
+  }
+
+  return writeDiagramRoleToPayload(baseData, input.role);
 }
 
 function seedErdBasicTemplate(
@@ -288,15 +305,46 @@ function seedFlow(input: {
   const direction = input.settings.context.flow?.direction ?? "left-right";
   const shouldCreateStartEnd = input.settings.context.flow?.autoCreateStartEnd ?? true;
   const shouldAllowDecisions = input.settings.context.flow?.allowDecisions ?? true;
+  const allowMultipleOutputs =
+    input.settings.context.flow?.allowMultipleOutputs ?? false;
+  const resolveFlowPosition = (column: number, lane = 0) =>
+    direction === "top-down"
+      ? { x: 220 + lane * 250, y: 120 + column * 180 }
+      : { x: 140 + column * 270, y: 180 + lane * 220 };
+  const firstMainColumn = shouldCreateStartEnd ? 1 : 0;
 
-  const stepNodeId = input.builder.addNode({
+  const intakeStepId = input.builder.addNode({
     kind: "flow-step",
-    label: "Etapa 1",
-    position: direction === "top-down" ? { x: 220, y: 280 } : { x: 360, y: 180 },
-    data: {
+    label: "Receber solicitacao",
+    position: resolveFlowPosition(firstMainColumn),
+    data: buildSeedPayload({
       role: "flow-step",
-    },
+      data: {
+        description: "Registro inicial do pedido, caso ou demanda que entra no processo.",
+      },
+    }),
   });
+
+  let analysisStepId = intakeStepId;
+  if (shouldAllowDecisions) {
+    analysisStepId = input.builder.addNode({
+      kind: "flow-step",
+      label: "Analisar solicitacao",
+      position: resolveFlowPosition(firstMainColumn + 1),
+      data: buildSeedPayload({
+        role: "flow-step",
+        data: {
+          description: "Confere informacoes, contexto e criterios antes da proxima passagem.",
+        },
+      }),
+    });
+
+    input.builder.addEdge({
+      sourceNodeId: intakeStepId,
+      targetNodeId: analysisStepId,
+      kind: "flows-to",
+    });
+  }
 
   let startId: string | undefined;
   let endId: string | undefined;
@@ -304,27 +352,28 @@ function seedFlow(input: {
     startId = input.builder.addNode({
       kind: "flow-step",
       label: "Inicio",
-      position: direction === "top-down" ? { x: 220, y: 120 } : { x: 120, y: 180 },
-      data: {
+      position: resolveFlowPosition(0),
+      data: buildSeedPayload({
         role: "flow-start",
-      },
+        data: {
+          description: "Ponto que abre este percurso operacional.",
+        },
+      }),
     });
     endId = input.builder.addNode({
       kind: "flow-step",
-      label: "Fim",
-      position: direction === "top-down" ? { x: 220, y: 440 } : { x: 600, y: 180 },
-      data: {
+      label: "Encerrar processo",
+      position: resolveFlowPosition(shouldAllowDecisions ? firstMainColumn + 4 : firstMainColumn + 2),
+      data: buildSeedPayload({
         role: "flow-end",
-      },
+        data: {
+          description: "Resultado final esperado para este fluxo inicial.",
+        },
+      }),
     });
     input.builder.addEdge({
       sourceNodeId: startId,
-      targetNodeId: stepNodeId,
-      kind: "flows-to",
-    });
-    input.builder.addEdge({
-      sourceNodeId: stepNodeId,
-      targetNodeId: endId,
+      targetNodeId: intakeStepId,
       kind: "flows-to",
     });
   }
@@ -332,32 +381,158 @@ function seedFlow(input: {
   if (shouldAllowDecisions) {
     const decisionId = input.builder.addNode({
       kind: "flow-step",
-      label: "Decisao",
-      position:
-        direction === "top-down"
-          ? { x: 430, y: 280 }
-          : { x: 360, y: 360 },
-      data: {
+      label: "Aprovacao necessaria?",
+      position: resolveFlowPosition(firstMainColumn + 2),
+      data: buildSeedPayload({
         role: "flow-decision",
-        allowMultipleOutputs:
-          input.settings.context.flow?.allowMultipleOutputs ?? false,
-      },
+        data: {
+          description: "Define se o processo segue direto ou passa por aprovacao.",
+          allowMultipleOutputs,
+        },
+      }),
+    });
+    const executionStepId = input.builder.addNode({
+      kind: "flow-step",
+      label: "Executar atendimento",
+      position: resolveFlowPosition(firstMainColumn + 3),
+      data: buildSeedPayload({
+        role: "flow-step",
+        data: {
+          description: "Realiza a entrega principal depois da analise ou aprovacao.",
+        },
+      }),
+    });
+    const approvalStepId = input.builder.addNode({
+      kind: "flow-step",
+      label: "Solicitar aprovacao",
+      position: resolveFlowPosition(firstMainColumn + 3, 1),
+      data: buildSeedPayload({
+        role: "flow-step",
+        data: {
+          description: "Encaminha a decisao para a pessoa ou area responsavel.",
+        },
+      }),
+    });
+    const noteId = input.builder.addNode({
+      kind: "note",
+      label: "Criterio de aprovacao",
+      position: resolveFlowPosition(firstMainColumn + 2, -1),
+      data: buildSeedPayload({
+        role: "flow-note",
+        data: {
+          description: "Use esta observacao para registrar regra, SLA ou excecao.",
+        },
+      }),
     });
 
     input.builder.addEdge({
-      sourceNodeId: stepNodeId,
+      sourceNodeId: analysisStepId,
       targetNodeId: decisionId,
-      kind: "depends-on",
-      label: "decisao",
+      kind: "flows-to",
     });
-    if (endId) {
+    input.builder.addEdge({
+      sourceNodeId: decisionId,
+      targetNodeId: executionStepId,
+      kind: "flows-to",
+      label: "Nao",
+    });
+    input.builder.addEdge({
+      sourceNodeId: decisionId,
+      targetNodeId: approvalStepId,
+      kind: "depends-on",
+      label: "Sim",
+    });
+    input.builder.addEdge({
+      sourceNodeId: approvalStepId,
+      targetNodeId: executionStepId,
+      kind: "flows-to",
+      label: "Aprovado",
+    });
+    input.builder.addEdge({
+      sourceNodeId: noteId,
+      targetNodeId: decisionId,
+      kind: "references",
+      label: "Regra",
+    });
+
+    if (allowMultipleOutputs) {
+      const escalationStepId = input.builder.addNode({
+        kind: "flow-step",
+        label: "Acionar area responsavel",
+        position: resolveFlowPosition(firstMainColumn + 3, 2),
+        data: buildSeedPayload({
+          role: "flow-step",
+          data: {
+            description: "Demonstra um caminho adicional quando o processo exige escalonamento.",
+          },
+        }),
+      });
+
       input.builder.addEdge({
         sourceNodeId: decisionId,
-        targetNodeId: endId,
+        targetNodeId: escalationStepId,
+        kind: "depends-on",
+        label: "Escalonar",
+      });
+      input.builder.addEdge({
+        sourceNodeId: escalationStepId,
+        targetNodeId: executionStepId,
         kind: "flows-to",
-        label: "continua",
+        label: "Retorna",
       });
     }
+
+    if (endId) {
+      input.builder.addEdge({
+        sourceNodeId: executionStepId,
+        targetNodeId: endId,
+        kind: "flows-to",
+      });
+    }
+    return;
+  }
+
+  const executionStepId = input.builder.addNode({
+    kind: "flow-step",
+    label: "Executar atividade",
+    position: resolveFlowPosition(firstMainColumn + 1),
+    data: buildSeedPayload({
+      role: "flow-step",
+      data: {
+        description: "Representa a principal entrega deste fluxo inicial.",
+      },
+    }),
+  });
+  const noteId = input.builder.addNode({
+    kind: "note",
+    label: "Observacao de apoio",
+    position: resolveFlowPosition(firstMainColumn + 1, -1),
+    data: buildSeedPayload({
+      role: "flow-note",
+      data: {
+        description: "Use para registrar contexto, risco, SLA ou excecao relevante.",
+      },
+    }),
+  });
+
+  input.builder.addEdge({
+    sourceNodeId: intakeStepId,
+    targetNodeId: executionStepId,
+    kind: "flows-to",
+  });
+  input.builder.addEdge({
+    sourceNodeId: noteId,
+    targetNodeId: executionStepId,
+    kind: "references",
+    label: "Apoio",
+  });
+
+  if (endId) {
+    input.builder.addEdge({
+      sourceNodeId: executionStepId,
+      targetNodeId: endId,
+      kind: "flows-to",
+    });
   }
 }
 
@@ -375,10 +550,12 @@ function seedSitemap(input: {
         kind: "page",
         label: "Home",
         position: { x: 200, y: 120 },
-        data: {
+        data: buildSeedPayload({
           role: "sitemap-home",
-          showNavDepth: input.settings.context.sitemap?.showNavDepth ?? true,
-        },
+          data: {
+            showNavDepth: input.settings.context.sitemap?.showNavDepth ?? true,
+          },
+        }),
       })
     : undefined;
 
@@ -392,9 +569,9 @@ function seedSitemap(input: {
       kind: "page",
       label: section,
       position: { x: 60 + index * 220, y: 320 },
-      data: {
+      data: buildSeedPayload({
         role: "sitemap-section",
-      },
+      }),
     });
 
     if (homeId) {
@@ -428,10 +605,12 @@ function seedHierarchy(input: {
     kind: "page",
     label: rootLabel,
     position: { x: 220, y: 120 },
-    data: {
+    data: buildSeedPayload({
       role: "hierarchy-root",
-      direction,
-    },
+      data: {
+        direction,
+      },
+    }),
   });
 
   for (let level = 1; level <= depth; level += 1) {
@@ -442,10 +621,12 @@ function seedHierarchy(input: {
         direction === "left-right"
           ? { x: 220 + level * 240, y: 120 }
           : { x: 220, y: 120 + level * 180 },
-      data: {
+      data: buildSeedPayload({
         role: "hierarchy-node",
-        level,
-      },
+        data: {
+          level,
+        },
+      }),
     });
     input.builder.addEdge({
       sourceNodeId: level === 1 ? rootId : input.builder.nodes[input.builder.nodes.length - 2].id,
@@ -470,11 +651,13 @@ function seedGraph(input: {
     kind: "entity",
     label: rootLabel,
     position: { x: 320, y: 220 },
-    data: {
+    data: buildSeedPayload({
       role: "graph-core",
-      autoGroup: input.settings.context.graph?.autoGroup ?? true,
-      reduceCrossing: input.settings.context.graph?.reduceCrossing ?? true,
-    },
+      data: {
+        autoGroup: input.settings.context.graph?.autoGroup ?? true,
+        reduceCrossing: input.settings.context.graph?.reduceCrossing ?? true,
+      },
+    }),
   });
   const topicIds: string[] = [];
 
@@ -488,10 +671,12 @@ function seedGraph(input: {
         x: 320 + Math.cos(angle) * radius,
         y: 220 + Math.sin(angle) * radius,
       },
-      data: {
+      data: buildSeedPayload({
         role: "graph-topic",
-        showEdgeLabels: input.settings.context.graph?.showEdgeLabels ?? true,
-      },
+        data: {
+          showEdgeLabels: input.settings.context.graph?.showEdgeLabels ?? true,
+        },
+      }),
     });
     topicIds.push(topicId);
     input.builder.addEdge({
@@ -520,10 +705,12 @@ function seedGraph(input: {
     kind: "page",
     label: "Servico auxiliar",
     position: { x: 96, y: 384 },
-    data: {
+    data: buildSeedPayload({
       role: "graph-supporting",
-      showEdgeLabels: input.settings.context.graph?.showEdgeLabels ?? true,
-    },
+      data: {
+        showEdgeLabels: input.settings.context.graph?.showEdgeLabels ?? true,
+      },
+    }),
   });
   input.builder.addEdge({
     sourceNodeId: supportNodeId,
@@ -564,9 +751,9 @@ function seedMindmap(input: {
     kind: "note",
     label: rootLabel,
     position: { x: 280, y: 200 },
-    data: {
+    data: buildSeedPayload({
       role: "mindmap-root",
-    },
+    }),
   });
 
   for (let index = 0; index < count; index += 1) {
@@ -574,9 +761,9 @@ function seedMindmap(input: {
       kind: "note",
       label: `Ramo ${index + 1}`,
       position: { x: 120 + index * 200, y: index % 2 === 0 ? 40 : 360 },
-      data: {
+      data: buildSeedPayload({
         role: "mindmap-branch",
-      },
+      }),
     });
     input.builder.addEdge({
       sourceNodeId: centerId,
@@ -616,9 +803,9 @@ function seedTimeline(input: {
       kind: "note",
       label: `Marco ${index + 1}`,
       position: { x: 140 + index * 220, y: 220 },
-      data: {
+      data: buildSeedPayload({
         role: "timeline-milestone",
-      },
+      }),
     });
 
     if (previousId) {

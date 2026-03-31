@@ -18,6 +18,7 @@ import {
 import {
   recordCreationLegacyTemplateFallback,
   recordCreationRecipeRuntimeResolved,
+  scheduleCreationTelemetryOperation,
 } from "@/src/server/observability/creation-assistant-transition-telemetry";
 
 type CreatePageProps = {
@@ -108,35 +109,38 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
         snapshotDiagramType,
         template: project.template,
       });
-      await recordCreationLegacyTemplateFallback({
-        projectId: project.id,
-        ownerIdentity,
-        source: "create-page",
-        fallbackMode: contextResolution.decisionTrace.legacyTemplateFallback.fallbackMode,
-        fallbackReason:
-          contextResolution.decisionTrace.legacyTemplateFallback.fallbackReason,
-        fieldsFromTemplate:
-          contextResolution.decisionTrace.legacyTemplateFallback.fieldsFromTemplate,
-        riskTier: contextResolution.decisionTrace.legacyTemplateFallback.riskTier,
-        effectiveResult: {
-          profile: contextResolution.context.effectiveProfile,
-          initialView: contextResolution.context.effectiveInitialView,
-          layout: contextResolution.context.effectiveLayout,
-        },
-      });
       const recipe = resolveCreationRecipe({
         profile: contextResolution.context.effectiveProfile,
         view: contextResolution.context.effectiveInitialView,
       });
-      await recordCreationRecipeRuntimeResolved({
-        projectId: project.id,
-        ownerIdentity,
-        profile: contextResolution.context.effectiveProfile,
-        view: contextResolution.context.effectiveInitialView,
-        recipeId:
-          recipe?.id ??
-          `${contextResolution.context.effectiveProfile}:${contextResolution.context.effectiveInitialView}`,
-        fallbackUsed: !recipe,
+      scheduleCreationTelemetryOperation(async () => {
+        await recordCreationLegacyTemplateFallback({
+          projectId: project.id,
+          ownerIdentity,
+          source: "create-page",
+          fallbackMode:
+            contextResolution.decisionTrace.legacyTemplateFallback.fallbackMode,
+          fallbackReason:
+            contextResolution.decisionTrace.legacyTemplateFallback.fallbackReason,
+          fieldsFromTemplate:
+            contextResolution.decisionTrace.legacyTemplateFallback.fieldsFromTemplate,
+          riskTier: contextResolution.decisionTrace.legacyTemplateFallback.riskTier,
+          effectiveResult: {
+            profile: contextResolution.context.effectiveProfile,
+            initialView: contextResolution.context.effectiveInitialView,
+            layout: contextResolution.context.effectiveLayout,
+          },
+        });
+        await recordCreationRecipeRuntimeResolved({
+          projectId: project.id,
+          ownerIdentity,
+          profile: contextResolution.context.effectiveProfile,
+          view: contextResolution.context.effectiveInitialView,
+          recipeId:
+            recipe?.id ??
+            `${contextResolution.context.effectiveProfile}:${contextResolution.context.effectiveInitialView}`,
+          fallbackUsed: !recipe,
+        });
       });
     } catch (error) {
       loadErrorMessage =

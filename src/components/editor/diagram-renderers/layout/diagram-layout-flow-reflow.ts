@@ -3,6 +3,7 @@ import { buildFlowTopology } from "./diagram-layout-flow-topology";
 import {
   FLOW_INSERT_LAYOUT,
   isFlowNoteNode,
+  resolveBalancedFlowLane,
   resolveDefaultFlowLogicalFootprint,
   type FlowDirection,
   type FlowLaneAssignment,
@@ -28,13 +29,16 @@ function assignFlowLanesAndColumns(
         (topology.incomingFlowByNodeId.get(node.id) ?? 0) === 0 &&
         (topology.incomingDependsByNodeId.get(node.id) ?? 0) === 0,
     )
-    .sort((nodeA, nodeB) => compareFlowNodesByVisualOrder(nodeA, nodeB, direction));
+    .sort((nodeA, nodeB) =>
+      compareFlowNodesByVisualOrder(nodeA, nodeB, direction),
+    );
   const primaryRoot = rootCandidates[0] ?? topology.nonNoteNodes[0];
   const laneByNodeId = new Map<string, number>();
   const columnByNodeId = new Map<string, number>();
   const queuedNodeIds = new Set<string>();
-  const chainQueue: Array<{ nodeId: string; lane: number; column: number }> = [];
-  let nextPositiveLane = 1;
+  const chainQueue: Array<{ nodeId: string; lane: number; column: number }> =
+    [];
+  let nextBranchLaneIndex = 0;
 
   function scheduleBranchChain(nodeId: string, column: number) {
     const targetNode = topology.nodeMap.get(nodeId);
@@ -48,11 +52,11 @@ function assignFlowLanesAndColumns(
 
     chainQueue.push({
       nodeId,
-      lane: nextPositiveLane,
+      lane: resolveBalancedFlowLane(nextBranchLaneIndex),
       column,
     });
     queuedNodeIds.add(nodeId);
-    nextPositiveLane += 1;
+    nextBranchLaneIndex += 1;
   }
 
   function layoutChain(startNodeId: string, lane: number, startColumn: number) {
@@ -73,7 +77,9 @@ function assignFlowLanesAndColumns(
       laneByNodeId.set(currentNodeId, lane);
       columnByNodeId.set(currentNodeId, currentColumn);
 
-      for (const branchTargetId of topology.dependsTargetsBySource.get(currentNodeId) ?? []) {
+      for (const branchTargetId of topology.dependsTargetsBySource.get(
+        currentNodeId,
+      ) ?? []) {
         scheduleBranchChain(branchTargetId, currentColumn + 1);
       }
 
@@ -138,10 +144,14 @@ function buildFlowGridStarts(input: {
 }) {
   const defaultFootprint = resolveDefaultFlowLogicalFootprint(input.direction);
   const columnIds = [
-    ...new Set(input.nonNoteNodes.map((node) => input.columnByNodeId.get(node.id) ?? 0)),
+    ...new Set(
+      input.nonNoteNodes.map((node) => input.columnByNodeId.get(node.id) ?? 0),
+    ),
   ].sort((valueA, valueB) => valueA - valueB);
   const laneIds = [
-    ...new Set(input.nonNoteNodes.map((node) => input.laneByNodeId.get(node.id) ?? 0)),
+    ...new Set(
+      input.nonNoteNodes.map((node) => input.laneByNodeId.get(node.id) ?? 0),
+    ),
   ].sort((valueA, valueB) => valueA - valueB);
   const columnPrimarySpanById = new Map<number, number>();
   const laneSecondarySpanById = new Map<number, number>();
@@ -177,13 +187,30 @@ function buildFlowGridStarts(input: {
   if (laneIds.includes(0)) {
     laneSecondaryStartById.set(0, 0);
   }
-  let nextSecondaryStart =
+  const firstBranchLaneGap = Math.max(
+    FLOW_INSERT_LAYOUT.branchSecondaryGap - 28,
+    FLOW_INSERT_LAYOUT.trunkSecondaryGap + 24,
+  );
+  let nextPositiveSecondaryStart =
     (laneSecondarySpanById.get(0) ?? defaultFootprint.secondarySpan) +
-    FLOW_INSERT_LAYOUT.branchSecondaryGap;
-  for (const laneId of laneIds.filter((laneId) => laneId > 0)) {
-    laneSecondaryStartById.set(laneId, nextSecondaryStart);
-    nextSecondaryStart +=
+    firstBranchLaneGap;
+  for (const laneId of laneIds
+    .filter((laneId) => laneId > 0)
+    .sort((valueA, valueB) => valueA - valueB)) {
+    laneSecondaryStartById.set(laneId, nextPositiveSecondaryStart);
+    nextPositiveSecondaryStart +=
       (laneSecondarySpanById.get(laneId) ?? defaultFootprint.secondarySpan) +
+      FLOW_INSERT_LAYOUT.branchLaneGap;
+  }
+  let nextNegativeSecondaryEnd = -firstBranchLaneGap;
+  for (const laneId of laneIds
+    .filter((laneId) => laneId < 0)
+    .sort((valueA, valueB) => Math.abs(valueA) - Math.abs(valueB))) {
+    const laneSpan =
+      laneSecondarySpanById.get(laneId) ?? defaultFootprint.secondarySpan;
+    laneSecondaryStartById.set(laneId, nextNegativeSecondaryEnd - laneSpan);
+    nextNegativeSecondaryEnd =
+      (laneSecondaryStartById.get(laneId) ?? 0) -
       FLOW_INSERT_LAYOUT.branchLaneGap;
   }
 
@@ -237,7 +264,8 @@ function compareFlowGridNodeIds(
     return columnDifference;
   }
 
-  const laneDifference = (laneByNodeId.get(nodeIdA) ?? 0) - (laneByNodeId.get(nodeIdB) ?? 0);
+  const laneDifference =
+    (laneByNodeId.get(nodeIdA) ?? 0) - (laneByNodeId.get(nodeIdB) ?? 0);
   if (laneDifference !== 0) {
     return laneDifference;
   }
@@ -250,23 +278,22 @@ function resolveNearestFlowHostId(input: {
   nonNoteNodes: DiagramLayoutNode[];
   direction: FlowDirection;
 }) {
-  return [...input.nonNoteNodes]
-    .sort((nodeA, nodeB) => {
-      const distanceA = Math.hypot(
-        nodeA.position.x - input.noteNode.position.x,
-        nodeA.position.y - input.noteNode.position.y,
-      );
-      const distanceB = Math.hypot(
-        nodeB.position.x - input.noteNode.position.x,
-        nodeB.position.y - input.noteNode.position.y,
-      );
+  return [...input.nonNoteNodes].sort((nodeA, nodeB) => {
+    const distanceA = Math.hypot(
+      nodeA.position.x - input.noteNode.position.x,
+      nodeA.position.y - input.noteNode.position.y,
+    );
+    const distanceB = Math.hypot(
+      nodeB.position.x - input.noteNode.position.x,
+      nodeB.position.y - input.noteNode.position.y,
+    );
 
-      if (distanceA !== distanceB) {
-        return distanceA - distanceB;
-      }
+    if (distanceA !== distanceB) {
+      return distanceA - distanceB;
+    }
 
-      return compareFlowNodesByVisualOrder(nodeA, nodeB, input.direction);
-    })[0]?.id;
+    return compareFlowNodesByVisualOrder(nodeA, nodeB, input.direction);
+  })[0]?.id;
 }
 
 function placeFlowNotes(input: {
@@ -281,10 +308,17 @@ function placeFlowNotes(input: {
   const detachedNoteIds: string[] = [];
 
   for (const noteNode of input.topology.noteNodes) {
-    const attachedHostIds = [...(input.topology.referenceHostsByNoteId.get(noteNode.id) ?? [])]
+    const attachedHostIds = [
+      ...(input.topology.referenceHostsByNoteId.get(noteNode.id) ?? []),
+    ]
       .filter((hostId) => input.topology.nodeMap.has(hostId))
       .sort((hostIdA, hostIdB) =>
-        compareFlowGridNodeIds(hostIdA, hostIdB, input.columnByNodeId, input.laneByNodeId),
+        compareFlowGridNodeIds(
+          hostIdA,
+          hostIdB,
+          input.columnByNodeId,
+          input.laneByNodeId,
+        ),
       );
     const attachedHostId =
       attachedHostIds[0] ??
@@ -305,19 +339,32 @@ function placeFlowNotes(input: {
   }
 
   for (const hostId of [...notesByHostId.keys()].sort((hostIdA, hostIdB) =>
-    compareFlowGridNodeIds(hostIdA, hostIdB, input.columnByNodeId, input.laneByNodeId),
+    compareFlowGridNodeIds(
+      hostIdA,
+      hostIdB,
+      input.columnByNodeId,
+      input.laneByNodeId,
+    ),
   )) {
-    const noteIds = [...(notesByHostId.get(hostId) ?? [])].sort((noteIdA, noteIdB) => {
-      const noteNodeA = input.topology.nodeMap.get(noteIdA);
-      const noteNodeB = input.topology.nodeMap.get(noteIdB);
-      if (!noteNodeA || !noteNodeB) {
-        return noteIdA.localeCompare(noteIdB);
-      }
+    const noteIds = [...(notesByHostId.get(hostId) ?? [])].sort(
+      (noteIdA, noteIdB) => {
+        const noteNodeA = input.topology.nodeMap.get(noteIdA);
+        const noteNodeB = input.topology.nodeMap.get(noteIdB);
+        if (!noteNodeA || !noteNodeB) {
+          return noteIdA.localeCompare(noteIdB);
+        }
 
-      return compareFlowNodesByVisualOrder(noteNodeA, noteNodeB, input.direction);
-    });
+        return compareFlowNodesByVisualOrder(
+          noteNodeA,
+          noteNodeB,
+          input.direction,
+        );
+      },
+    );
     const hostPosition = input.logicalPositions[hostId];
     const hostFootprint = input.topology.logicalFootprintByNodeId.get(hostId);
+    const hostNode = input.topology.nodeMap.get(hostId);
+    const hostIsDecision = hostNode?.diagramRole === "flow-decision";
     if (!hostPosition || !hostFootprint) {
       continue;
     }
@@ -331,14 +378,24 @@ function placeFlowNotes(input: {
       input.logicalPositions[noteId] = {
         primary:
           hostPosition.primary +
-          Math.max((hostFootprint.primarySpan - noteFootprint.primarySpan) / 2, 0) +
-          FLOW_INSERT_LAYOUT.noteForwardOffset +
+          Math.max(
+            (hostFootprint.primarySpan - noteFootprint.primarySpan) / 2,
+            0,
+          ) +
+          (hostIsDecision
+            ? Math.max(FLOW_INSERT_LAYOUT.noteForwardOffset - 40, 44)
+            : FLOW_INSERT_LAYOUT.noteForwardOffset) +
           (index % 2) *
-            Math.max(noteFootprint.primarySpan * 0.62, FLOW_INSERT_LAYOUT.noteClusterGap),
+            Math.max(
+              noteFootprint.primarySpan * 0.62,
+              FLOW_INSERT_LAYOUT.noteClusterGap,
+            ),
         secondary:
           hostPosition.secondary -
           noteFootprint.secondarySpan -
-          FLOW_INSERT_LAYOUT.noteSecondaryGap -
+          (hostIsDecision
+            ? Math.max(FLOW_INSERT_LAYOUT.noteSecondaryGap - 24, 74)
+            : FLOW_INSERT_LAYOUT.noteSecondaryGap) -
           Math.floor(index / 2) *
             (noteFootprint.secondarySpan + FLOW_INSERT_LAYOUT.noteLaneGap),
       };
@@ -354,7 +411,11 @@ function placeFlowNotes(input: {
         return noteIdA.localeCompare(noteIdB);
       }
 
-      return compareFlowNodesByVisualOrder(noteNodeA, noteNodeB, input.direction);
+      return compareFlowNodesByVisualOrder(
+        noteNodeA,
+        noteNodeB,
+        input.direction,
+      );
     })
     .forEach((noteId, index) => {
       const noteFootprint = input.topology.logicalFootprintByNodeId.get(noteId);
@@ -363,7 +424,9 @@ function placeFlowNotes(input: {
       }
 
       input.logicalPositions[noteId] = {
-        primary: index * (noteFootprint.primarySpan + FLOW_INSERT_LAYOUT.noteClusterGap / 2),
+        primary:
+          index *
+          (noteFootprint.primarySpan + FLOW_INSERT_LAYOUT.noteClusterGap / 2),
         secondary:
           -noteFootprint.secondarySpan -
           FLOW_INSERT_LAYOUT.noteSecondaryGap * 2 -
@@ -383,8 +446,10 @@ function orderFlowPlacementIds(input: {
     .map((node) => node.id)
     .filter((nodeId) => Boolean(input.logicalPositions[nodeId]))
     .sort((nodeIdA, nodeIdB) => {
-      const placementKindA = input.placementKindByNodeId.get(nodeIdA) ?? "branch";
-      const placementKindB = input.placementKindByNodeId.get(nodeIdB) ?? "branch";
+      const placementKindA =
+        input.placementKindByNodeId.get(nodeIdA) ?? "branch";
+      const placementKindB =
+        input.placementKindByNodeId.get(nodeIdB) ?? "branch";
       const placementRankA =
         placementKindA === "main" ? 0 : placementKindA === "branch" ? 1 : 2;
       const placementRankB =
@@ -448,23 +513,37 @@ function stabilizeFlowLogicalPositions(input: {
         candidatePosition = {
           primary:
             candidatePosition.primary +
-            Math.max(footprint.primarySpan * 0.42, FLOW_INSERT_LAYOUT.noteClusterGap / 2),
+            Math.max(
+              footprint.primarySpan * 0.42,
+              FLOW_INSERT_LAYOUT.noteClusterGap / 2,
+            ),
           secondary:
             candidatePosition.secondary -
-            Math.max(footprint.secondarySpan * 0.4, FLOW_INSERT_LAYOUT.noteLaneGap / 2),
+            Math.max(
+              footprint.secondarySpan * 0.4,
+              FLOW_INSERT_LAYOUT.noteLaneGap / 2,
+            ),
         };
       } else if (placementKind === "branch") {
+        const branchDirection = candidatePosition.secondary >= 0 ? 1 : -1;
         candidatePosition = {
           primary: candidatePosition.primary,
           secondary:
             candidatePosition.secondary +
-            Math.max(footprint.secondarySpan * 0.46, FLOW_INSERT_LAYOUT.branchLaneGap / 2),
+            branchDirection *
+              Math.max(
+                footprint.secondarySpan * 0.46,
+                FLOW_INSERT_LAYOUT.branchLaneGap / 2,
+              ),
         };
       } else {
         candidatePosition = {
           primary:
             candidatePosition.primary +
-            Math.max(footprint.primarySpan * 0.58, FLOW_INSERT_LAYOUT.trunkPrimaryGap / 2),
+            Math.max(
+              footprint.primarySpan * 0.58,
+              FLOW_INSERT_LAYOUT.trunkPrimaryGap / 2,
+            ),
           secondary: candidatePosition.secondary,
         };
       }
@@ -525,7 +604,9 @@ export function computeFlowReflow(
     footprintByNodeId: topology.logicalFootprintByNodeId,
   });
 
-  for (const [nodeId, logicalPosition] of Object.entries(logicalPlacement.logicalPositions)) {
+  for (const [nodeId, logicalPosition] of Object.entries(
+    logicalPlacement.logicalPositions,
+  )) {
     positions[nodeId] = fromFlowLogicalPosition(logicalPosition, direction);
   }
 

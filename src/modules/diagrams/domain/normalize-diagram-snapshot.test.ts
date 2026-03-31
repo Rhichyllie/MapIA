@@ -194,4 +194,36 @@ describe("normalizeDiagramSnapshot", () => {
       ),
     ).toBe(true);
   });
+
+  it("migrates legacy role payload into canonical diagram metadata", () => {
+    const snapshot = createBaseSnapshot({
+      diagramType: "flow",
+      nodes: [
+        {
+          id: "91000000-0000-4000-8000-000000000001",
+          projectId: "92000000-0000-4000-8000-000000000001",
+          kind: "flow-step",
+          label: "Aprovacao necessaria?",
+          position: { x: 180, y: 120 },
+          data: {
+            role: "flow-decision",
+          },
+          externalRefs: [],
+        },
+      ],
+      edges: [],
+    });
+
+    const normalized = normalizeDiagramSnapshot({
+      snapshot,
+      diagramTypeEffective: "flow",
+    });
+
+    expect(normalized.normalizedSnapshot.nodes[0]?.data).toMatchObject({
+      role: "flow-decision",
+      __mapia: {
+        role: "flow-decision",
+      },
+    });
+  });
 });
