@@ -196,6 +196,35 @@ describe("semantics rules engine", () => {
     expect(audit.bySeverity.error).toBeGreaterThan(0);
   });
 
+  it("runGraphAudit no ERD nao ignora nodes e edges fora do perfil", () => {
+    const audit = runGraphAudit(
+      {
+        nodes: [
+          { id: "n1", kind: "entity", label: "Cliente", payload: { fields: [] } },
+          { id: "n2", kind: "flow-step", label: "Aprovar" },
+        ],
+        edges: [
+          {
+            id: "e1",
+            sourceNodeId: "n1",
+            targetNodeId: "n2",
+            kind: "references",
+          },
+        ],
+      },
+      "erd",
+      "operational",
+    );
+
+    const issueCodes = audit.issues.map((issue) => issue.code);
+
+    expect(issueCodes).toContain("NODE_KIND_OUT_OF_PROFILE");
+    expect(issueCodes).toContain("EDGE_CONNECTION_NOT_ALLOWED");
+    expect(audit.counters.nodes).toBeGreaterThan(0);
+    expect(audit.counters.edges).toBeGreaterThan(0);
+    expect(audit.bySeverity.error).toBeGreaterThan(0);
+  });
+
   it("sinaliza decisao sem bifurcacao real e etapa sem fechamento", () => {
     const audit = runGraphAudit(
       {

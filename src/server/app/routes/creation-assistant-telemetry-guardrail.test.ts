@@ -50,7 +50,8 @@ const ROUTE_GUARDRAILS: RouteGuardrail[] = [
     },
   },
   {
-    filePath: "app/api/projects/[projectId]/creation-settings/apply-initial-map/route.ts",
+    filePath:
+      "app/api/projects/[projectId]/creation-settings/apply-initial-map/route.ts",
     expectedStyles: {
       recordCreationApplyAttempted: "direct",
       recordCreationApplySucceeded: "fanout",
@@ -114,7 +115,8 @@ function resolveRecorderStyles(source: string) {
       ? "fanout"
       : "direct";
 
-    const recorderStyles = styles.get(recorderName) ?? new Set<TelemetryStyle>();
+    const recorderStyles =
+      styles.get(recorderName) ?? new Set<TelemetryStyle>();
     recorderStyles.add(style);
     styles.set(recorderName, recorderStyles);
   }
@@ -125,7 +127,10 @@ function resolveRecorderStyles(source: string) {
 describe("creation assistant telemetry route guardrails", () => {
   it("does not mix direct and fanout styles for the same recorder in each route", () => {
     for (const route of ROUTE_GUARDRAILS) {
-      const source = readFileSync(resolveRouteAbsolutePath(route.filePath), "utf8");
+      const source = readFileSync(
+        resolveRouteAbsolutePath(route.filePath),
+        "utf8",
+      );
       const styles = resolveRecorderStyles(source);
 
       for (const [recorderName, recorderStyles] of styles.entries()) {
@@ -139,7 +144,10 @@ describe("creation assistant telemetry route guardrails", () => {
 
   it("keeps expected telemetry emission style per assistant route", () => {
     for (const route of ROUTE_GUARDRAILS) {
-      const source = readFileSync(resolveRouteAbsolutePath(route.filePath), "utf8");
+      const source = readFileSync(
+        resolveRouteAbsolutePath(route.filePath),
+        "utf8",
+      );
       const styles = resolveRecorderStyles(source);
 
       for (const [recorderName, expectedStyle] of Object.entries(
@@ -154,4 +162,3 @@ describe("creation assistant telemetry route guardrails", () => {
     }
   });
 });
-

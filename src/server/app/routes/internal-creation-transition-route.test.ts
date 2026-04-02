@@ -14,20 +14,24 @@ vi.mock("@/src/server/auth/api-session", () => ({
 }));
 
 vi.mock("@/src/server/auth/internal-observability-access", () => ({
-  resolveInternalObservabilityAccess: routeMocks.resolveInternalObservabilityAccess,
+  resolveInternalObservabilityAccess:
+    routeMocks.resolveInternalObservabilityAccess,
 }));
 
-vi.mock("@/src/server/observability/creation-assistant-transition-telemetry", () => ({
-  buildCreationTelemetryContextFromRequest: vi.fn().mockReturnValue({}),
-  getCreationTransitionTelemetrySnapshot:
-    routeMocks.getCreationTransitionTelemetrySnapshot,
-  evaluateCreationTransitionGateWarnings:
-    routeMocks.evaluateCreationTransitionGateWarnings,
-  recordCreationTransitionSnapshotAccessed:
-    routeMocks.recordCreationTransitionSnapshotAccessed,
-  recordCreationTransitionSnapshotAccessDenied:
-    routeMocks.recordCreationTransitionSnapshotAccessDenied,
-}));
+vi.mock(
+  "@/src/server/observability/creation-assistant-transition-telemetry",
+  () => ({
+    buildCreationTelemetryContextFromRequest: vi.fn().mockReturnValue({}),
+    getCreationTransitionTelemetrySnapshot:
+      routeMocks.getCreationTransitionTelemetrySnapshot,
+    evaluateCreationTransitionGateWarnings:
+      routeMocks.evaluateCreationTransitionGateWarnings,
+    recordCreationTransitionSnapshotAccessed:
+      routeMocks.recordCreationTransitionSnapshotAccessed,
+    recordCreationTransitionSnapshotAccessDenied:
+      routeMocks.recordCreationTransitionSnapshotAccessDenied,
+  }),
+);
 
 import { GET } from "@/app/api/internal/observability/creation-transition/route";
 
@@ -37,12 +41,18 @@ describe("GET /api/internal/observability/creation-transition", () => {
     routeMocks.getCreationTransitionTelemetrySnapshot.mockResolvedValue({
       generatedAt: new Date().toISOString(),
     });
-    routeMocks.evaluateCreationTransitionGateWarnings.mockResolvedValue(undefined);
+    routeMocks.evaluateCreationTransitionGateWarnings.mockResolvedValue(
+      undefined,
+    );
   });
 
   it("returns 401 for unauthenticated requests", async () => {
     routeMocks.getApiSessionIdentity.mockResolvedValue(null);
-    const response = await GET(new Request("http://localhost/api/internal/observability/creation-transition"));
+    const response = await GET(
+      new Request(
+        "http://localhost/api/internal/observability/creation-transition",
+      ),
+    );
     expect(response.status).toBe(401);
   });
 
@@ -57,14 +67,22 @@ describe("GET /api/internal/observability/creation-transition", () => {
       reason: "forbidden",
     });
 
-    const response = await GET(new Request("http://localhost/api/internal/observability/creation-transition"));
+    const response = await GET(
+      new Request(
+        "http://localhost/api/internal/observability/creation-transition",
+      ),
+    );
 
     expect(response.status).toBe(403);
-    expect(routeMocks.recordCreationTransitionSnapshotAccessDenied).toHaveBeenCalledTimes(
-      1,
-    );
-    expect(routeMocks.evaluateCreationTransitionGateWarnings).not.toHaveBeenCalled();
-    expect(routeMocks.getCreationTransitionTelemetrySnapshot).not.toHaveBeenCalled();
+    expect(
+      routeMocks.recordCreationTransitionSnapshotAccessDenied,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      routeMocks.evaluateCreationTransitionGateWarnings,
+    ).not.toHaveBeenCalled();
+    expect(
+      routeMocks.getCreationTransitionTelemetrySnapshot,
+    ).not.toHaveBeenCalled();
   });
 
   it("returns snapshot for allowed identities and audits access", async () => {
@@ -78,14 +96,20 @@ describe("GET /api/internal/observability/creation-transition", () => {
       reason: "allowlist",
     });
 
-    const response = await GET(new Request("http://localhost/api/internal/observability/creation-transition"));
+    const response = await GET(
+      new Request(
+        "http://localhost/api/internal/observability/creation-transition",
+      ),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(routeMocks.recordCreationTransitionSnapshotAccessed).toHaveBeenCalledTimes(
-      1,
-    );
-    expect(routeMocks.evaluateCreationTransitionGateWarnings).not.toHaveBeenCalled();
+    expect(
+      routeMocks.recordCreationTransitionSnapshotAccessed,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      routeMocks.evaluateCreationTransitionGateWarnings,
+    ).not.toHaveBeenCalled();
     expect(body.data).toEqual(
       expect.objectContaining({
         generatedAt: expect.any(String),

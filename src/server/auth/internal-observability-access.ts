@@ -20,7 +20,9 @@ export function resolveInternalObservabilityAccess(identity: string): {
 } {
   const env = getServerEnv();
   const normalizedIdentity = identity.trim().toLowerCase();
-  const allowList = parseAllowList(env.INTERNAL_OBSERVABILITY_ALLOWED_IDENTITIES);
+  const allowList = parseAllowList(
+    env.INTERNAL_OBSERVABILITY_ALLOWED_IDENTITIES,
+  );
   if (allowList.has(normalizedIdentity)) {
     return {
       allowed: true,
@@ -29,8 +31,12 @@ export function resolveInternalObservabilityAccess(identity: string): {
     };
   }
 
-  const canUseDevBypass = env.NODE_ENV === "development" || env.NODE_ENV === "test";
-  if (canUseDevBypass && normalizedIdentity === env.DEV_LOGIN_EMAIL.toLowerCase()) {
+  const canUseDevBypass =
+    env.NODE_ENV === "development" || env.NODE_ENV === "test";
+  if (
+    canUseDevBypass &&
+    normalizedIdentity === env.DEV_LOGIN_EMAIL.toLowerCase()
+  ) {
     return {
       allowed: true,
       role: "internal",

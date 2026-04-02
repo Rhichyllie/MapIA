@@ -3,10 +3,13 @@ import { MIN_SEMANTIC_OVERRIDE_REASON_LENGTH } from "@/src/modules/semantics/dom
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -30,28 +33,25 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const body = ImportPrismaFileRequestSchema.parse(await request.json());
-    const { projects, importing, editor, repositories } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
+    const useCases = createServerUseCases();
+    const project = await requireOwnedProjectForApi({
+      route: "POST /api/projects/[projectId]/imports/prisma-file",
+      projectId: params.projectId,
       ownerIdentity: auth.identity,
-      projectId: params.projectId,
+      useCases,
     });
 
-    const imported = await importing.importPrismaSchemaFileToSnapshot.execute({
-      projectId: params.projectId,
-      filePath: body.filePath,
-      workspaceRoot: process.cwd(),
-    });
+    const imported =
+      await useCases.importing.importPrismaSchemaFileToSnapshot.execute({
+        projectId: params.projectId,
+        filePath: body.filePath,
+        workspaceRoot: process.cwd(),
+      });
 
-    const workingSnapshot = await editor.saveFullSnapshot.execute({
+    const workingSnapshot = await useCases.editor.saveFullSnapshot.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       snapshot: imported.snapshot,
@@ -66,7 +66,7 @@ export async function POST(
       ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
     });
 
-    await repositories.semanticEventLogRepository.append({
+    await useCases.repositories.semanticEventLogRepository.append({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       eventType: "import_prisma",
@@ -78,9 +78,25 @@ export async function POST(
         newRevision: workingSnapshot.revision,
       },
     });
+    await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
+      projectId: params.projectId,
+      entityType: "project",
+      entityId: params.projectId,
+      action: "imported",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "POST /api/projects/[projectId]/imports/prisma-file",
+        source: "prisma-schema-file",
+        importSource: imported.source,
+        importSummary: imported.summary,
+        newRevision: workingSnapshot.revision,
+      },
+    });
 
     return apiSuccessResponse({
-      message: "Arquivo Prisma importado com sucesso para o snapshot de trabalho.",
+      message:
+        "Arquivo Prisma importado com sucesso para o snapshot de trabalho.",
       importSource: imported.source,
       importSummary: imported.summary,
       workingSnapshot,

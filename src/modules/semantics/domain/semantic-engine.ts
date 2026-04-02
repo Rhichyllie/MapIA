@@ -1061,23 +1061,77 @@ export function runGraphAudit(
   };
 
   if (profile.diagramType === "erd") {
+    for (const node of sortedNodes) {
+      const semanticKind = semanticKindByNodeId.get(node.id);
+      if (!semanticKind) {
+        continue;
+      }
+
+      if (!isNodeKindAllowedForProfile(profile, semanticKind)) {
+        const severity: SemanticSeverity =
+          mode === "operational" ? "error" : "warning";
+        issues.push({
+          id: buildIssueId("NODE_KIND_OUT_OF_PROFILE", "node", node.id, issues.length),
+          code: "NODE_KIND_OUT_OF_PROFILE",
+          severity,
+          message: `No '${node.label ?? node.id}' usa tipo '${node.kind}' fora do perfil ${profile.label}.`,
+          details: `Tipos permitidos: ${profile.allowedNodeKinds.join(", ")}.`,
+          targetType: "node",
+          targetId: node.id,
+        });
+      }
+    }
+
     for (const edge of sortedEdges) {
       const sourceNode = nodeMap.get(edge.sourceNodeId);
       const targetNode = nodeMap.get(edge.targetNodeId);
 
-      if (sourceNode && targetNode) {
+      if (!sourceNode || !targetNode) {
+        issues.push({
+          id: buildIssueId("EDGE_ENDPOINT_NOT_FOUND", "edge", edge.id, issues.length),
+          code: "EDGE_ENDPOINT_NOT_FOUND",
+          severity: "error",
+          message: `Aresta '${edge.id}' aponta para no inexistente.`,
+          details: "Ajuste origem/destino ou remova a relacao quebrada.",
+          targetType: "edge",
+          targetId: edge.id,
+        });
         continue;
       }
 
-      issues.push({
-        id: buildIssueId("EDGE_ENDPOINT_NOT_FOUND", "edge", edge.id, issues.length),
-        code: "EDGE_ENDPOINT_NOT_FOUND",
-        severity: "error",
-        message: `Aresta '${edge.id}' aponta para no inexistente.`,
-        details: "Ajuste origem/destino ou remova a relacao quebrada.",
-        targetType: "edge",
-        targetId: edge.id,
-      });
+      const sourceSemanticKind = semanticKindByNodeId.get(sourceNode.id);
+      const targetSemanticKind = semanticKindByNodeId.get(targetNode.id);
+
+      if (sourceSemanticKind === null || targetSemanticKind === null) {
+        continue;
+      }
+
+      const validation = validateEdgeCreation({
+        diagramType,
+        sourceNode,
+        targetNode,
+        edgeKind: edge.kind,
+        mode,
+      }, options);
+
+      if (!validation.ok) {
+        issues.push({
+          id: buildIssueId(
+            validation.violation?.code ?? "EDGE_SEMANTIC_INVALID",
+            "edge",
+            edge.id,
+            issues.length,
+          ),
+          code: validation.violation?.code ?? "EDGE_SEMANTIC_INVALID",
+          severity: validation.violation?.severity ?? "error",
+          message:
+            validation.violation?.message ??
+            `Aresta '${edge.id}' viola regra semantica.`,
+          details: validation.violation?.details,
+          targetType: "edge",
+          targetId: edge.id,
+        });
+      }
     }
 
     const erdGraph = normalizeErdGraphFromSemantic({

@@ -325,6 +325,7 @@ enum AuditAction {
   restored
   imported
   exported
+  denied
 }
 
 enum LegacyCreationFlowStatus {

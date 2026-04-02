@@ -4,10 +4,9 @@ import { MIN_SEMANTIC_OVERRIDE_REASON_LENGTH } from "@/src/modules/semantics/dom
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -40,22 +39,16 @@ export async function PUT(
   context: { params: Promise<{ projectId: string; nodeId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
-    const params = ParamsSchema.parse(await context.params);
-    const body = UpdateNodeRequestSchema.parse(await request.json());
-    const { projects, editor } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
+    const useCases = createServerUseCases();
+    const { auth, params } = await requireOwnedProjectRouteContext({
+      route: "PUT /api/projects/[projectId]/nodes/[nodeId]",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      useCases,
     });
+    const body = UpdateNodeRequestSchema.parse(await request.json());
 
-    const workingSnapshot = await editor.applyCommand.execute({
+    const workingSnapshot = await useCases.editor.applyCommand.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       ...(body.expectedRevision !== undefined

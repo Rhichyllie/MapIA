@@ -11,10 +11,9 @@ import { runGraphAudit } from "@/src/modules/semantics/domain";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -44,7 +43,13 @@ function toSemanticGraph(snapshot: {
   return {
     nodes: snapshot.nodes.map((node) => ({
       id: node.id,
-      kind: node.kind as "workspace" | "project" | "entity" | "page" | "flow-step" | "note",
+      kind: node.kind as
+        | "workspace"
+        | "project"
+        | "entity"
+        | "page"
+        | "flow-step"
+        | "note",
       label: node.label,
       payload: node.data,
     })),
@@ -52,7 +57,12 @@ function toSemanticGraph(snapshot: {
       id: edge.id,
       sourceNodeId: edge.sourceNodeId,
       targetNodeId: edge.targetNodeId,
-      kind: edge.kind as "contains" | "references" | "depends-on" | "flows-to" | "relates-to",
+      kind: edge.kind as
+        | "contains"
+        | "references"
+        | "depends-on"
+        | "flows-to"
+        | "relates-to",
       label: edge.label,
       payload: edge.data,
     })),
@@ -64,22 +74,16 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
-    const params = ParamsSchema.parse(await context.params);
-    const body = ExportPreviewRequestSchema.parse(await request.json());
-    const { projects, graph, semantics } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
+    const useCases = createServerUseCases();
+    const { auth, params } = await requireOwnedProjectRouteContext({
+      route: "POST /api/projects/[projectId]/erd/export-preview",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      useCases,
     });
+    const body = ExportPreviewRequestSchema.parse(await request.json());
 
-    const workingSnapshot = await graph.loadWorkingSnapshot.execute({
+    const workingSnapshot = await useCases.graph.loadWorkingSnapshot.execute({
       projectId: params.projectId,
     });
     if (!workingSnapshot) {
@@ -106,7 +110,7 @@ export async function POST(
       });
     }
 
-    const policy = await semantics.getOrCreatePolicy.execute({
+    const policy = await useCases.semantics.getOrCreatePolicy.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
     });
@@ -120,18 +124,17 @@ export async function POST(
       graph: erdGraph,
       policy: erdPolicy,
     });
-    const audit = runGraphAudit(
-      semanticGraph,
-      "erd",
-      "operational",
-      {
-        strictEnabled: policy.strictEnabled,
-        ...(policy.customRulesJson ? { customRulesJson: policy.customRulesJson } : {}),
-      },
-    );
+    const audit = runGraphAudit(semanticGraph, "erd", "operational", {
+      strictEnabled: policy.strictEnabled,
+      ...(policy.customRulesJson
+        ? { customRulesJson: policy.customRulesJson }
+        : {}),
+    });
 
     if (erdPolicy.validationLevel === "strict" && audit.bySeverity.error > 0) {
-      const repairPlan = buildErdRepairPlanFromDiagnostics(erdDiagnostics.diagnostics);
+      const repairPlan = buildErdRepairPlanFromDiagnostics(
+        erdDiagnostics.diagnostics,
+      );
 
       throw new AppError(
         "Export preview requer reparo semantico no nivel strict.",

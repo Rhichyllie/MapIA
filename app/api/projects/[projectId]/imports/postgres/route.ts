@@ -3,10 +3,13 @@ import { MIN_SEMANTIC_OVERRIDE_REASON_LENGTH } from "@/src/modules/semantics/dom
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -30,27 +33,23 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const body = ImportPostgresRequestSchema.parse(await request.json());
-    const { projects, importing, editor } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
+    const useCases = createServerUseCases();
+    const project = await requireOwnedProjectForApi({
+      route: "POST /api/projects/[projectId]/imports/postgres",
       projectId: params.projectId,
+      ownerIdentity: auth.identity,
+      useCases,
     });
 
-    const imported = await importing.importPostgresToSnapshot.execute({
+    const imported = await useCases.importing.importPostgresToSnapshot.execute({
       projectId: params.projectId,
       schema: body.schema ?? "public",
     });
 
-    const workingSnapshot = await editor.saveFullSnapshot.execute({
+    const workingSnapshot = await useCases.editor.saveFullSnapshot.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       snapshot: imported.snapshot,
@@ -63,6 +62,20 @@ export async function POST(
         ? { allowSemanticOverride: body.allowSemanticOverride }
         : {}),
       ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
+    });
+    await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
+      projectId: params.projectId,
+      entityType: "project",
+      entityId: params.projectId,
+      action: "imported",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "POST /api/projects/[projectId]/imports/postgres",
+        source: imported.source,
+        importSummary: imported.summary,
+        newRevision: workingSnapshot.revision,
+      },
     });
 
     return apiSuccessResponse({

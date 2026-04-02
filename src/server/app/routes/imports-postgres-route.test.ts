@@ -38,7 +38,10 @@ function createUseCasesMock() {
   return {
     projects: {
       getOwnedProject: {
-        execute: vi.fn().mockResolvedValue(undefined),
+        execute: vi.fn().mockResolvedValue({
+          id: projectId,
+          workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+        }),
       },
     },
     importing: {
@@ -93,7 +96,10 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
   it("returns 401 when there is no authenticated session", async () => {
     routeMocks.getApiSessionIdentity.mockResolvedValueOnce(null);
 
-    const response = await POST(createJsonRequest({ schema: "public" }), createContext());
+    const response = await POST(
+      createJsonRequest({ schema: "public" }),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(401);
@@ -108,7 +114,10 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
     const useCases = createUseCasesMock();
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createJsonRequest({ schema: "   " }), createContext());
+    const response = await POST(
+      createJsonRequest({ schema: "   " }),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -123,7 +132,10 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
     const useCases = createUseCasesMock();
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createJsonRequest("not-an-object"), createContext());
+    const response = await POST(
+      createJsonRequest("not-an-object"),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -144,7 +156,10 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
     );
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createJsonRequest({ schema: "public" }), createContext());
+    const response = await POST(
+      createJsonRequest({ schema: "public" }),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(404);
@@ -152,7 +167,9 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
       error: "PROJECT_NOT_FOUND",
       message: "Projeto nao encontrado.",
     });
-    expect(useCases.importing.importPostgresToSnapshot.execute).not.toHaveBeenCalled();
+    expect(
+      useCases.importing.importPostgresToSnapshot.execute,
+    ).not.toHaveBeenCalled();
     expect(useCases.editor.saveFullSnapshot.execute).not.toHaveBeenCalled();
   });
 
@@ -160,7 +177,10 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
     const useCases = createUseCasesMock();
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createJsonRequest({ schema: "public" }), createContext());
+    const response = await POST(
+      createJsonRequest({ schema: "public" }),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -168,7 +188,9 @@ describe("POST /api/projects/[projectId]/imports/postgres", () => {
       ownerIdentity: "user-123",
       projectId,
     });
-    expect(useCases.importing.importPostgresToSnapshot.execute).toHaveBeenCalledWith({
+    expect(
+      useCases.importing.importPostgresToSnapshot.execute,
+    ).toHaveBeenCalledWith({
       projectId,
       schema: "public",
     });

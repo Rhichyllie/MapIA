@@ -12,11 +12,14 @@ function renderWithLocale(
   messages: AppMessages,
   element: React.ReactNode,
 ) {
+  const providerProps = {
+    locale,
+    messages,
+    timeZone: "UTC",
+  } as React.ComponentProps<typeof NextIntlClientProvider>;
+
   return renderToStaticMarkup(
-    React.createElement(
-      NextIntlClientProvider,
-      { locale, messages, timeZone: "UTC", children: element },
-    ),
+    React.createElement(NextIntlClientProvider, providerProps, element),
   );
 }
 

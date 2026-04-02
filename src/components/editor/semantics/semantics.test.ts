@@ -17,7 +17,7 @@ describe("semantics rules engine", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(result.allowedEdgeKinds).toEqual(["flows-to", "depends-on"]);
+    expect(result.allowedEdgeKinds).toEqual(["flows-to"]);
     expect(result.recommendedEdgeKind).toBe("flows-to");
   });
 
@@ -79,11 +79,11 @@ describe("semantics rules engine", () => {
     expect(plan.summary).toContain("Plano de reparo");
   });
 
-  it("runGraphAudit contabiliza issues por severidade e alvo", () => {
+  it("runGraphAudit no ERD nao ignora nodes e edges fora do perfil", () => {
     const audit = runGraphAudit(
       {
         nodes: [
-          { id: "n1", kind: "entity", label: "Cliente" },
+          { id: "n1", kind: "entity", label: "Cliente", payload: { fields: [] } },
           { id: "n2", kind: "flow-step", label: "Aprovar" },
         ],
         edges: [
@@ -99,6 +99,10 @@ describe("semantics rules engine", () => {
       "operational",
     );
 
+    const issueCodes = audit.issues.map((issue) => issue.code);
+
+    expect(issueCodes).toContain("NODE_KIND_OUT_OF_PROFILE");
+    expect(issueCodes).toContain("EDGE_CONNECTION_NOT_ALLOWED");
     expect(audit.counters.total).toBeGreaterThan(0);
     expect(audit.counters.nodes).toBeGreaterThan(0);
     expect(audit.counters.edges).toBeGreaterThan(0);

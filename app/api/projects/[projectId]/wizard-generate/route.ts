@@ -2,10 +2,10 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -18,18 +18,24 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const { creationAssistant } = createServerUseCases();
     const result = await creationAssistant.applyProjectCreation.execute({
       ownerIdentity: auth.identity,
       projectId: params.projectId,
       createInitialMap: true,
+    });
+    await recordServerAuditEvent({
+      projectId: params.projectId,
+      entityType: "project",
+      entityId: params.projectId,
+      action: "updated",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "POST /api/projects/[projectId]/wizard-generate",
+        compatibilityAlias: true,
+      },
     });
 
     return apiSuccessResponse({

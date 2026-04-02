@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 import {
   ApplyEditorCommandsInputSchema,
   ApplyEditorCommandInputSchema,
@@ -42,18 +44,19 @@ export async function POST(
         },
       },
       async (span) => {
-        const auth = await getApiSessionIdentity();
-
-        if (!auth) {
-          span.setAttribute("editor.authenticated", false);
-          return unauthorizedResponse();
-        }
-
-        span.setAttribute("editor.authenticated", true);
+        const auth = await requireAuthenticatedApiRequest();
         const params = ParamsSchema.parse(await context.params);
         const body = ApplyCommandsRequestSchema.parse(await request.json());
-        const { projects, editor } = createServerUseCases();
+        const useCases = createServerUseCases();
 
+        await requireOwnedProjectForApi({
+          route: "POST /api/projects/[projectId]/editor-commands",
+          projectId: params.projectId,
+          ownerIdentity: auth.identity,
+          useCases,
+        });
+
+        span.setAttribute("editor.authenticated", true);
         span.setAttribute("editor.project_id", params.projectId);
         span.setAttribute("editor.command.batch", !("command" in body));
         span.setAttribute(
@@ -61,39 +64,42 @@ export async function POST(
           "command" in body ? 1 : body.commands.length,
         );
 
-        await projects.getOwnedProject.execute({
-          ownerIdentity: auth.identity,
-          projectId: params.projectId,
-        });
-
         const workingSnapshot =
           "command" in body
-            ? await editor.applyCommand.execute({
+            ? await useCases.editor.applyCommand.execute({
                 projectId: params.projectId,
                 actorIdentity: auth.identity,
                 label: body.label,
                 ...(body.expectedRevision !== undefined
                   ? { expectedRevision: body.expectedRevision }
                   : {}),
-                ...(body.semanticMode ? { semanticMode: body.semanticMode } : {}),
+                ...(body.semanticMode
+                  ? { semanticMode: body.semanticMode }
+                  : {}),
                 ...(body.allowSemanticOverride !== undefined
                   ? { allowSemanticOverride: body.allowSemanticOverride }
                   : {}),
-                ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
+                ...(body.overrideReason
+                  ? { overrideReason: body.overrideReason }
+                  : {}),
                 command: body.command,
               })
-            : await editor.applyCommands.execute({
+            : await useCases.editor.applyCommands.execute({
                 projectId: params.projectId,
                 actorIdentity: auth.identity,
                 label: body.label,
                 ...(body.expectedRevision !== undefined
                   ? { expectedRevision: body.expectedRevision }
                   : {}),
-                ...(body.semanticMode ? { semanticMode: body.semanticMode } : {}),
+                ...(body.semanticMode
+                  ? { semanticMode: body.semanticMode }
+                  : {}),
                 ...(body.allowSemanticOverride !== undefined
                   ? { allowSemanticOverride: body.allowSemanticOverride }
                   : {}),
-                ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
+                ...(body.overrideReason
+                  ? { overrideReason: body.overrideReason }
+                  : {}),
                 commands: body.commands,
               });
 

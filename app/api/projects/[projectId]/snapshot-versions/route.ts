@@ -2,10 +2,13 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 import { CreateSnapshotVersionFromWorkingSnapshotInputSchema } from "@/src/modules/versioning/application";
 
 const ParamsSchema = z.object({
@@ -22,23 +25,21 @@ export async function GET(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
-    const { projects, versioning } = createServerUseCases();
+    const useCases = createServerUseCases();
 
-    await projects.getOwnedProject.execute({
+    await requireOwnedProjectForApi({
+      route: "GET /api/projects/[projectId]/snapshot-versions",
+      projectId: params.projectId,
       ownerIdentity: auth.identity,
-      projectId: params.projectId,
+      useCases,
     });
 
-    const snapshotVersions = await versioning.listSnapshotVersions.execute({
-      projectId: params.projectId,
-    });
+    const snapshotVersions =
+      await useCases.versioning.listSnapshotVersions.execute({
+        projectId: params.projectId,
+      });
 
     return apiSuccessResponse({ snapshotVersions });
   } catch (error) {
@@ -51,27 +52,38 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const body = CreateSnapshotVersionRequestSchema.parse(await request.json());
-    const { projects, versioning } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
+    const useCases = createServerUseCases();
+    const project = await requireOwnedProjectForApi({
+      route: "POST /api/projects/[projectId]/snapshot-versions",
       projectId: params.projectId,
+      ownerIdentity: auth.identity,
+      useCases,
     });
 
     const snapshotVersion =
-      await versioning.createSnapshotVersionFromWorkingSnapshot.execute({
-        projectId: params.projectId,
-        label: body.label,
-        origin: body.origin,
-      });
+      await useCases.versioning.createSnapshotVersionFromWorkingSnapshot.execute(
+        {
+          projectId: params.projectId,
+          label: body.label,
+          origin: body.origin,
+        },
+      );
+    await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
+      projectId: params.projectId,
+      entityType: "graph_version",
+      entityId: snapshotVersion.id,
+      action: "created",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "POST /api/projects/[projectId]/snapshot-versions",
+        origin: snapshotVersion.origin,
+        label: snapshotVersion.label ?? null,
+      },
+    });
 
     return apiSuccessResponse(
       {

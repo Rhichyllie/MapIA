@@ -1,20 +1,20 @@
 import { getToken } from "next-auth/jwt";
 import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  buildProtectedLoginRedirect,
-} from "./src/i18n/proxy-helpers";
+import { buildProtectedLoginRedirect } from "./src/i18n/proxy-helpers";
 import {
   normalizePathname,
   routing,
   stripLocaleFromPathname,
 } from "./src/i18n/routing";
 import { isProtectedAppPathname } from "./src/lib/routes";
+import { applySecurityHeaders } from "./src/server/security/http-security";
 
 const handleI18nRouting = createMiddleware(routing);
 
 export default async function proxy(request: NextRequest) {
   let response = handleI18nRouting(request);
+  applySecurityHeaders(response.headers);
 
   if (!response.ok) {
     return response;
@@ -23,7 +23,9 @@ export default async function proxy(request: NextRequest) {
   const resolvedUrl = new URL(
     response.headers.get("x-middleware-rewrite") ?? request.url,
   );
-  const pathname = normalizePathname(stripLocaleFromPathname(resolvedUrl.pathname));
+  const pathname = normalizePathname(
+    stripLocaleFromPathname(resolvedUrl.pathname),
+  );
 
   if (!isProtectedAppPathname(pathname)) {
     return response;
@@ -47,6 +49,7 @@ export default async function proxy(request: NextRequest) {
   response = NextResponse.redirect(loginUrl, {
     headers: response.headers,
   });
+  applySecurityHeaders(response.headers);
 
   return response;
 }

@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 import { withServerTelemetrySpan } from "@/src/server/observability/server-telemetry";
 
 const ParamsSchema = z.object({
@@ -25,27 +27,24 @@ export async function GET(
         },
       },
       async (span) => {
-        const auth = await getApiSessionIdentity();
+        const auth = await requireAuthenticatedApiRequest();
+        const params = ParamsSchema.parse(await context.params);
+        const useCases = createServerUseCases();
 
-        if (!auth) {
-          span.setAttribute("editor.authenticated", false);
-          return unauthorizedResponse();
-        }
+        await requireOwnedProjectForApi({
+          route: "GET /api/projects/[projectId]/editor-snapshot",
+          projectId: params.projectId,
+          ownerIdentity: auth.identity,
+          useCases,
+        });
 
         span.setAttribute("editor.authenticated", true);
-        const params = ParamsSchema.parse(await context.params);
-        const { projects, editor } = createServerUseCases();
-
         span.setAttribute("editor.project_id", params.projectId);
 
-        await projects.getOwnedProject.execute({
-          ownerIdentity: auth.identity,
-          projectId: params.projectId,
-        });
-
-        const workingSnapshot = await editor.getWorkingSnapshotForEditor.execute({
-          projectId: params.projectId,
-        });
+        const workingSnapshot =
+          await useCases.editor.getWorkingSnapshotForEditor.execute({
+            projectId: params.projectId,
+          });
 
         span.setAttribute("editor.snapshot.present", Boolean(workingSnapshot));
         return apiSuccessResponse({ workingSnapshot });

@@ -2,10 +2,10 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 import { withServerTelemetrySpan } from "@/src/server/observability/server-telemetry";
 
 const ParamsSchema = z.object({
@@ -34,30 +34,26 @@ export async function GET(
         },
       },
       async (span) => {
-        const auth = await getApiSessionIdentity();
-
-        if (!auth) {
-          span.setAttribute("semantic.authenticated", false);
-          return unauthorizedResponse();
-        }
-
-        span.setAttribute("semantic.authenticated", true);
-        const params = ParamsSchema.parse(await context.params);
-        const { projects, semantics } = createServerUseCases();
-
-        span.setAttribute("semantic.project_id", params.projectId);
-
-        await projects.getOwnedProject.execute({
-          ownerIdentity: auth.identity,
-          projectId: params.projectId,
+        const useCases = createServerUseCases();
+        const { auth, params } = await requireOwnedProjectRouteContext({
+          route: "GET /api/projects/[projectId]/semantic/policy",
+          params: context.params,
+          paramsSchema: ParamsSchema,
+          useCases,
         });
 
-        const policy = await semantics.getOrCreatePolicy.execute({
+        span.setAttribute("semantic.authenticated", true);
+        span.setAttribute("semantic.project_id", params.projectId);
+
+        const policy = await useCases.semantics.getOrCreatePolicy.execute({
           projectId: params.projectId,
           actorIdentity: auth.identity,
         });
 
-        span.setAttribute("semantic.policy.strict_enabled", policy.strictEnabled);
+        span.setAttribute(
+          "semantic.policy.strict_enabled",
+          policy.strictEnabled,
+        );
         return apiSuccessResponse({ policy });
       },
     );
@@ -71,25 +67,35 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
-    const params = ParamsSchema.parse(await context.params);
-    const body = UpdateSemanticPolicyRequestSchema.parse(await request.json());
-    const { projects, semantics } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
+    const useCases = createServerUseCases();
+    const { auth, params, project } = await requireOwnedProjectRouteContext({
+      route: "PUT /api/projects/[projectId]/semantic/policy",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      useCases,
     });
+    const body = UpdateSemanticPolicyRequestSchema.parse(await request.json());
 
-    const policy = await semantics.updatePolicy.execute({
+    const policy = await useCases.semantics.updatePolicy.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       ...body,
+    });
+    await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
+      projectId: params.projectId,
+      entityType: "project",
+      entityId: params.projectId,
+      action: "updated",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "PUT /api/projects/[projectId]/semantic/policy",
+        diagramType: policy.diagramType ?? null,
+        strictEnabled: policy.strictEnabled,
+        enforceOnServer: policy.enforceOnServer,
+        allowTechOverride: policy.allowTechOverride,
+        requireOverrideReason: policy.requireOverrideReason,
+      },
     });
 
     return apiSuccessResponse({ policy });

@@ -94,23 +94,75 @@ describe("importPrismaSchemaToGraphSnapshot", () => {
 
     const userFields = (userNode?.data.fields as Array<Record<string, unknown>>) ?? [];
     expect(userFields.map((field) => field.name)).toEqual(["id", "email"]);
-    expect(userFields).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "id", isId: true, isUnique: false }),
-        expect.objectContaining({ name: "email", isUnique: true }),
-      ]),
-    );
+    expect(userFields).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        name: "id",
+        type: "string",
+        flags: ["PK", "NOT_NULL", "DEFAULT"],
+      }),
+      expect.objectContaining({
+        id: expect.any(String),
+        name: "email",
+        type: "string",
+        flags: ["UQ", "NOT_NULL"],
+      }),
+    ]);
+    expect(userFields.every((field) => !("isId" in field))).toBe(true);
+    expect(userFields.every((field) => !("isUnique" in field))).toBe(true);
 
     const postFields = (postNode?.data.fields as Array<Record<string, unknown>>) ?? [];
     expect(postFields.map((field) => field.name)).toEqual(["id", "title", "authorId"]);
+    expect(postFields).toEqual([
+      expect.objectContaining({
+        id: expect.any(String),
+        name: "id",
+        type: "string",
+        flags: ["PK", "NOT_NULL", "DEFAULT"],
+      }),
+      expect.objectContaining({
+        id: expect.any(String),
+        name: "title",
+        type: "string",
+        flags: ["NOT_NULL"],
+      }),
+      expect.objectContaining({
+        id: expect.any(String),
+        name: "authorId",
+        type: "string",
+        flags: ["NULLABLE", "FK"],
+      }),
+    ]);
 
     const edge = result.snapshot.edges[0];
     expect(edge.kind).toBe("references");
     expect(edge.label).toBeDefined();
     expect(edge.data).toMatchObject({
-      cardinality: "1:N",
-      fkFields: ["authorId"],
-      references: ["id"],
+      source: "prisma-schema",
+      sourceFieldName: "author",
+      name: "author",
+      cardinality: {
+        minSource: 0,
+        maxSource: 1,
+        minTarget: 0,
+        maxTarget: "N",
+      },
+      materialization: {
+        mode: "fk",
+        dependentSide: "source",
+        fk: {
+          dependentEntityId: postNode!.id,
+          fkFieldIds: [postFields[2]!.id],
+          referencesEntityId: userNode!.id,
+          referencesFieldIds: [userFields[0]!.id],
+        },
+      },
+    });
+    expect(postFields[2]).toMatchObject({
+      references: {
+        entityId: userNode!.id,
+        relationEdgeId: edge.id,
+      },
     });
     expect(new Set([edge.sourceNodeId, edge.targetNodeId])).toEqual(
       new Set([userNode!.id, postNode!.id]),

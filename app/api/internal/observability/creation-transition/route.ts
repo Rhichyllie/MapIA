@@ -1,9 +1,9 @@
 import {
+  apiErrorResponse,
   apiSuccessResponse,
   forbiddenResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
 import { resolveInternalObservabilityAccess } from "@/src/server/auth/internal-observability-access";
 import {
   buildCreationTelemetryContextFromRequest,
@@ -13,27 +13,29 @@ import {
 } from "@/src/server/observability/creation-assistant-transition-telemetry";
 
 export async function GET(request: Request) {
-  const auth = await getApiSessionIdentity();
-  if (!auth) {
-    return unauthorizedResponse();
-  }
+  try {
+    const auth = await requireAuthenticatedApiRequest();
+    const requestContext = buildCreationTelemetryContextFromRequest(request);
+    const access = resolveInternalObservabilityAccess(auth.identity);
 
-  const requestContext = buildCreationTelemetryContextFromRequest(request);
-  const access = resolveInternalObservabilityAccess(auth.identity);
+    if (!access.allowed) {
+      await recordCreationTransitionSnapshotAccessDenied({
+        ownerIdentity: auth.identity,
+        requestContext,
+      });
+      return forbiddenResponse(
+        "Acesso restrito a perfis internos de observabilidade.",
+      );
+    }
 
-  if (!access.allowed) {
-    await recordCreationTransitionSnapshotAccessDenied({
+    await recordCreationTransitionSnapshotAccessed({
       ownerIdentity: auth.identity,
+      role: "internal",
       requestContext,
     });
-    return forbiddenResponse("Acesso restrito a perfis internos de observabilidade.");
+
+    return apiSuccessResponse(await getCreationTransitionTelemetrySnapshot());
+  } catch (error) {
+    return apiErrorResponse(error);
   }
-
-  await recordCreationTransitionSnapshotAccessed({
-    ownerIdentity: auth.identity,
-    role: "internal",
-    requestContext,
-  });
-
-  return apiSuccessResponse(await getCreationTransitionTelemetrySnapshot());
 }

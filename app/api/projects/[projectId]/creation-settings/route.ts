@@ -10,8 +10,8 @@ import {
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
 import {
   buildCreationTelemetryContextFromRequest,
   recordCreationDraftSaved,
@@ -20,7 +20,6 @@ import {
   runCreationTelemetryFanout,
 } from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -47,12 +46,7 @@ export async function GET(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const { creationAssistant } = createServerUseCases();
     const [settings, summary] = await Promise.all([
@@ -66,7 +60,9 @@ export async function GET(
       }),
     ]);
 
-    const safeSettings = settings ? redactAssistantCreationSettings(settings) : null;
+    const safeSettings = settings
+      ? redactAssistantCreationSettings(settings)
+      : null;
 
     return apiSuccessResponse({
       settings: safeSettings,
@@ -90,19 +86,29 @@ function toDraftFromSettingsAlias(input: {
 }) {
   return AssistantDraftSchema.parse({
     projectName: input.projectName,
-    ...(input.projectObjective ? { projectObjective: input.projectObjective } : {}),
+    ...(input.projectObjective
+      ? { projectObjective: input.projectObjective }
+      : {}),
     profile: input.settings.profile,
     startStrategy: input.settings.startStrategy,
-    ...(input.settings.startSource ? { startSource: input.settings.startSource } : {}),
+    ...(input.settings.startSource
+      ? { startSource: input.settings.startSource }
+      : {}),
     ...(input.settings.templatePreset
       ? { templatePreset: input.settings.templatePreset }
       : {}),
-    ...(input.settings.sourceConfig ? { sourceConfig: input.settings.sourceConfig } : {}),
-    ...(input.settings.sourceStatus ? { sourceStatus: input.settings.sourceStatus } : {}),
+    ...(input.settings.sourceConfig
+      ? { sourceConfig: input.settings.sourceConfig }
+      : {}),
+    ...(input.settings.sourceStatus
+      ? { sourceStatus: input.settings.sourceStatus }
+      : {}),
     ...(input.settings.precheckResult
       ? { precheckResult: input.settings.precheckResult }
       : {}),
-    ...(input.settings.lastError ? { lastError: input.settings.lastError } : {}),
+    ...(input.settings.lastError
+      ? { lastError: input.settings.lastError }
+      : {}),
     ...(input.settings.lastCheckedAt
       ? { lastCheckedAt: input.settings.lastCheckedAt }
       : {}),
@@ -119,12 +125,7 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const requestContext = buildCreationTelemetryContextFromRequest(request);
     const rawBody = await request.json();
@@ -139,10 +140,11 @@ export async function PUT(
           ...(settingsOnly.success ? { settings: settingsOnly.data } : {}),
         };
     const { creationAssistant, projects } = createServerUseCases();
-    const previousDraftState = await creationAssistant.getProjectCreationDraft.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
-    });
+    const previousDraftState =
+      await creationAssistant.getProjectCreationDraft.execute({
+        ownerIdentity: auth.identity,
+        projectId: params.projectId,
+      });
 
     const projectForAlias = body.settings
       ? await projects.getOwnedProject.execute({
@@ -168,14 +170,19 @@ export async function PUT(
       });
     }
 
-    const draftState = await creationAssistant.saveProjectCreationDraft.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
-      draft,
-      ...(body.expectedVersion || body.expectedDraftVersion
-        ? { expectedVersion: body.expectedVersion ?? body.expectedDraftVersion }
-        : {}),
-    });
+    const draftState = await creationAssistant.saveProjectCreationDraft.execute(
+      {
+        ownerIdentity: auth.identity,
+        projectId: params.projectId,
+        draft,
+        ...(body.expectedVersion || body.expectedDraftVersion
+          ? {
+              expectedVersion:
+                body.expectedVersion ?? body.expectedDraftVersion,
+            }
+          : {}),
+      },
+    );
     await runCreationTelemetryFanout([
       () =>
         recordCreationSettingsAliasPut({

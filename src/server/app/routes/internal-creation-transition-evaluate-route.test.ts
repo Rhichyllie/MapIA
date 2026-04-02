@@ -13,25 +13,31 @@ vi.mock("@/src/server/auth/api-session", () => ({
 }));
 
 vi.mock("@/src/server/auth/internal-observability-access", () => ({
-  resolveInternalObservabilityAccess: routeMocks.resolveInternalObservabilityAccess,
+  resolveInternalObservabilityAccess:
+    routeMocks.resolveInternalObservabilityAccess,
 }));
 
-vi.mock("@/src/server/observability/creation-assistant-transition-telemetry", () => ({
-  buildCreationTelemetryContextFromRequest: vi.fn().mockReturnValue({}),
-  evaluateCreationTransitionGateWarnings:
-    routeMocks.evaluateCreationTransitionGateWarnings,
-  recordCreationTransitionSnapshotAccessed:
-    routeMocks.recordCreationTransitionSnapshotAccessed,
-  recordCreationTransitionSnapshotAccessDenied:
-    routeMocks.recordCreationTransitionSnapshotAccessDenied,
-}));
+vi.mock(
+  "@/src/server/observability/creation-assistant-transition-telemetry",
+  () => ({
+    buildCreationTelemetryContextFromRequest: vi.fn().mockReturnValue({}),
+    evaluateCreationTransitionGateWarnings:
+      routeMocks.evaluateCreationTransitionGateWarnings,
+    recordCreationTransitionSnapshotAccessed:
+      routeMocks.recordCreationTransitionSnapshotAccessed,
+    recordCreationTransitionSnapshotAccessDenied:
+      routeMocks.recordCreationTransitionSnapshotAccessDenied,
+  }),
+);
 
 import { POST } from "@/app/api/internal/observability/creation-transition/evaluate/route";
 
 describe("POST /api/internal/observability/creation-transition/evaluate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    routeMocks.evaluateCreationTransitionGateWarnings.mockResolvedValue(undefined);
+    routeMocks.evaluateCreationTransitionGateWarnings.mockResolvedValue(
+      undefined,
+    );
   });
 
   it("returns 401 for unauthenticated requests", async () => {
@@ -64,10 +70,12 @@ describe("POST /api/internal/observability/creation-transition/evaluate", () => 
     );
 
     expect(response.status).toBe(403);
-    expect(routeMocks.evaluateCreationTransitionGateWarnings).not.toHaveBeenCalled();
-    expect(routeMocks.recordCreationTransitionSnapshotAccessDenied).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      routeMocks.evaluateCreationTransitionGateWarnings,
+    ).not.toHaveBeenCalled();
+    expect(
+      routeMocks.recordCreationTransitionSnapshotAccessDenied,
+    ).toHaveBeenCalledTimes(1);
   });
 
   it("evaluates gates for internal identities", async () => {
@@ -92,12 +100,12 @@ describe("POST /api/internal/observability/creation-transition/evaluate", () => 
     };
 
     expect(response.status).toBe(200);
-    expect(routeMocks.evaluateCreationTransitionGateWarnings).toHaveBeenCalledTimes(
-      1,
-    );
-    expect(routeMocks.recordCreationTransitionSnapshotAccessed).toHaveBeenCalledTimes(
-      1,
-    );
+    expect(
+      routeMocks.evaluateCreationTransitionGateWarnings,
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      routeMocks.recordCreationTransitionSnapshotAccessed,
+    ).toHaveBeenCalledTimes(1);
     expect(payload.data?.evaluatedAt).toEqual(expect.any(String));
   });
 });

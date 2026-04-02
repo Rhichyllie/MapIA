@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { isAppError } from "@/src/lib/app-error";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 const CreateProjectRequestSchema = z.object({
   workspaceId: z.string().uuid(),
@@ -17,22 +18,50 @@ const CreateProjectRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const body = CreateProjectRequestSchema.parse(await request.json());
     const { projects } = createServerUseCases();
+    let createdProject;
 
-    const createdProject = await projects.createProject.execute({
-      ownerIdentity: auth.identity,
-      workspaceId: body.workspaceId,
-      name: body.name,
-      description: body.description,
-      template: body.template,
-      slug: body.slug,
+    try {
+      createdProject = await projects.createProject.execute({
+        ownerIdentity: auth.identity,
+        workspaceId: body.workspaceId,
+        name: body.name,
+        description: body.description,
+        template: body.template,
+        slug: body.slug,
+      });
+    } catch (error) {
+      if (isAppError(error) && error.code === "WORKSPACE_NOT_FOUND") {
+        await recordServerAuditEvent({
+          workspaceId: body.workspaceId,
+          entityType: "workspace",
+          entityId: body.workspaceId,
+          action: "denied",
+          actorIdentity: auth.identity,
+          payload: {
+            route: "POST /api/projects",
+            reason: error.code,
+          },
+        });
+      }
+
+      throw error;
+    }
+
+    await recordServerAuditEvent({
+      workspaceId: createdProject.workspaceId,
+      projectId: createdProject.id,
+      entityType: "project",
+      entityId: createdProject.id,
+      action: "created",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "POST /api/projects",
+        template: createdProject.template,
+        slug: createdProject.slug,
+      },
     });
 
     return apiSuccessResponse(

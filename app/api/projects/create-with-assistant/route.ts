@@ -5,8 +5,8 @@ import {
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
 import {
   buildCreationTelemetryContextFromRequest,
   recordCreationApplyAttempted,
@@ -16,16 +16,11 @@ import {
   scheduleCreationTelemetryOperation,
 } from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 export async function POST(request: Request) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const body = AssistantDraftSchema.parse(await request.json());
     const requestContext = buildCreationTelemetryContextFromRequest(request);
     scheduleCreationTelemetryOperation(() =>
@@ -40,6 +35,18 @@ export async function POST(request: Request) {
     const result = await creationAssistant.createProjectWithAssistant.execute({
       ownerIdentity: auth.identity,
       draft: body,
+    });
+    await recordServerAuditEvent({
+      projectId: result.projectId,
+      entityType: "project",
+      entityId: result.projectId,
+      action: "created",
+      actorIdentity: auth.identity,
+      payload: {
+        route: "POST /api/projects/create-with-assistant",
+        appliedVersion: result.appliedVersion,
+        sourceStatus: result.appliedSettings.sourceStatus ?? null,
+      },
     });
     await runCreationTelemetryFanout([
       () =>
@@ -71,9 +78,7 @@ export async function POST(request: Request) {
         projectId: result.projectId,
         initialSnapshot: result.initialSnapshot,
         redirectUrl: result.redirectUrl,
-        sourceStatus: sourceStatus
-          ? { statusCode: sourceStatus }
-          : null,
+        sourceStatus: sourceStatus ? { statusCode: sourceStatus } : null,
       },
       { status: 201 },
     );

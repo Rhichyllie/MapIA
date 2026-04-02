@@ -2,10 +2,9 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 import {
   buildAssistantDraftFromLegacyWizard,
   buildLegacyWizardDraftViewModel,
@@ -23,19 +22,14 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
-    const params = ParamsSchema.parse(await context.params);
-    const body = SaveLegacyWizardDraftInputSchema.parse(await request.json());
-    const { projects, creationAssistant } = createServerUseCases();
-    const project = await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
+    const useCases = createServerUseCases();
+    const { auth, params, project } = await requireOwnedProjectRouteContext({
+      route: "PUT /api/projects/[projectId]/wizard-draft",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      useCases,
     });
+    const body = SaveLegacyWizardDraftInputSchema.parse(await request.json());
     const assistantDraft = buildAssistantDraftFromLegacyWizard({
       project: {
         name: project.name,
@@ -44,7 +38,7 @@ export async function PUT(
       },
       payload: body.payload,
     });
-    await creationAssistant.saveProjectCreationDraft.execute({
+    await useCases.creationAssistant.saveProjectCreationDraft.execute({
       ownerIdentity: auth.identity,
       projectId: params.projectId,
       draft: assistantDraft,

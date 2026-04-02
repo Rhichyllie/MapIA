@@ -1,6 +1,7 @@
 import type { Session } from "next-auth";
 import { getLocale } from "next-intl/server";
 import { getServerSession } from "next-auth";
+import { AppError } from "@/src/lib/app-error";
 import { redirect } from "@/src/i18n/navigation";
 import { appRoutes } from "@/src/lib/routes";
 import { authOptions } from "@/src/server/auth/options";
@@ -68,12 +69,13 @@ export async function requireSession(): Promise<Session> {
 }
 
 export function requireSessionIdentity(session: Session): string {
-  const identity = session.user?.email;
+  const identity = session.user?.email?.trim();
 
   if (!identity) {
-    throw new Error(
-      "Authenticated session is missing a user identity (email).",
-    );
+    throw new AppError("Sessao autenticada sem identidade de usuario.", {
+      code: "AUTH_SESSION_IDENTITY_MISSING",
+      status: 401,
+    });
   }
 
   return identity;

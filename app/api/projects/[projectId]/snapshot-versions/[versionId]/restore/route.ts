@@ -3,10 +3,13 @@ import { MIN_SEMANTIC_OVERRIDE_REASON_LENGTH } from "@/src/modules/semantics/dom
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -30,12 +33,7 @@ export async function POST(
   context: { params: Promise<{ projectId: string; versionId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     let body: z.infer<typeof RestoreSnapshotRequestSchema> = {};
     try {
@@ -44,25 +42,42 @@ export async function POST(
     } catch {
       body = {};
     }
-    const { projects, versioning } = createServerUseCases();
-
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
+    const useCases = createServerUseCases();
+    const project = await requireOwnedProjectForApi({
+      route:
+        "POST /api/projects/[projectId]/snapshot-versions/[versionId]/restore",
       projectId: params.projectId,
+      ownerIdentity: auth.identity,
+      useCases,
     });
 
-    const result = await versioning.restoreWorkingSnapshotFromVersion.execute({
+    const result =
+      await useCases.versioning.restoreWorkingSnapshotFromVersion.execute({
+        projectId: params.projectId,
+        versionId: params.versionId,
+        actorIdentity: auth.identity,
+        ...(body.expectedRevision !== undefined
+          ? { expectedRevision: body.expectedRevision }
+          : {}),
+        ...(body.semanticMode ? { semanticMode: body.semanticMode } : {}),
+        ...(body.allowSemanticOverride !== undefined
+          ? { allowSemanticOverride: body.allowSemanticOverride }
+          : {}),
+        ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
+      });
+    await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
       projectId: params.projectId,
-      versionId: params.versionId,
+      entityType: "graph_version",
+      entityId: params.versionId,
+      action: "restored",
       actorIdentity: auth.identity,
-      ...(body.expectedRevision !== undefined
-        ? { expectedRevision: body.expectedRevision }
-        : {}),
-      ...(body.semanticMode ? { semanticMode: body.semanticMode } : {}),
-      ...(body.allowSemanticOverride !== undefined
-        ? { allowSemanticOverride: body.allowSemanticOverride }
-        : {}),
-      ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
+      payload: {
+        route:
+          "POST /api/projects/[projectId]/snapshot-versions/[versionId]/restore",
+        restoredFromVersionId: result.restoredFromVersionId,
+        newRevision: result.workingSnapshot.revision,
+      },
     });
 
     return apiSuccessResponse({

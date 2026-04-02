@@ -2,43 +2,45 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 import { SaveEditorFullSnapshotInputSchema } from "@/src/modules/editor/application";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
 });
 
-const SaveWorkingSnapshotRequestSchema = SaveEditorFullSnapshotInputSchema.omit({
-  projectId: true,
-  actorIdentity: true,
-});
+const SaveWorkingSnapshotRequestSchema = SaveEditorFullSnapshotInputSchema.omit(
+  {
+    projectId: true,
+    actorIdentity: true,
+  },
+);
 
 export async function GET(
   _request: Request,
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
-    const { projects, editor } = createServerUseCases();
+    const useCases = createServerUseCases();
 
-    await projects.getOwnedProject.execute({
+    await requireOwnedProjectForApi({
+      route: "GET /api/projects/[projectId]/working-snapshot",
+      projectId: params.projectId,
       ownerIdentity: auth.identity,
-      projectId: params.projectId,
+      useCases,
     });
 
-    const workingSnapshot = await editor.getWorkingSnapshotForEditor.execute({
-      projectId: params.projectId,
-    });
+    const workingSnapshot =
+      await useCases.editor.getWorkingSnapshotForEditor.execute({
+        projectId: params.projectId,
+      });
 
     return apiSuccessResponse({ workingSnapshot });
   } catch (error) {
@@ -51,22 +53,19 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
     const body = SaveWorkingSnapshotRequestSchema.parse(await request.json());
-    const { projects, editor } = createServerUseCases();
+    const useCases = createServerUseCases();
 
-    await projects.getOwnedProject.execute({
-      ownerIdentity: auth.identity,
+    await requireOwnedProjectForApi({
+      route: "PUT /api/projects/[projectId]/working-snapshot",
       projectId: params.projectId,
+      ownerIdentity: auth.identity,
+      useCases,
     });
 
-    const workingSnapshot = await editor.saveFullSnapshot.execute({
+    const workingSnapshot = await useCases.editor.saveFullSnapshot.execute({
       projectId: params.projectId,
       actorIdentity: auth.identity,
       label: body.label,

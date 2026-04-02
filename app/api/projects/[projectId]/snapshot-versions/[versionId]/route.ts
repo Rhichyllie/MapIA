@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import {
+  requireAuthenticatedApiRequest,
+  requireOwnedProjectForApi,
+} from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
-import { getApiSessionIdentity } from "@/src/server/auth/api-session";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -17,24 +19,22 @@ export async function GET(
   context: { params: Promise<{ projectId: string; versionId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-
-    if (!auth) {
-      return unauthorizedResponse();
-    }
-
+    const auth = await requireAuthenticatedApiRequest();
     const params = ParamsSchema.parse(await context.params);
-    const { projects, versioning } = createServerUseCases();
+    const useCases = createServerUseCases();
 
-    await projects.getOwnedProject.execute({
+    await requireOwnedProjectForApi({
+      route: "GET /api/projects/[projectId]/snapshot-versions/[versionId]",
+      projectId: params.projectId,
       ownerIdentity: auth.identity,
-      projectId: params.projectId,
+      useCases,
     });
 
-    const snapshotVersion = await versioning.getSnapshotVersionById.execute({
-      projectId: params.projectId,
-      versionId: params.versionId,
-    });
+    const snapshotVersion =
+      await useCases.versioning.getSnapshotVersionById.execute({
+        projectId: params.projectId,
+        versionId: params.versionId,
+      });
 
     return apiSuccessResponse({ snapshotVersion });
   } catch (error) {

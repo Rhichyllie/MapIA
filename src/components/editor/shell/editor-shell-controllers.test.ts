@@ -526,7 +526,9 @@ describe("editor shell controller helpers", () => {
   });
 
   it("cuts the current selection through the clipboard workflow", async () => {
-    const writeText = vi.fn(async (_text: string) => undefined);
+    const writeText = vi.fn(async (text: string) => {
+      void text;
+    });
     vi.stubGlobal("navigator", {
       clipboard: {
         writeText,

@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { unauthorizedError } from "@/src/server/app/api-response";
 import { authOptions } from "@/src/server/auth/options";
 import { requireSessionIdentity } from "@/src/server/auth/session";
 import {
@@ -37,4 +38,14 @@ export async function getApiSessionIdentity() {
       };
     },
   );
+}
+
+export async function requireApiSessionIdentity() {
+  const auth = await getApiSessionIdentity();
+
+  if (!auth) {
+    throw unauthorizedError();
+  }
+
+  return auth;
 }

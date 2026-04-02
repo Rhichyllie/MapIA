@@ -3,6 +3,7 @@
 <div align="center">
 
 # MapIA
+
 **Enterprise software for mapping information architecture, processes, and system relationships through a canonical, multi-view model**
 
 [![Product](https://img.shields.io/badge/Product-Enterprise%20Atlas-6F2DBD)](#)
@@ -203,7 +204,7 @@ MapIA is structured to support long-term product evolution.
 
 ```text
 app/                      # Next.js app router pages and route handlers
-docs/                     # Architecture, ADRs, domain notes, product evolution docs
+docs/                     # Architecture, ADRs, engineering governance, testing notes, operations
 prisma/                   # Prisma schema, migrations, seed
 public/                   # Static assets
 scripts/                  # Operational and validation scripts
@@ -426,14 +427,16 @@ The goal is to build a product foundation solid enough to support:
 
 ## Contributing
 
-This repository is evolving with a strong product and architecture direction.
-Contributions and internal changes should follow these principles:
+Operational contribution rules live in:
 
-- do not reduce the product to a generic editor
-- do not introduce temporary abstractions that weaken the domain
-- prefer product coherence over local technical convenience
-- keep canonical truth centralized
-- design for future expansion without losing clarity
+- `CONTRIBUTING.md`
+- `docs/engineering/branching-and-prs.md`
+- `docs/engineering/non-regression-checklist.md`
+
+When the change touches editor or importing flows, use these docs together with:
+
+- `docs/testing-e2e-editor.md`
+- `docs/testing-importing.md`
 
 ---
 

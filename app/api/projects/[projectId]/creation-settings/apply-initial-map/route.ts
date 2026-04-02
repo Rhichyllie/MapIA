@@ -4,8 +4,8 @@ import { AssistantDraftSchema } from "@/src/modules/creation-assistant/domain";
 import {
   apiErrorResponse,
   apiSuccessResponse,
-  unauthorizedResponse,
 } from "@/src/server/app/api-response";
+import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
 import {
   buildCreationTelemetryContextFromRequest,
   recordCreationApplyAttempted,
@@ -17,6 +17,7 @@ import {
 } from "@/src/server/observability/creation-assistant-transition-telemetry";
 import { createServerUseCases } from "@/src/server/app/container";
 import { getApiSessionIdentity } from "@/src/server/auth/api-session";
+import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
 const ParamsSchema = z.object({
   projectId: z.string().uuid(),
@@ -27,19 +28,17 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await getApiSessionIdentity();
-    if (!auth) {
-      return unauthorizedResponse();
-    }
+    const auth = await requireAuthenticatedApiRequest();
 
     const params = ParamsSchema.parse(await context.params);
     const requestContext = buildCreationTelemetryContextFromRequest(request);
     const draft = AssistantDraftSchema.parse(await request.json());
     const { creationAssistant } = createServerUseCases();
-    const previousSettings = await creationAssistant.getProjectCreationSettings.execute({
-      ownerIdentity: auth.identity,
-      projectId: params.projectId,
-    });
+    const previousSettings =
+      await creationAssistant.getProjectCreationSettings.execute({
+        ownerIdentity: auth.identity,
+        projectId: params.projectId,
+      });
     scheduleCreationTelemetryOperation(() =>
       recordCreationApplyAttempted({
         projectId: params.projectId,
@@ -54,6 +53,20 @@ export async function POST(
       projectId: params.projectId,
       createInitialMap: true,
       draft,
+    });
+    await recordServerAuditEvent({
+      projectId: params.projectId,
+      entityType: "project",
+      entityId: params.projectId,
+      action: "updated",
+      actorIdentity: auth.identity,
+      payload: {
+        route:
+          "POST /api/projects/[projectId]/creation-settings/apply-initial-map",
+        createInitialMap: true,
+        appliedVersion: result.appliedVersion,
+        sourceStatus: result.appliedSettings.sourceStatus ?? null,
+      },
     });
     await runCreationTelemetryFanout([
       () =>

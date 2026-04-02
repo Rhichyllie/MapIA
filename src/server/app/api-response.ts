@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { isAppError } from "@/src/lib/app-error";
+import { AppError, isAppError } from "@/src/lib/app-error";
 import {
   getRedactedValueMask,
   redactSensitiveStrings,
@@ -17,7 +17,9 @@ function redactErrorDetails(value: unknown): unknown {
 
   if (value && typeof value === "object") {
     const redacted: Record<string, unknown> = {};
-    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, nested] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       if (sensitiveKeyPattern.test(key)) {
         if (nested === undefined || nested === null || nested === "") {
           continue;
@@ -38,16 +40,11 @@ function flattenZodIssues(error: ZodError) {
     path: issue.path.join("."),
     message: issue.message,
     code: issue.code,
-    ...(
-      "params" in issue &&
-      (issue as { params?: unknown }).params
-        ? {
-            params: redactErrorDetails(
-              (issue as { params?: unknown }).params,
-            ),
-          }
-        : {}
-    ),
+    ...("params" in issue && (issue as { params?: unknown }).params
+      ? {
+          params: redactErrorDetails((issue as { params?: unknown }).params),
+        }
+      : {}),
   }));
 }
 
@@ -56,6 +53,7 @@ export function apiErrorResponse(error: unknown) {
     return NextResponse.json(
       {
         error: "VALIDATION_ERROR",
+        code: "VALIDATION_ERROR",
         message: "Dados invalidos.",
         issues: flattenZodIssues(error),
       },
@@ -89,6 +87,7 @@ export function apiErrorResponse(error: unknown) {
   return NextResponse.json(
     {
       error: "INTERNAL_SERVER_ERROR",
+      code: "INTERNAL_SERVER_ERROR",
       message: "Erro interno inesperado.",
     },
     { status: 500 },
@@ -99,16 +98,24 @@ export function apiSuccessResponse<T>(data: T, init?: ResponseInit) {
   return NextResponse.json({ data }, init);
 }
 
+export function unauthorizedError(message = "Autenticacao necessaria.") {
+  return new AppError(message, {
+    code: "UNAUTHORIZED",
+    status: 401,
+  });
+}
+
 export function unauthorizedResponse() {
-  return NextResponse.json(
-    { error: "UNAUTHORIZED", message: "Autenticacao necessaria." },
-    { status: 401 },
-  );
+  return apiErrorResponse(unauthorizedError());
+}
+
+export function forbiddenError(message = "Acesso nao autorizado.") {
+  return new AppError(message, {
+    code: "FORBIDDEN",
+    status: 403,
+  });
 }
 
 export function forbiddenResponse(message = "Acesso nao autorizado.") {
-  return NextResponse.json(
-    { error: "FORBIDDEN", message },
-    { status: 403 },
-  );
+  return apiErrorResponse(forbiddenError(message));
 }

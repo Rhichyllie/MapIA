@@ -1,4 +1,8 @@
-# Arquitetura (Fase 0)
+# Arquitetura (historico de fases)
+
+> Este arquivo continua como registro historico de fases e decisoes acumuladas.
+> Para retrato tecnico do sistema atual, ver `docs/architecture-current-state.md`.
+> Para contratos criticos que nao podem quebrar, ver `docs/architecture-non-breakable-contracts.md`.
 
 ## Objetivo
 
@@ -560,6 +564,7 @@ Estabelecer base modular para evolucao incremental do MapIA sem acoplar UI, impo
 10. `finalize summary`
 
 Observacao:
+
 - A telemetria e opcional no importer (`telemetry.collector`), com comportamento default `noop`.
 - O retorno publico do importer/use-cases/rotas continua inalterado (`snapshot + summary` + source sanitizado nos composicionais).
 
@@ -593,6 +598,7 @@ Observacao:
 - A 4D.2 reduz risco de drift no adapter 4E ao fixar nomes/codigos/steps em contratos centralizados com testes de governanca.
 
 Fora de escopo da 4D:
+
 - integrar SDK OpenTelemetry real
 - exporter/vendor adapter (`ImportTelemetryOtelAdapter`) na runtime de producao
 
@@ -651,6 +657,7 @@ Fora de escopo da 4D:
 - `partial` permanece explicitamente representado no tracing via atributo (`import.outcome` / `import.status`) sem forcar `ERROR`
 
 Fora de escopo da 4E.1:
+
 - OTLP exporter
 - bootstrap global de `NodeSDK` / runtime OTel
 - `MeterProvider` e metricas avancadas
@@ -712,6 +719,7 @@ Fora de escopo da 4E.1:
   - `OTEL_EXPORTER_OTLP_METRICS_TIMEOUT`
 
 Observacao:
+
 - O parser e leniente: valores invalidos viram warnings + fallback.
 - Logs/warnings de config nao vazam valores de headers/segredos (somente flags/contagens).
 - O bootstrap server-side e memoizado para evitar `start()` repetido no container/entrypoint.
@@ -729,16 +737,19 @@ Observacao:
 - Falhas de meter/instrumentos nao quebram o pipeline; o adapter emite warning interno e segue processando.
 
 Fora de escopo da 4E.2:
+
 - auto-instrumentacao ampla da app (HTTP/Prisma/Next) com instrumentations OTel
 - dashboards/SLOs externos
 - tuning avancado vendor-specific
 
 Fica para 4E.3+:
+
 - instrumentations adicionais da plataforma/app
 - tuning operacional mais avancado (views/temporality/sampling por ambiente)
 - integracoes vendor-specific (Datadog/Tempo/Jaeger)
 
 Notas de hardening posteriores (4E.3/4E.4):
+
 - state machine/runtime endurecida para shutdown concorrente + diagnostico `shutdownInFlight`
 - provider com memoizacao terminal de `runtime.start()` + reuse de fallback collector
 - bootstrap server-side padronizado via helper reutilizavel

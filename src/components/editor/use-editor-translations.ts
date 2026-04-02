@@ -4,7 +4,6 @@ import {
   getEditorBaseMessage,
   isMissingEditorMessage,
   type EditorTranslationFn,
-  type EditorTranslationValues,
 } from "./editor-i18n";
 
 export function useEditorTranslations(namespace?: string): EditorTranslationFn {

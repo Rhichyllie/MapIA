@@ -88,10 +88,11 @@ function getOrCreateImportingTelemetryCollectorProvider() {
 export function createServerRepositories() {
   const workspaceRepository = new PrismaWorkspaceRepository(prisma.workspace);
   const projectRepository = new PrismaProjectRepository(prisma.project);
-  const projectCreationStateRepository = new PrismaProjectCreationStateRepository(
-    prisma.projectCreationSettings,
-    prisma.projectCreationDraft,
-  );
+  const projectCreationStateRepository =
+    new PrismaProjectCreationStateRepository(
+      prisma.projectCreationSettings,
+      prisma.projectCreationDraft,
+    );
   const workingSnapshotRepository = new PrismaWorkingSnapshotRepository(
     prisma.graphVersion,
   );
@@ -107,7 +108,8 @@ export function createServerRepositories() {
   const editorSnapshotGateway = new WorkingSnapshotEditorGateway(
     workingSnapshotRepository,
   );
-  const prismaSchemaFileImportSource = new FileSystemPrismaSchemaFileImportSource();
+  const prismaSchemaFileImportSource =
+    new FileSystemPrismaSchemaFileImportSource();
   const postgresImportIntrospectionPort =
     new InformationSchemaPostgresImportIntrospectionSource(
       new PrismaPostgresIntrospectionQueryRunner(prisma),
@@ -131,10 +133,11 @@ export function createServerUseCases() {
   const repositories = createServerRepositories();
   const importingTelemetryCollectorProvider =
     getOrCreateImportingTelemetryCollectorProvider();
-  const importPrismaSchemaToSnapshotUseCase = new ImportPrismaSchemaToSnapshotUseCase({
-    telemetryCollectorFactory: () =>
-      importingTelemetryCollectorProvider.getCollector(),
-  });
+  const importPrismaSchemaToSnapshotUseCase =
+    new ImportPrismaSchemaToSnapshotUseCase({
+      telemetryCollectorFactory: () =>
+        importingTelemetryCollectorProvider.getCollector(),
+    });
 
   return {
     repositories,
@@ -170,25 +173,29 @@ export function createServerUseCases() {
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
       applyAssistantDraftToProject: new ApplyAssistantDraftToProjectUseCase({
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
       applyProjectCreation: new ApplyProjectCreationUseCase({
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
       getProjectCreationSettings: new GetProjectCreationSettingsUseCase({
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
       getProjectCreationSettingsSummary:
         new GetProjectCreationSettingsSummaryUseCase({
@@ -202,19 +209,22 @@ export function createServerUseCases() {
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
       getProjectCreationDraft: new GetProjectCreationDraftUseCase({
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
       saveProjectCreationDraft: new SaveProjectCreationDraftUseCase({
         workspaceRepository: repositories.workspaceRepository,
         projectRepository: repositories.projectRepository,
         workingSnapshotRepository: repositories.workingSnapshotRepository,
-        projectCreationStateRepository: repositories.projectCreationStateRepository,
+        projectCreationStateRepository:
+          repositories.projectCreationStateRepository,
       }),
     },
     editor: {
@@ -274,10 +284,12 @@ export function createServerUseCases() {
     },
     importing: {
       importPrismaSchemaToSnapshot: importPrismaSchemaToSnapshotUseCase,
-      importPrismaSchemaFileToSnapshot: new ImportPrismaSchemaFileToSnapshotUseCase({
-        prismaSchemaFileImportSource: repositories.prismaSchemaFileImportSource,
-        importPrismaSchemaToSnapshot: importPrismaSchemaToSnapshotUseCase,
-      }),
+      importPrismaSchemaFileToSnapshot:
+        new ImportPrismaSchemaFileToSnapshotUseCase({
+          prismaSchemaFileImportSource:
+            repositories.prismaSchemaFileImportSource,
+          importPrismaSchemaToSnapshot: importPrismaSchemaToSnapshotUseCase,
+        }),
       importPostgresToSnapshot: new ImportPostgresToSnapshotUseCase({
         postgresImportIntrospectionPort:
           repositories.postgresImportIntrospectionPort,
@@ -308,3 +320,5 @@ export function createServerUseCases() {
     },
   };
 }
+
+export type ServerUseCases = ReturnType<typeof createServerUseCases>;

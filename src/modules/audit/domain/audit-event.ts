@@ -15,6 +15,7 @@ export const AuditActionSchema = z.enum([
   "restored",
   "imported",
   "exported",
+  "denied",
 ]);
 
 export const AuditEventSchema = z.object({

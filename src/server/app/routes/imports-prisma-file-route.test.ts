@@ -38,7 +38,10 @@ function createUseCasesMock() {
   return {
     projects: {
       getOwnedProject: {
-        execute: vi.fn().mockResolvedValue(undefined),
+        execute: vi.fn().mockResolvedValue({
+          id: projectId,
+          workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+        }),
       },
     },
     importing: {
@@ -115,7 +118,10 @@ describe("POST /api/projects/[projectId]/imports/prisma-file", () => {
     const useCases = createUseCasesMock();
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createJsonRequest("not-an-object"), createContext());
+    const response = await POST(
+      createJsonRequest("not-an-object"),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -130,7 +136,10 @@ describe("POST /api/projects/[projectId]/imports/prisma-file", () => {
     const useCases = createUseCasesMock();
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createJsonRequest({ filePath: "   " }), createContext());
+    const response = await POST(
+      createJsonRequest({ filePath: "   " }),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(400);
@@ -162,7 +171,9 @@ describe("POST /api/projects/[projectId]/imports/prisma-file", () => {
       error: "PROJECT_NOT_FOUND",
       message: "Projeto nao encontrado.",
     });
-    expect(useCases.importing.importPrismaSchemaFileToSnapshot.execute).not.toHaveBeenCalled();
+    expect(
+      useCases.importing.importPrismaSchemaFileToSnapshot.execute,
+    ).not.toHaveBeenCalled();
     expect(useCases.editor.saveFullSnapshot.execute).not.toHaveBeenCalled();
   });
 
@@ -181,7 +192,9 @@ describe("POST /api/projects/[projectId]/imports/prisma-file", () => {
       ownerIdentity: "user-123",
       projectId,
     });
-    expect(useCases.importing.importPrismaSchemaFileToSnapshot.execute).toHaveBeenCalledWith({
+    expect(
+      useCases.importing.importPrismaSchemaFileToSnapshot.execute,
+    ).toHaveBeenCalledWith({
       projectId,
       filePath: "prisma/schema.prisma",
       workspaceRoot: process.cwd(),
@@ -196,7 +209,9 @@ describe("POST /api/projects/[projectId]/imports/prisma-file", () => {
       },
       label: "import-prisma-file",
     });
-    expect(useCases.repositories.semanticEventLogRepository.append).toHaveBeenCalledWith({
+    expect(
+      useCases.repositories.semanticEventLogRepository.append,
+    ).toHaveBeenCalledWith({
       projectId,
       actorIdentity: "user-123",
       eventType: "import_prisma",
@@ -208,7 +223,8 @@ describe("POST /api/projects/[projectId]/imports/prisma-file", () => {
     });
     expect(body).toMatchObject({
       data: {
-        message: "Arquivo Prisma importado com sucesso para o snapshot de trabalho.",
+        message:
+          "Arquivo Prisma importado com sucesso para o snapshot de trabalho.",
         importSource: {
           sourceKind: "prisma-schema-file",
           sourceLabel: "prisma/schema.prisma",

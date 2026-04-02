@@ -94,11 +94,16 @@ describe("POST /api/projects/[projectId]/semantic/audit", () => {
     const useCases = createUseCasesMock();
     routeMocks.createServerUseCases.mockReturnValue(useCases);
 
-    const response = await POST(createRequest({ mode: "operational" }), createContext());
+    const response = await POST(
+      createRequest({ mode: "operational" }),
+      createContext(),
+    );
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(useCases.semantics.auditWorkingSnapshot.execute).toHaveBeenCalledWith({
+    expect(
+      useCases.semantics.auditWorkingSnapshot.execute,
+    ).toHaveBeenCalledWith({
       projectId,
       actorIdentity: "dev@mapia.local",
       mode: "operational",
@@ -120,4 +125,3 @@ describe("POST /api/projects/[projectId]/semantic/audit", () => {
     });
   });
 });
-

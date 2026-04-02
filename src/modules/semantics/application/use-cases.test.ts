@@ -65,12 +65,23 @@ describe("AuditWorkingSnapshotUseCase", () => {
     });
 
     expect(result.issues.length).toBeGreaterThan(0);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "NODE_KIND_OUT_OF_PROFILE",
+          severity: "error",
+          targetType: "node",
+          targetId: "node-1",
+        }),
+      ]),
+    );
     expect(result.snapshotRevision).toBe(9);
     expect(append).toHaveBeenCalledWith(
       expect.objectContaining({
         projectId: "58f3ca26-085e-4237-80d9-adcc42f7142b",
         actorIdentity: "dev@mapia.local",
         eventType: "audit_run",
+        severity: "error",
       }),
     );
   });
