@@ -7,7 +7,11 @@ import type {
 } from "@/src/modules/projects/application";
 import type { Project } from "@/src/modules/projects/domain";
 import type { WorkspaceRepository } from "@/src/modules/workspaces/application";
-import type { Workspace } from "@/src/modules/workspaces/domain";
+import type {
+  Workspace,
+  WorkspaceMembership,
+  WorkspaceMembershipWithUser,
+} from "@/src/modules/workspaces/domain";
 import type { WorkingSnapshotRepository } from "@/src/modules/graph/application";
 import type {
   ProjectCreationAppliedState,
@@ -23,8 +27,10 @@ import {
 } from "./use-cases";
 
 const OWNER = "owner@mapia.local";
+const OWNER_USER_ID = "123e4567-e89b-12d3-a456-426614174199";
 const WORKSPACE_ID = "123e4567-e89b-12d3-a456-426614174100";
 const PROJECT_ID = "123e4567-e89b-12d3-a456-426614174101";
+const MEMBERSHIP_ID = "123e4567-e89b-12d3-a456-426614174102";
 
 function buildProject(): Project {
   return {
@@ -73,7 +79,9 @@ class InMemoryProjectRepository implements ProjectRepository {
     this.project = {
       ...this.project,
       ...(input.name ? { name: input.name } : {}),
-      ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.description !== undefined
+        ? { description: input.description }
+        : {}),
       ...(input.template ? { template: input.template } : {}),
       updatedAt: new Date(),
     };
@@ -83,8 +91,38 @@ class InMemoryProjectRepository implements ProjectRepository {
 
 class InMemoryWorkspaceRepository implements WorkspaceRepository {
   workspace = buildWorkspace();
+  membership: WorkspaceMembership = {
+    id: MEMBERSHIP_ID,
+    workspaceId: WORKSPACE_ID,
+    userId: OWNER_USER_ID,
+    role: "owner",
+    createdAt: new Date("2026-03-12T00:00:00.000Z"),
+    updatedAt: new Date("2026-03-12T00:00:00.000Z"),
+  };
 
-  async create() {
+  async create(input: {
+    slug: string;
+    name: string;
+    ownerUserId: string;
+    legacyOwnerIdentity?: string;
+  }) {
+    this.workspace = {
+      id: this.workspace.id,
+      slug: input.slug,
+      name: input.name,
+      ...(input.legacyOwnerIdentity
+        ? { ownerIdentity: input.legacyOwnerIdentity }
+        : {}),
+      createdAt: this.workspace.createdAt,
+      updatedAt: new Date(),
+    };
+    this.membership = {
+      ...this.membership,
+      workspaceId: this.workspace.id,
+      userId: input.ownerUserId,
+      role: "owner",
+      updatedAt: new Date(),
+    };
     return this.workspace;
   }
 
@@ -92,8 +130,54 @@ class InMemoryWorkspaceRepository implements WorkspaceRepository {
     return id === this.workspace.id ? this.workspace : null;
   }
 
-  async findByOwnerIdentity(ownerIdentity: string) {
-    return ownerIdentity === this.workspace.ownerIdentity ? [this.workspace] : [];
+  async findBySlug(slug: string) {
+    return slug === this.workspace.slug ? this.workspace : null;
+  }
+
+  async findByUserId(userId: string) {
+    return userId === this.membership.userId ? [this.workspace] : [];
+  }
+
+  async findMembership(workspaceId: string, userId: string) {
+    return workspaceId === this.workspace.id &&
+      userId === this.membership.userId
+      ? this.membership
+      : null;
+  }
+
+  async listMemberships() {
+    return [
+      {
+        ...this.membership,
+        userEmail: OWNER,
+        userDisplayName: "Owner",
+        userActive: true,
+      } satisfies WorkspaceMembershipWithUser,
+    ];
+  }
+
+  async upsertMembership(input: {
+    workspaceId: string;
+    actorUserId: string;
+    userId: string;
+    role: WorkspaceMembership["role"];
+  }) {
+    const previousMembership = this.membership;
+    this.membership = {
+      ...this.membership,
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      role: input.role,
+      updatedAt: new Date(),
+    };
+    return {
+      membership: this.membership,
+      previousMembership,
+    };
+  }
+
+  async removeMembership() {
+    return this.membership;
   }
 }
 
@@ -140,7 +224,9 @@ class InMemoryCreationStateRepository implements ProjectCreationStateRepository 
     return {
       applied,
       draftExists: Boolean(draft),
-      ...(draft ? { draftVersion: draft.version, draftUpdatedAt: draft.updatedAt } : {}),
+      ...(draft
+        ? { draftVersion: draft.version, draftUpdatedAt: draft.updatedAt }
+        : {}),
     };
   }
 
@@ -171,7 +257,11 @@ class InMemoryCreationStateRepository implements ProjectCreationStateRepository 
     updatedByIdentity?: string;
   }) {
     const current = this.draftByProjectId.get(input.projectId);
-    if (current && input.expectedVersion && current.version !== input.expectedVersion) {
+    if (
+      current &&
+      input.expectedVersion &&
+      current.version !== input.expectedVersion
+    ) {
       throw new AppError("Conflict", {
         code: "CREATION_DRAFT_VERSION_CONFLICT",
         status: 409,
@@ -224,7 +314,8 @@ function buildDraftWithSecret() {
       sslMode: "require",
       username: "readonly",
       password: "secret-password",
-      connectionString: "postgresql://readonly:secret-password@db.internal:5432/mapia",
+      connectionString:
+        "postgresql://readonly:secret-password@db.internal:5432/mapia",
     },
     initialView: "erd",
     layout: "relational",
@@ -248,16 +339,19 @@ describe("creation-assistant draft vs applied", () => {
     const getDraft = new GetProjectCreationDraftUseCase(deps);
 
     const draftState = await saveDraft.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
       draft: buildDraftWithSecret(),
     });
 
     const applied = await getApplied.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
     });
     const draft = await getDraft.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
     });
@@ -276,18 +370,21 @@ describe("creation-assistant draft vs applied", () => {
     const getApplied = new GetProjectCreationSettingsUseCase(deps);
 
     await saveDraft.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
       draft: buildDraftWithSecret(),
     });
 
     const result = await apply.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
       createInitialMap: false,
     });
 
     const applied = await getApplied.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
     });
@@ -303,6 +400,7 @@ describe("creation-assistant draft vs applied", () => {
     const saveDraft = new SaveProjectCreationDraftUseCase(deps);
 
     await saveDraft.execute({
+      actorUserId: OWNER_USER_ID,
       ownerIdentity: OWNER,
       projectId: PROJECT_ID,
       draft: buildDraftWithSecret(),
@@ -310,6 +408,7 @@ describe("creation-assistant draft vs applied", () => {
 
     await expect(
       saveDraft.execute({
+        actorUserId: OWNER_USER_ID,
         ownerIdentity: OWNER,
         projectId: PROJECT_ID,
         draft: buildDraftWithSecret(),
@@ -322,6 +421,7 @@ describe("creation-assistant draft vs applied", () => {
 
     try {
       await saveDraft.execute({
+        actorUserId: OWNER_USER_ID,
         ownerIdentity: OWNER,
         projectId: PROJECT_ID,
         draft: buildDraftWithSecret(),
@@ -330,7 +430,9 @@ describe("creation-assistant draft vs applied", () => {
     } catch (error) {
       const appError = error as AppError;
       const latestDraft = appError.details?.latestDraft;
-      expect(JSON.stringify(latestDraft ?? {})).not.toContain("secret-password");
+      expect(JSON.stringify(latestDraft ?? {})).not.toContain(
+        "secret-password",
+      );
       expect(JSON.stringify(latestDraft ?? {})).not.toContain("password");
     }
   });

@@ -25,6 +25,7 @@ export const AuditEventSchema = z.object({
   entityType: AuditEntitySchema,
   entityId: z.string().min(1).max(255),
   action: AuditActionSchema,
+  actorUserId: z.string().uuid().optional(),
   actorIdentity: z.string().min(1).max(255).optional(),
   payload: z.record(z.string(), z.unknown()).default({}),
   createdAt: z.date(),

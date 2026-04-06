@@ -73,7 +73,7 @@
     "page": {
       "badge": "Authenticated access",
       "title": "Sign in to MapIA",
-      "description": "Sign in with the credentials configured for the local environment. This provider remains disabled in production."
+      "description": "Sign in with the authentication provider available in this environment. Dev-only credentials exist only for development and test."
     },
     "form": {
       "emailLabel": "Email",
@@ -81,7 +81,10 @@
       "credentialsHint": "Default credentials can be configured with DEV_LOGIN_EMAIL and DEV_LOGIN_PASSWORD.",
       "submit": "Sign in",
       "submitting": "Signing in...",
-      "disabledMessage": "Development credential sign-in is disabled outside NODE_ENV=development."
+      "oidcHint": "Continue with the provider configured for this environment: {providerName}.",
+      "oidcSubmit": "Continue with {providerName}",
+      "oidcSubmitting": "Redirecting...",
+      "configurationMessage": "Authentication is misconfigured for this environment. Review AUTH_MODE, OIDC settings and NEXTAUTH_SECRET before operating in production."
     },
     "errors": {
       "credentialsSignin": "Invalid credentials. Check the development email and password.",

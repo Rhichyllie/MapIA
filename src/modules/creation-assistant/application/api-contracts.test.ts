@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   saveProjectCreationDraftExecuteMock: vi.fn(),
   applyProjectCreationExecuteMock: vi.fn(),
   createProjectWithAssistantExecuteMock: vi.fn(),
-  getOwnedProjectExecuteMock: vi.fn(),
+  getProjectAccessExecuteMock: vi.fn(),
 }));
 
 vi.mock("@/src/server/auth/api-session", () => ({
@@ -51,8 +51,8 @@ vi.mock("@/src/server/app/container", () => ({
       },
     },
     projects: {
-      getOwnedProject: {
-        execute: mocks.getOwnedProjectExecuteMock,
+      getProjectAccess: {
+        execute: mocks.getProjectAccessExecuteMock,
       },
     },
   }),
@@ -63,10 +63,15 @@ import {
   PUT as putCreationDraftRoute,
 } from "@/app/api/projects/[projectId]/creation-draft/route";
 import { POST as postCreationApplyRoute } from "@/app/api/projects/[projectId]/creation-apply/route";
+import { PUT as putCreationSettingsDraftAliasRoute } from "@/app/api/projects/[projectId]/creation-settings/draft/route";
+import { POST as postCreationSettingsApplyInitialMapRoute } from "@/app/api/projects/[projectId]/creation-settings/apply-initial-map/route";
 import { PUT as putCreationSettingsAliasRoute } from "@/app/api/projects/[projectId]/creation-settings/route";
+import { PUT as putWizardDraftRoute } from "@/app/api/projects/[projectId]/wizard-draft/route";
+import { POST as postWizardGenerateRoute } from "@/app/api/projects/[projectId]/wizard-generate/route";
 import { POST as postCreateWithAssistantRoute } from "@/app/api/projects/create-with-assistant/route";
 
 const PROJECT_ID = "123e4567-e89b-12d3-a456-426614174199";
+const ACTOR_USER_ID = "11111111-1111-4111-8111-111111111111";
 let telemetryStore: MemoryCreationTransitionTelemetryStore;
 
 async function countEventByName(eventName: CreationTransitionEventName) {
@@ -163,6 +168,21 @@ describe("creation assistant api contracts", () => {
     });
     mocks.getApiSessionIdentityMock.mockResolvedValue({
       identity: "owner@mapia.local",
+      userId: ACTOR_USER_ID,
+      actor: {
+        userId: ACTOR_USER_ID,
+        email: "owner@mapia.local",
+        providerId: "credentials",
+        authMode: "development_credentials",
+      },
+      session: {
+        user: {
+          id: ACTOR_USER_ID,
+          email: "owner@mapia.local",
+          authProvider: "credentials",
+          authMode: "development_credentials",
+        },
+      },
     });
     mocks.getProjectCreationDraftExecuteMock.mockResolvedValue(null);
     mocks.getProjectCreationSettingsExecuteMock.mockResolvedValue(null);
@@ -172,9 +192,25 @@ describe("creation assistant api contracts", () => {
       draftUpdatedAt: null,
       applied: null,
     });
-    mocks.getOwnedProjectExecuteMock.mockResolvedValue({
-      name: "Projeto",
-      description: null,
+    mocks.getProjectAccessExecuteMock.mockResolvedValue({
+      project: {
+        id: PROJECT_ID,
+        workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+        slug: "projeto",
+        name: "Projeto",
+        description: null,
+        template: "graph",
+        createdAt: new Date("2026-03-12T10:00:00.000Z"),
+        updatedAt: new Date("2026-03-12T10:00:00.000Z"),
+      },
+      membership: {
+        id: "22222222-2222-4222-8222-222222222222",
+        workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+        userId: ACTOR_USER_ID,
+        role: "member",
+        createdAt: new Date("2026-03-12T10:00:00.000Z"),
+        updatedAt: new Date("2026-03-12T10:00:00.000Z"),
+      },
     });
   });
 
@@ -182,6 +218,189 @@ describe("creation assistant api contracts", () => {
     await __flushCreationTransitionTelemetryForTests();
     __resetCreationTransitionTelemetryForTests();
     vi.clearAllMocks();
+  });
+
+  it("GET /creation-draft returns 404 when membership access cannot resolve the project", async () => {
+    mocks.getProjectAccessExecuteMock.mockRejectedValueOnce(
+      new AppError("Projeto nao encontrado.", {
+        code: "PROJECT_NOT_FOUND",
+        status: 404,
+      }),
+    );
+
+    const response = await getCreationDraftRoute(
+      new Request("http://localhost/api/projects/x/creation-draft"),
+      { params: Promise.resolve({ projectId: PROJECT_ID }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(mocks.getProjectCreationDraftExecuteMock).not.toHaveBeenCalled();
+  });
+
+  it("PUT /creation-settings/draft returns 403 when member role is insufficient", async () => {
+    mocks.getProjectAccessExecuteMock.mockRejectedValueOnce(
+      new AppError("Permissao insuficiente para este projeto.", {
+        code: "PROJECT_FORBIDDEN",
+        status: 403,
+      }),
+    );
+
+    const response = await putCreationSettingsDraftAliasRoute(
+      new Request("http://localhost/api/projects/x/creation-settings/draft", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          draft: {
+            projectName: "Projeto",
+            profile: "blank",
+            startStrategy: "manual",
+            initialView: "free",
+            layout: "free",
+            detailLevel: "intermediate",
+            automation: {
+              inferRelations: true,
+              createLinkFields: true,
+              applySuggestedNames: true,
+              autoOrganizeOnCreate: true,
+              detectInconsistenciesEarly: true,
+            },
+            context: {},
+          },
+        }),
+      }),
+      { params: Promise.resolve({ projectId: PROJECT_ID }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.saveProjectCreationDraftExecuteMock).not.toHaveBeenCalled();
+  });
+
+  it("POST /creation-settings/apply-initial-map returns 403 when member role is insufficient", async () => {
+    mocks.getProjectAccessExecuteMock.mockRejectedValueOnce(
+      new AppError("Permissao insuficiente para este projeto.", {
+        code: "PROJECT_FORBIDDEN",
+        status: 403,
+      }),
+    );
+
+    const response = await postCreationSettingsApplyInitialMapRoute(
+      new Request(
+        "http://localhost/api/projects/x/creation-settings/apply-initial-map",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            projectName: "Projeto",
+            profile: "blank",
+            startStrategy: "manual",
+            initialView: "free",
+            layout: "free",
+            detailLevel: "intermediate",
+            automation: {
+              inferRelations: true,
+              createLinkFields: true,
+              applySuggestedNames: true,
+              autoOrganizeOnCreate: true,
+              detectInconsistenciesEarly: true,
+            },
+            context: {},
+          }),
+        },
+      ),
+      { params: Promise.resolve({ projectId: PROJECT_ID }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.applyProjectCreationExecuteMock).not.toHaveBeenCalled();
+  });
+
+  it("PUT /wizard-draft resolves through getProjectAccess and keeps member minimum role", async () => {
+    mocks.saveProjectCreationDraftExecuteMock.mockResolvedValueOnce({
+      draft: {
+        projectName: "Projeto",
+        profile: "blank",
+        startStrategy: "manual",
+        initialView: "free",
+        layout: "free",
+        detailLevel: "intermediate",
+        automation: {
+          inferRelations: true,
+          createLinkFields: true,
+          applySuggestedNames: true,
+          autoOrganizeOnCreate: true,
+          detectInconsistenciesEarly: true,
+        },
+        context: {},
+      },
+      version: 1,
+      updatedAt: new Date("2026-03-12T10:00:00.000Z"),
+      updatedByIdentity: "owner@mapia.local",
+    });
+
+    const response = await putWizardDraftRoute(
+      new Request("http://localhost/api/projects/x/wizard-draft", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "draft",
+          currentStep: "template",
+          payload: {
+            template: "graph",
+            config: {
+              name: "Projeto",
+              description: "Objetivo",
+            },
+          },
+        }),
+      }),
+      { params: Promise.resolve({ projectId: PROJECT_ID }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getProjectAccessExecuteMock).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      projectId: PROJECT_ID,
+      minimumRole: "member",
+    });
+  });
+
+  it("POST /wizard-generate resolves through getProjectAccess and keeps member minimum role", async () => {
+    mocks.applyProjectCreationExecuteMock.mockResolvedValueOnce({
+      projectId: PROJECT_ID,
+      redirectUrl: `/editor?projectId=${PROJECT_ID}`,
+      appliedVersion: 2,
+      appliedAt: new Date("2026-03-12T11:00:00.000Z"),
+      initialSnapshot: null,
+      appliedSettings: {
+        profile: "blank",
+        startStrategy: "manual",
+        initialView: "free",
+        layout: "free",
+        detailLevel: "intermediate",
+        automation: {
+          inferRelations: true,
+          createLinkFields: true,
+          applySuggestedNames: true,
+          autoOrganizeOnCreate: true,
+          detectInconsistenciesEarly: true,
+        },
+        context: {},
+      },
+    });
+
+    const response = await postWizardGenerateRoute(
+      new Request("http://localhost/api/projects/x/wizard-generate", {
+        method: "POST",
+      }),
+      { params: Promise.resolve({ projectId: PROJECT_ID }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.getProjectAccessExecuteMock).toHaveBeenCalledWith({
+      actorUserId: ACTOR_USER_ID,
+      projectId: PROJECT_ID,
+      minimumRole: "member",
+    });
   });
 
   it("PUT /creation-draft does not return raw secrets", async () => {

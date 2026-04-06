@@ -1,5 +1,5 @@
 import { ProtectedShell } from "@/src/components/layout/protected-shell";
-import { requireSession } from "@/src/server/auth/session";
+import { requireAuthenticatedSession } from "@/src/server/auth/session";
 
 type ProtectedLayoutProps = {
   children: React.ReactNode;
@@ -8,7 +8,7 @@ type ProtectedLayoutProps = {
 export default async function ProtectedLayout({
   children,
 }: ProtectedLayoutProps) {
-  const session = await requireSession();
+  const { session } = await requireAuthenticatedSession();
 
   return <ProtectedShell session={session}>{children}</ProtectedShell>;
 }

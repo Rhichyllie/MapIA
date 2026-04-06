@@ -1,9 +1,45 @@
+import { randomUUID } from "crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { GraphSnapshotSchema } from "../src/domain";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const [seedUser] = await prisma.$queryRaw<
+    Array<{
+      id: string;
+      email: string;
+    }>
+  >(
+    Prisma.sql`
+      INSERT INTO "app_users" (
+        "id",
+        "email",
+        "emailNormalized",
+        "displayName",
+        "active",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${randomUUID()}::uuid,
+        'admin@mapia.local',
+        'admin@mapia.local',
+        'MapIA Development Admin',
+        true,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT ("emailNormalized")
+      DO UPDATE SET
+        "email" = EXCLUDED."email",
+        "displayName" = EXCLUDED."displayName",
+        "active" = true,
+        "updatedAt" = CURRENT_TIMESTAMP
+      RETURNING "id", "email"
+    `,
+  );
+
   const workspace = await prisma.workspace.upsert({
     where: { slug: "mapia-demo" },
     update: {
@@ -15,6 +51,64 @@ async function main() {
       ownerIdentity: "admin@mapia.local",
     },
   });
+
+  await prisma.$executeRaw(
+    Prisma.sql`
+      INSERT INTO "workspace_memberships" (
+        "id",
+        "workspaceId",
+        "userId",
+        "role",
+        "createdAt",
+        "updatedAt"
+      )
+      VALUES (
+        ${randomUUID()}::uuid,
+        ${workspace.id}::uuid,
+        ${seedUser.id}::uuid,
+        'owner'::"WorkspaceRole",
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT ("workspaceId", "userId")
+      DO UPDATE SET
+        "role" = 'owner'::"WorkspaceRole",
+        "updatedAt" = CURRENT_TIMESTAMP
+    `,
+  );
+
+  await prisma.$executeRaw(
+    Prisma.sql`
+      INSERT INTO "auth_identities" (
+        "id",
+        "userId",
+        "providerType",
+        "providerId",
+        "subject",
+        "emailAtLogin",
+        "createdAt",
+        "updatedAt",
+        "lastSeenAt"
+      )
+      VALUES (
+        ${randomUUID()}::uuid,
+        ${seedUser.id}::uuid,
+        'development_credentials'::"AuthProviderType",
+        'credentials',
+        'admin@mapia.local',
+        'admin@mapia.local',
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT ("providerId", "subject")
+      DO UPDATE SET
+        "userId" = EXCLUDED."userId",
+        "emailAtLogin" = EXCLUDED."emailAtLogin",
+        "lastSeenAt" = CURRENT_TIMESTAMP,
+        "updatedAt" = CURRENT_TIMESTAMP
+    `,
+  );
 
   const project = await prisma.project.upsert({
     where: {
@@ -62,7 +156,7 @@ async function main() {
   });
 
   console.log(
-    `Seed concluido: workspace=${workspace.slug} project=${project.slug} version=1`,
+    `Seed concluido: user=${seedUser.email} workspace=${workspace.slug} project=${project.slug} version=1`,
   );
 }
 

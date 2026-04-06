@@ -11,7 +11,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import {
   buildCreationTelemetryContextFromRequest,
   recordCreationDraftSaved,
@@ -46,15 +46,23 @@ export async function GET(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await requireAuthenticatedApiRequest();
-    const params = ParamsSchema.parse(await context.params);
-    const { creationAssistant } = createServerUseCases();
+    const useCases = createServerUseCases();
+    const { auth, params } = await requireProjectRouteContext({
+      route: "GET /api/projects/[projectId]/creation-settings",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      minimumRole: "viewer",
+      useCases,
+    });
+    const { creationAssistant } = useCases;
     const [settings, summary] = await Promise.all([
       creationAssistant.getProjectCreationSettings.execute({
+        actorUserId: auth.userId,
         ownerIdentity: auth.identity,
         projectId: params.projectId,
       }),
       creationAssistant.getProjectCreationSettingsSummary.execute({
+        actorUserId: auth.userId,
         ownerIdentity: auth.identity,
         projectId: params.projectId,
       }),
@@ -125,8 +133,14 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await requireAuthenticatedApiRequest();
-    const params = ParamsSchema.parse(await context.params);
+    const useCases = createServerUseCases();
+    const { auth, params, project } = await requireProjectRouteContext({
+      route: "PUT /api/projects/[projectId]/creation-settings",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      minimumRole: "member",
+      useCases,
+    });
     const requestContext = buildCreationTelemetryContextFromRequest(request);
     const rawBody = await request.json();
     const parsedAliasBody = DraftAliasBodySchema.safeParse(rawBody);
@@ -139,29 +153,25 @@ export async function PUT(
           ...(draftOnly.success ? { draft: draftOnly.data } : {}),
           ...(settingsOnly.success ? { settings: settingsOnly.data } : {}),
         };
-    const { creationAssistant, projects } = createServerUseCases();
+    const { creationAssistant } = useCases;
     const previousDraftState =
       await creationAssistant.getProjectCreationDraft.execute({
+        actorUserId: auth.userId,
         ownerIdentity: auth.identity,
         projectId: params.projectId,
       });
-
-    const projectForAlias = body.settings
-      ? await projects.getOwnedProject.execute({
-          ownerIdentity: auth.identity,
-          projectId: params.projectId,
-        })
-      : null;
 
     const draft =
       body.draft ??
       (body.settings
         ? toDraftFromSettingsAlias({
             settings: body.settings,
-            projectName: projectForAlias?.name ?? "Projeto",
-            projectObjective: projectForAlias?.description,
+            projectName: project.name,
+            projectObjective: project.description,
           })
         : null);
+    const expectedVersion =
+      body.expectedVersion ?? body.expectedDraftVersion ?? undefined;
 
     if (!draft) {
       throw new AppError("Envie draft ou settings para o alias de rascunho.", {
@@ -172,15 +182,11 @@ export async function PUT(
 
     const draftState = await creationAssistant.saveProjectCreationDraft.execute(
       {
+        actorUserId: auth.userId,
         ownerIdentity: auth.identity,
         projectId: params.projectId,
         draft,
-        ...(body.expectedVersion || body.expectedDraftVersion
-          ? {
-              expectedVersion:
-                body.expectedVersion ?? body.expectedDraftVersion,
-            }
-          : {}),
+        ...(expectedVersion ? { expectedVersion } : {}),
       },
     );
     await runCreationTelemetryFanout([

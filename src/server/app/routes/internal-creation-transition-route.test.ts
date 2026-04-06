@@ -36,6 +36,8 @@ vi.mock(
 import { GET } from "@/app/api/internal/observability/creation-transition/route";
 
 describe("GET /api/internal/observability/creation-transition", () => {
+  const actorUserId = "11111111-1111-4111-8111-111111111111";
+
   beforeEach(() => {
     vi.clearAllMocks();
     routeMocks.getCreationTransitionTelemetrySnapshot.mockResolvedValue({
@@ -59,7 +61,21 @@ describe("GET /api/internal/observability/creation-transition", () => {
   it("returns 403 for non-internal identities and audits denied access", async () => {
     routeMocks.getApiSessionIdentity.mockResolvedValue({
       identity: "user@mapia.local",
-      session: { user: { email: "user@mapia.local" } },
+      userId: actorUserId,
+      actor: {
+        userId: actorUserId,
+        email: "user@mapia.local",
+        providerId: "credentials",
+        authMode: "development_credentials",
+      },
+      session: {
+        user: {
+          id: actorUserId,
+          email: "user@mapia.local",
+          authProvider: "credentials",
+          authMode: "development_credentials",
+        },
+      },
     });
     routeMocks.resolveInternalObservabilityAccess.mockReturnValue({
       allowed: false,
@@ -88,7 +104,21 @@ describe("GET /api/internal/observability/creation-transition", () => {
   it("returns snapshot for allowed identities and audits access", async () => {
     routeMocks.getApiSessionIdentity.mockResolvedValue({
       identity: "admin@mapia.local",
-      session: { user: { email: "admin@mapia.local" } },
+      userId: actorUserId,
+      actor: {
+        userId: actorUserId,
+        email: "admin@mapia.local",
+        providerId: "credentials",
+        authMode: "development_credentials",
+      },
+      session: {
+        user: {
+          id: actorUserId,
+          email: "admin@mapia.local",
+          authProvider: "credentials",
+          authMode: "development_credentials",
+        },
+      },
     });
     routeMocks.resolveInternalObservabilityAccess.mockReturnValue({
       allowed: true,

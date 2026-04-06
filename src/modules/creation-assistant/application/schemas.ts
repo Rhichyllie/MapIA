@@ -5,17 +5,20 @@ import {
 } from "@/src/modules/creation-assistant/domain";
 
 export const CreateProjectWithAssistantInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   draft: AssistantDraftSchema,
 });
 
 export const ApplyAssistantDraftToProjectInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   projectId: z.string().uuid(),
   draft: AssistantDraftSchema,
 });
 
 export const ApplyProjectCreationInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   projectId: z.string().uuid(),
   createInitialMap: z.boolean().default(true),
@@ -23,22 +26,26 @@ export const ApplyProjectCreationInputSchema = z.object({
 });
 
 export const GetProjectCreationSettingsInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   projectId: z.string().uuid(),
 });
 
 export const GetProjectCreationDraftInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   projectId: z.string().uuid(),
 });
 
 export const SaveProjectCreationSettingsInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   projectId: z.string().uuid(),
   settings: AssistantCreationSettingsSchema,
 });
 
 export const SaveProjectCreationDraftInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   ownerIdentity: z.string().email(),
   projectId: z.string().uuid(),
   draft: AssistantDraftSchema,

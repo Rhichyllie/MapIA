@@ -5,7 +5,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import {
   buildCreationTelemetryContextFromRequest,
   recordCreationApplyAttempted,
@@ -28,14 +28,22 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await requireAuthenticatedApiRequest();
-
-    const params = ParamsSchema.parse(await context.params);
+    const useCases = createServerUseCases();
+    const { auth, params, project, membership } =
+      await requireProjectRouteContext({
+        route:
+          "POST /api/projects/[projectId]/creation-settings/apply-initial-map",
+        params: context.params,
+        paramsSchema: ParamsSchema,
+        minimumRole: "member",
+        useCases,
+      });
     const requestContext = buildCreationTelemetryContextFromRequest(request);
     const draft = AssistantDraftSchema.parse(await request.json());
-    const { creationAssistant } = createServerUseCases();
+    const { creationAssistant } = useCases;
     const previousSettings =
       await creationAssistant.getProjectCreationSettings.execute({
+        actorUserId: auth.userId,
         ownerIdentity: auth.identity,
         projectId: params.projectId,
       });
@@ -49,16 +57,19 @@ export async function POST(
       }),
     );
     const result = await creationAssistant.applyProjectCreation.execute({
+      actorUserId: auth.userId,
       ownerIdentity: auth.identity,
       projectId: params.projectId,
       createInitialMap: true,
       draft,
     });
     await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
       projectId: params.projectId,
       entityType: "project",
       entityId: params.projectId,
       action: "updated",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route:
@@ -66,6 +77,7 @@ export async function POST(
         createInitialMap: true,
         appliedVersion: result.appliedVersion,
         sourceStatus: result.appliedSettings.sourceStatus ?? null,
+        actorRole: membership.role,
       },
     });
     await runCreationTelemetryFanout([

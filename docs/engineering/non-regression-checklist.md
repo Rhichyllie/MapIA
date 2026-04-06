@@ -60,6 +60,8 @@ Documentos de apoio:
 
 - Comando E2E alvo:
   - `pnpm exec playwright test tests/e2e/i18n-login-locale.spec.ts tests/e2e/i18n-language-switcher.spec.ts --project=chromium`
+- Comando unitario alvo:
+  - `pnpm exec vitest run src/server/auth/auth-runtime.test.ts src/server/auth/auth-runtime-readiness.test.ts src/server/auth/session.test.ts src/server/app/api-route-guards.test.ts`
 - Rodar quando:
   - `app/[locale]/login`
   - protecao de rotas
@@ -121,15 +123,18 @@ Rode quando a mudanca tocar a area correspondente. Registre no PR o que foi vali
 ### Autenticacao
 
 - abrir `/login`
-- autenticar com `DEV_LOGIN_EMAIL` e `DEV_LOGIN_PASSWORD` em `NODE_ENV=development`
+- autenticar com `DEV_LOGIN_EMAIL` e `DEV_LOGIN_PASSWORD` em `AUTH_MODE=development`
 - confirmar redirect para `/dashboard`
 - tentar abrir uma rota protegida sem sessao quando a mudanca tocar guard de auth
+- se a mudanca tocar `AUTH_MODE=oidc` ou `src/server/auth/auth-runtime.ts`, validar tambem que producao mal configurada falha de forma segura em vez de cair para login dev-only
+- se a mudanca tocar readiness/contrato OIDC, rodar tambem `pnpm auth:preflight:staging`
 
 Referencia real do repositorio:
 
 - `.env.example`
 - `tests/e2e/fixtures.ts`
 - `src/server/auth/options.ts`
+- `src/server/auth/auth-runtime.ts`
 
 ### Rotas principais
 
@@ -178,6 +183,8 @@ Referencia real do repositorio:
 Valide por teste automatizado, fluxo E2E ou chamada manual, conforme o escopo:
 
 - `POST /api/projects`
+- `GET|PUT /api/workspaces/[workspaceId]/memberships` quando a mudanca tocar acesso multiusuario
+- `DELETE /api/workspaces/[workspaceId]/memberships/[memberUserId]` quando a mudanca tocar governanca de membership
 - `PUT /api/projects/[projectId]/creation-draft`
 - `POST /api/projects/[projectId]/creation-apply`
 - `POST /api/projects/[projectId]/editor-commands`
@@ -199,6 +206,7 @@ Valide por teste automatizado, fluxo E2E ou chamada manual, conforme o escopo:
 - Ainda faltam route tests dedicados para algumas rotas menos centrais ou de compatibilidade, especialmente aliases e partes de `creation-settings*`.
 - Os E2E dependem de Postgres local, browser do Playwright instalado e credenciais dev validas em `.env`.
 - O login por credenciais deste repositorio existe apenas em `development`; smoke de auth fora desse modo exige outra estrategia.
+- O backend agora exige `AUTH_MODE=oidc` com env completa para auth de producao; sem isso, o comportamento esperado em ambiente compartilhado e falha segura.
 - `pnpm prisma:migrate` deixou de ser alias executavel; use o comando explicito correto para o ambiente.
 
 ## Fechamento minimo antes de merge

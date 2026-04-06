@@ -7,7 +7,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import {
   buildCreationTelemetryContextFromRequest,
   recordCreationDraftSaved,
@@ -31,10 +31,17 @@ export async function GET(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await requireAuthenticatedApiRequest();
-    const params = ParamsSchema.parse(await context.params);
-    const { creationAssistant } = createServerUseCases();
+    const useCases = createServerUseCases();
+    const { auth, params } = await requireProjectRouteContext({
+      route: "GET /api/projects/[projectId]/creation-settings/draft",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      minimumRole: "viewer",
+      useCases,
+    });
+    const { creationAssistant } = useCases;
     const draft = await creationAssistant.getProjectCreationDraft.execute({
+      actorUserId: auth.userId,
       ownerIdentity: auth.identity,
       projectId: params.projectId,
     });
@@ -58,17 +65,25 @@ export async function PUT(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await requireAuthenticatedApiRequest();
-    const params = ParamsSchema.parse(await context.params);
+    const useCases = createServerUseCases();
+    const { auth, params } = await requireProjectRouteContext({
+      route: "PUT /api/projects/[projectId]/creation-settings/draft",
+      params: context.params,
+      paramsSchema: ParamsSchema,
+      minimumRole: "member",
+      useCases,
+    });
     const requestContext = buildCreationTelemetryContextFromRequest(request);
     const body = SaveDraftBodySchema.parse(await request.json());
-    const { creationAssistant } = createServerUseCases();
+    const { creationAssistant } = useCases;
     const previousDraft =
       await creationAssistant.getProjectCreationDraft.execute({
+        actorUserId: auth.userId,
         ownerIdentity: auth.identity,
         projectId: params.projectId,
       });
     const draft = await creationAssistant.saveProjectCreationDraft.execute({
+      actorUserId: auth.userId,
       ownerIdentity: auth.identity,
       projectId: params.projectId,
       draft: body.draft,

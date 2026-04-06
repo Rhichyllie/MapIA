@@ -18,6 +18,7 @@ import { POST } from "@/app/api/projects/route";
 
 const workspaceId = "58f3ca26-085e-4237-80d9-adcc42f7142b";
 const projectId = "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2";
+const actorUserId = "11111111-1111-4111-8111-111111111111";
 
 function createRequest(body: unknown) {
   return new Request("http://localhost/api/projects", {
@@ -51,7 +52,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   routeMocks.getApiSessionIdentity.mockResolvedValue({
     identity: "owner@mapia.local",
-    session: { user: { email: "owner@mapia.local" } },
+    userId: actorUserId,
+    actor: {
+      userId: actorUserId,
+      email: "owner@mapia.local",
+      providerId: "credentials",
+      authMode: "development_credentials",
+    },
+    session: {
+      user: {
+        id: actorUserId,
+        email: "owner@mapia.local",
+        authProvider: "credentials",
+        authMode: "development_credentials",
+      },
+    },
   });
 });
 
@@ -140,7 +155,7 @@ describe("POST /api/projects", () => {
 
     expect(response.status).toBe(201);
     expect(useCases.projects.createProject.execute).toHaveBeenCalledWith({
-      ownerIdentity: "owner@mapia.local",
+      actorUserId,
       workspaceId,
       name: "Projeto Alpha",
       description: "Mapa principal",

@@ -6,7 +6,7 @@ import {
 } from "@/src/server/app/api-response";
 import {
   requireAuthenticatedApiRequest,
-  requireOwnedProjectForApi,
+  requireProjectAccessForApi,
 } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
@@ -43,11 +43,12 @@ export async function POST(
       body = {};
     }
     const useCases = createServerUseCases();
-    const project = await requireOwnedProjectForApi({
+    const access = await requireProjectAccessForApi({
       route:
         "POST /api/projects/[projectId]/snapshot-versions/[versionId]/restore",
       projectId: params.projectId,
-      ownerIdentity: auth.identity,
+      minimumRole: "member",
+      auth,
       useCases,
     });
 
@@ -66,15 +67,17 @@ export async function POST(
         ...(body.overrideReason ? { overrideReason: body.overrideReason } : {}),
       });
     await recordServerAuditEvent({
-      workspaceId: project.workspaceId,
+      workspaceId: access.project.workspaceId,
       projectId: params.projectId,
       entityType: "graph_version",
       entityId: params.versionId,
       action: "restored",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route:
           "POST /api/projects/[projectId]/snapshot-versions/[versionId]/restore",
+        actorRole: access.membership.role,
         restoredFromVersionId: result.restoredFromVersionId,
         newRevision: result.workingSnapshot.revision,
       },

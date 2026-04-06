@@ -3,7 +3,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireAuthenticatedApiRequest } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 
@@ -18,23 +18,34 @@ export async function POST(
   context: { params: Promise<{ projectId: string }> },
 ) {
   try {
-    const auth = await requireAuthenticatedApiRequest();
-    const params = ParamsSchema.parse(await context.params);
-    const { creationAssistant } = createServerUseCases();
+    const useCases = createServerUseCases();
+    const { auth, params, project, membership } =
+      await requireProjectRouteContext({
+        route: "POST /api/projects/[projectId]/wizard-generate",
+        params: context.params,
+        paramsSchema: ParamsSchema,
+        minimumRole: "member",
+        useCases,
+      });
+    const { creationAssistant } = useCases;
     const result = await creationAssistant.applyProjectCreation.execute({
+      actorUserId: auth.userId,
       ownerIdentity: auth.identity,
       projectId: params.projectId,
       createInitialMap: true,
     });
     await recordServerAuditEvent({
+      workspaceId: project.workspaceId,
       projectId: params.projectId,
       entityType: "project",
       entityId: params.projectId,
       action: "updated",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route: "POST /api/projects/[projectId]/wizard-generate",
         compatibilityAlias: true,
+        actorRole: membership.role,
       },
     });
 

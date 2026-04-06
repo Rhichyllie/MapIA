@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { WorkspaceRoleSchema } from "@/src/modules/workspaces/domain";
 import { ProjectTemplateSchema } from "@/src/modules/projects/domain";
 
 export const CreateProjectInputSchema = z.object({
-  ownerIdentity: z.string().email(),
+  actorUserId: z.string().uuid(),
   workspaceId: z.string().uuid(),
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional().or(z.literal("")),
@@ -11,13 +12,14 @@ export const CreateProjectInputSchema = z.object({
 });
 
 export const ListProjectsByWorkspaceInputSchema = z.object({
-  ownerIdentity: z.string().email(),
+  actorUserId: z.string().uuid(),
   workspaceId: z.string().uuid(),
 });
 
-export const GetOwnedProjectInputSchema = z.object({
-  ownerIdentity: z.string().email(),
+export const GetProjectAccessInputSchema = z.object({
+  actorUserId: z.string().uuid(),
   projectId: z.string().uuid(),
+  minimumRole: WorkspaceRoleSchema.default("viewer"),
 });
 
 export const UpdateProjectMetadataInputSchema = z.object({
@@ -31,7 +33,7 @@ export type CreateProjectInput = z.infer<typeof CreateProjectInputSchema>;
 export type ListProjectsByWorkspaceInput = z.infer<
   typeof ListProjectsByWorkspaceInputSchema
 >;
-export type GetOwnedProjectInput = z.infer<typeof GetOwnedProjectInputSchema>;
+export type GetProjectAccessInput = z.infer<typeof GetProjectAccessInputSchema>;
 export type UpdateProjectMetadataInput = z.infer<
   typeof UpdateProjectMetadataInputSchema
 >;

@@ -33,6 +33,8 @@ vi.mock(
 import { POST } from "@/app/api/internal/observability/creation-transition/evaluate/route";
 
 describe("POST /api/internal/observability/creation-transition/evaluate", () => {
+  const actorUserId = "11111111-1111-4111-8111-111111111111";
+
   beforeEach(() => {
     vi.clearAllMocks();
     routeMocks.evaluateCreationTransitionGateWarnings.mockResolvedValue(
@@ -54,7 +56,21 @@ describe("POST /api/internal/observability/creation-transition/evaluate", () => 
   it("returns 403 for non-internal identities and audits denied access", async () => {
     routeMocks.getApiSessionIdentity.mockResolvedValue({
       identity: "user@mapia.local",
-      session: { user: { email: "user@mapia.local" } },
+      userId: actorUserId,
+      actor: {
+        userId: actorUserId,
+        email: "user@mapia.local",
+        providerId: "credentials",
+        authMode: "development_credentials",
+      },
+      session: {
+        user: {
+          id: actorUserId,
+          email: "user@mapia.local",
+          authProvider: "credentials",
+          authMode: "development_credentials",
+        },
+      },
     });
     routeMocks.resolveInternalObservabilityAccess.mockReturnValue({
       allowed: false,
@@ -81,7 +97,21 @@ describe("POST /api/internal/observability/creation-transition/evaluate", () => 
   it("evaluates gates for internal identities", async () => {
     routeMocks.getApiSessionIdentity.mockResolvedValue({
       identity: "ops@mapia.local",
-      session: { user: { email: "ops@mapia.local" } },
+      userId: actorUserId,
+      actor: {
+        userId: actorUserId,
+        email: "ops@mapia.local",
+        providerId: "credentials",
+        authMode: "development_credentials",
+      },
+      session: {
+        user: {
+          id: actorUserId,
+          email: "ops@mapia.local",
+          authProvider: "credentials",
+          authMode: "development_credentials",
+        },
+      },
     });
     routeMocks.resolveInternalObservabilityAccess.mockReturnValue({
       allowed: true,

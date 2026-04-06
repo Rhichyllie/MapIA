@@ -6,6 +6,7 @@
 
 - Agrupa projetos.
 - Campos basicos: `id`, `slug`, `name`, `ownerIdentity`, timestamps.
+- `ownerIdentity` permanece apenas como compatibilidade historica; autorizacao ativa ja depende de `workspace_memberships` + role.
 
 ### Project
 

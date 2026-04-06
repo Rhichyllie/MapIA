@@ -17,6 +17,7 @@ vi.mock("@/src/server/app/container", () => ({
 import { POST } from "@/app/api/projects/[projectId]/edges/route";
 
 const projectId = "58f3ca26-085e-4237-80d9-adcc42f7142b";
+const actorUserId = "11111111-1111-4111-8111-111111111111";
 
 function createContext() {
   return {
@@ -37,8 +38,21 @@ function createRequest(body: unknown) {
 function createUseCasesMock() {
   return {
     projects: {
-      getOwnedProject: {
-        execute: vi.fn().mockResolvedValue(undefined),
+      getProjectAccess: {
+        execute: vi.fn().mockResolvedValue({
+          project: {
+            id: projectId,
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          },
+          membership: {
+            id: "22222222-2222-4222-8222-222222222222",
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+            userId: actorUserId,
+            role: "member",
+            createdAt: new Date("2026-04-02T10:00:00.000Z"),
+            updatedAt: new Date("2026-04-02T10:00:00.000Z"),
+          },
+        }),
       },
     },
     editor: {
@@ -61,7 +75,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   routeMocks.getApiSessionIdentity.mockResolvedValue({
     identity: "dev@mapia.local",
-    session: { user: { email: "dev@mapia.local" } },
+    userId: actorUserId,
+    actor: {
+      userId: actorUserId,
+      email: "dev@mapia.local",
+      providerId: "credentials",
+      authMode: "development_credentials",
+    },
+    session: {
+      user: {
+        id: actorUserId,
+        email: "dev@mapia.local",
+        authProvider: "credentials",
+        authMode: "development_credentials",
+      },
+    },
   });
 });
 

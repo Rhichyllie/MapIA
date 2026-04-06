@@ -76,14 +76,16 @@ Os contratos abaixo sao os pontos que futuras fases nao devem quebrar sem migrac
 - Como validar integridade: route tests existentes e chamadas manuais para rotas representativas.
 - Impacto em caso de regressao: clientes quebram parsing, mensagens deixam de ser previsiveis e ferramentas operacionais perdem consistencia.
 
-## 9. Sessao, identidade e ownership
+## 9. Sessao autenticada, usuario interno e membership por workspace
 
-- Nome: sessao `NextAuth` + ownership por identidade
-- Local no codigo: `src/server/auth/options.ts`, `src/server/auth/session.ts`, `src/server/auth/api-session.ts`, `src/server/app/api-route-guards.ts`, casos de uso de `projects` e `workspaces`
-- Por que e critico: quase toda protecao hoje depende de `ownerIdentity` e da sessao JWT.
-- Risco de quebra: alto. Nao existe outro modelo de autorizacao pronto no repo.
-- Como validar integridade: login, acesso a paginas protegidas, chamadas autenticadas de API e ownership de projeto.
-- Impacto em caso de regressao: vazamento de acesso entre projetos, quebra de login ou protecao insuficiente em rotas.
+- Nome: sessao `NextAuth` + `app_users` + `auth_identities` + `workspace_memberships`
+- Local no codigo: `src/server/auth/options.ts`, `src/server/auth/auth-runtime.ts`, `src/server/auth/session.ts`, `src/server/auth/api-session.ts`, `src/server/auth/auth-user-store.ts`, `src/server/app/api-route-guards.ts`, casos de uso de `projects` e `workspaces`, `prisma/schema.prisma`
+- Por que e critico: a protecao principal agora depende da resolucao consistente entre identidade autenticada, usuario interno e membership/role no workspace correto.
+- Risco de quebra: alto. Essa e a base do produto multiusuario e do fail-closed em producao.
+- Como validar integridade: testes de `auth-runtime`, `auth-runtime-readiness`, `options`, `session`, guards de API, `api/auth/[...nextauth]`, `pnpm auth:preflight:staging`, `test:routes:critical` e rotas de membership.
+- Impacto em caso de regressao: login aparentemente valido com sessao inconsistente, acesso indevido entre workspaces/projetos, ou falha total de auth em ambiente compartilhado.
+- Regra adicional: `Workspace.ownerIdentity` nao pode voltar a ser fonte de autorizacao; ele permanece apenas como compatibilidade de dados.
+- Regra adicional: o ultimo `owner` de um workspace nao pode ser rebaixado nem removido.
 
 ## 10. Acesso a observabilidade interna
 
@@ -127,7 +129,7 @@ Os contratos abaixo sao os pontos que futuras fases nao devem quebrar sem migrac
 - Local no codigo: `src/lib/routes.ts`, `app/[locale]/(protected)/wizard/page.tsx`, `app/api/projects/[projectId]/wizard-draft/route.ts`, `app/api/projects/[projectId]/wizard-generate/route.ts`, `app/api/projects/[projectId]/creation-settings/route.ts`
 - Por que e critico: ainda ha codigo e possiveis clientes internos antigos dependendo desses aliases.
 - Risco de quebra: medio-alto ate haver plano de retirada.
-- Como validar integridade: abrir `/wizard?projectId=...`, salvar por alias e aplicar via alias; comparar com rotas oficiais.
+- Como validar integridade: abrir `/wizard?projectId=...`, salvar por alias e aplicar via alias; comparar com rotas oficiais e confirmar que os aliases passam pelos mesmos guards de membership/role do caminho canonico.
 - Impacto em caso de regressao: links antigos e clientes de compatibilidade deixam de funcionar sem migracao.
 
 ## O que nao deve acontecer sem migracao explicita

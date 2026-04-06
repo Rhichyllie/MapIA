@@ -5,7 +5,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 
 const ParamsSchema = z.object({
@@ -38,10 +38,11 @@ export async function POST(
 ) {
   try {
     const useCases = createServerUseCases();
-    const { auth, params } = await requireOwnedProjectRouteContext({
+    const { auth, params } = await requireProjectRouteContext({
       route: "POST /api/projects/[projectId]/edges",
       params: context.params,
       paramsSchema: ParamsSchema,
+      minimumRole: "member",
       useCases,
     });
     const body = CreateEdgeRequestSchema.parse(await request.json());

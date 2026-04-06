@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
     try {
       createdProject = await projects.createProject.execute({
-        ownerIdentity: auth.identity,
+        actorUserId: auth.userId,
         workspaceId: body.workspaceId,
         name: body.name,
         description: body.description,
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
           entityType: "workspace",
           entityId: body.workspaceId,
           action: "denied",
+          actorUserId: auth.userId,
           actorIdentity: auth.identity,
           payload: {
             route: "POST /api/projects",
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
       entityType: "project",
       entityId: createdProject.id,
       action: "created",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route: "POST /api/projects",

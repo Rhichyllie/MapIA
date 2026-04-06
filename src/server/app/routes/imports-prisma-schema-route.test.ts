@@ -17,6 +17,7 @@ vi.mock("@/src/server/app/container", () => ({
 import { POST } from "@/app/api/projects/[projectId]/imports/prisma-schema/route";
 
 const projectId = "58f3ca26-085e-4237-80d9-adcc42f7142b";
+const actorUserId = "11111111-1111-4111-8111-111111111111";
 
 function createContext() {
   return {
@@ -37,10 +38,20 @@ function createJsonRequest(body: unknown) {
 function createUseCasesMock() {
   return {
     projects: {
-      getOwnedProject: {
+      getProjectAccess: {
         execute: vi.fn().mockResolvedValue({
-          id: projectId,
-          workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          project: {
+            id: projectId,
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          },
+          membership: {
+            id: "22222222-2222-4222-8222-222222222222",
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+            userId: actorUserId,
+            role: "member",
+            createdAt: new Date("2026-04-02T10:00:00.000Z"),
+            updatedAt: new Date("2026-04-02T10:00:00.000Z"),
+          },
         }),
       },
     },
@@ -87,8 +98,22 @@ function createUseCasesMock() {
 beforeEach(() => {
   vi.clearAllMocks();
   routeMocks.getApiSessionIdentity.mockResolvedValue({
-    identity: "user-123",
-    session: { user: { email: "dev@example.com" } },
+    identity: "dev@example.com",
+    userId: actorUserId,
+    actor: {
+      userId: actorUserId,
+      email: "dev@example.com",
+      providerId: "credentials",
+      authMode: "development_credentials",
+    },
+    session: {
+      user: {
+        id: actorUserId,
+        email: "dev@example.com",
+        authProvider: "credentials",
+        authMode: "development_credentials",
+      },
+    },
   });
 });
 
@@ -125,12 +150,12 @@ describe("POST /api/projects/[projectId]/imports/prisma-schema", () => {
       error: "VALIDATION_ERROR",
       message: "Dados invalidos.",
     });
-    expect(useCases.projects.getOwnedProject.execute).not.toHaveBeenCalled();
+    expect(useCases.projects.getProjectAccess.execute).not.toHaveBeenCalled();
   });
 
-  it("returns ownership/access failure from getOwnedProject", async () => {
+  it("returns membership/access failure from getProjectAccess", async () => {
     const useCases = createUseCasesMock();
-    useCases.projects.getOwnedProject.execute.mockRejectedValueOnce(
+    useCases.projects.getProjectAccess.execute.mockRejectedValueOnce(
       new AppError("Projeto nao encontrado.", {
         code: "PROJECT_NOT_FOUND",
         status: 404,
@@ -172,9 +197,10 @@ describe("POST /api/projects/[projectId]/imports/prisma-schema", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(useCases.projects.getOwnedProject.execute).toHaveBeenCalledWith({
-      ownerIdentity: "user-123",
+    expect(useCases.projects.getProjectAccess.execute).toHaveBeenCalledWith({
+      actorUserId,
       projectId,
+      minimumRole: "member",
     });
     expect(
       useCases.importing.importPrismaSchemaToSnapshot.execute,
@@ -184,7 +210,7 @@ describe("POST /api/projects/[projectId]/imports/prisma-schema", () => {
     });
     expect(useCases.editor.saveFullSnapshot.execute).toHaveBeenCalledWith({
       projectId,
-      actorIdentity: "user-123",
+      actorIdentity: "dev@example.com",
       snapshot: {
         nodes: [],
         edges: [],
@@ -200,7 +226,7 @@ describe("POST /api/projects/[projectId]/imports/prisma-schema", () => {
       useCases.repositories.semanticEventLogRepository.append,
     ).toHaveBeenCalledWith({
       projectId,
-      actorIdentity: "user-123",
+      actorIdentity: "dev@example.com",
       eventType: "import_prisma",
       severity: "info",
       payloadJson: {

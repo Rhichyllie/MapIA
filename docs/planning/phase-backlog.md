@@ -31,6 +31,7 @@ Legenda curta:
 - `PLAT-04` avancou novamente em `2026-04-02`: `semantic/policy` e `semantic/validate` agora tambem tem route tests dedicados, reduzindo dependencia de E2E para validar auth, ownership e envelope.
 - `OBS-02` avancou em `2026-04-02`: as rotas internas de observabilidade passaram a usar o mesmo comportamento de sessao backend, `forbidden` padronizado e tratamento de erro das demais APIs protegidas.
 - Fase `1B` de hardening de plataforma em `2026-04-02`: auth/session backend, ownership por projeto, headers conservadores, auditoria minima e runbook de env/migration ficaram mais centralizados e reutilizaveis.
+- Fase `1C` avancou em `2026-04-02`: auth OIDC production-capable, sessao com ator interno, `app_users/auth_identities/workspace_memberships`, roles ativas no backend e rota de memberships ficaram implementadas.
 - Proximos candidatos naturais apos esta fase: `DOM-01`, `OBS-01`, fechamento do restante de `PLAT-04` e expansao seletiva de route tests.
 
 ## Plataforma e seguranca
@@ -102,3 +103,21 @@ Legenda curta:
 - Nova feature grande de editor ou semantica antes de consolidar `PLAT-03`, `PLAT-04` e `DOM-01`.
 - Retirada de aliases legados sem evidencias de uso e sem janela de migracao.
 - Refactor estrutural profundo em editor ou importacao sem travar antes os contratos hoje implicitos.
+
+## Status de plataforma e acesso apos Fase 1C
+
+- `PLAT-01` avancou substancialmente em `2026-04-02`: existe auth production-capable por OIDC, sessao com `userId` interno e comportamento fail-closed em producao mal configurada.
+- `ENT-01` avancou substancialmente em `2026-04-02`: ownership por email deixou de ser o criterio principal; o backend agora usa `workspace_memberships` com roles `owner/admin/member/viewer`.
+- Fechamento executado em `2026-04-06` (Fase 1C.1):
+  - `api-route-guards.ts` deixou de aceitar fallback central por `getOwnedProject`;
+  - aliases `creation-settings*` e `wizard-*` passaram a ser validados pelo mesmo modelo de membership/role;
+  - lifecycle de memberships ganhou protecao explicita para ultimo `owner`;
+  - OIDC/JWT/session ganharam guardrails adicionais para `NEXTAUTH_URL`, claims obrigatorias e conflito de identity externa.
+- Evolucao focada executada em `2026-04-06` (pos-Fase 1C.1):
+  - staging auth ganhou preflight operacional real com `pnpm auth:preflight:staging` e probe de discovery sem credencial embutida;
+  - `Workspace.ownerIdentity` ficou encapsulado como legado via boundary explicita, em vez de permanecer espalhado nas bordas;
+  - memberships passaram a ter rota de revogacao dedicada com protecao do ultimo `owner` tambem na remocao.
+- Pendencias naturais apos esse marco:
+  - conectar credenciais reais do IdP por ambiente;
+  - medir uso restante dos aliases para definir janela real de retirada;
+  - remover a coluna `workspaces.ownerIdentity` quando os consumidores de compatibilidade chegarem a zero.

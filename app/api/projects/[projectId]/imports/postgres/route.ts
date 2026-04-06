@@ -6,7 +6,7 @@ import {
 } from "@/src/server/app/api-response";
 import {
   requireAuthenticatedApiRequest,
-  requireOwnedProjectForApi,
+  requireProjectAccessForApi,
 } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
@@ -37,12 +37,14 @@ export async function POST(
     const params = ParamsSchema.parse(await context.params);
     const body = ImportPostgresRequestSchema.parse(await request.json());
     const useCases = createServerUseCases();
-    const project = await requireOwnedProjectForApi({
+    const access = await requireProjectAccessForApi({
       route: "POST /api/projects/[projectId]/imports/postgres",
       projectId: params.projectId,
-      ownerIdentity: auth.identity,
+      minimumRole: "member",
+      auth,
       useCases,
     });
+    const { project, membership } = access;
 
     const imported = await useCases.importing.importPostgresToSnapshot.execute({
       projectId: params.projectId,
@@ -69,12 +71,14 @@ export async function POST(
       entityType: "project",
       entityId: params.projectId,
       action: "imported",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route: "POST /api/projects/[projectId]/imports/postgres",
         source: imported.source,
         importSummary: imported.summary,
         newRevision: workingSnapshot.revision,
+        actorRole: membership.role,
       },
     });
 

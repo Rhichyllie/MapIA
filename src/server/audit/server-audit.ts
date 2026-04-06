@@ -21,6 +21,7 @@ type RecordServerAuditEventInput = {
   entityType: ServerAuditEntityType;
   entityId: string;
   action: ServerAuditAction;
+  actorUserId?: string;
   actorIdentity?: string;
   payload?: Record<string, unknown>;
 };
@@ -52,6 +53,7 @@ export async function recordServerAuditEvent(
         "entityType",
         "entityId",
         "action",
+        "actorUserId",
         "actorIdentity",
         "payload"
       ) VALUES (
@@ -60,6 +62,7 @@ export async function recordServerAuditEvent(
         CAST(${input.entityType} AS "AuditEntityType"),
         ${input.entityId},
         CAST(${input.action} AS "AuditAction"),
+        CAST(${input.actorUserId ?? null} AS uuid),
         ${input.actorIdentity ?? null},
         CAST(${JSON.stringify(input.payload ?? {})} AS jsonb)
       )

@@ -22,6 +22,7 @@ vi.mock("@/src/server/observability/server-telemetry", () => ({
 import { GET, PUT } from "@/app/api/projects/[projectId]/semantic/policy/route";
 
 const projectId = "58f3ca26-085e-4237-80d9-adcc42f7142b";
+const actorUserId = "11111111-1111-4111-8111-111111111111";
 
 function createContext() {
   return {
@@ -44,10 +45,20 @@ function createRequest(body?: unknown) {
 function createUseCasesMock() {
   return {
     projects: {
-      getOwnedProject: {
+      getProjectAccess: {
         execute: vi.fn().mockResolvedValue({
-          id: projectId,
-          workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          project: {
+            id: projectId,
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          },
+          membership: {
+            id: "22222222-2222-4222-8222-222222222222",
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+            userId: actorUserId,
+            role: "admin",
+            createdAt: new Date("2026-04-02T10:00:00.000Z"),
+            updatedAt: new Date("2026-04-02T10:00:00.000Z"),
+          },
         }),
       },
     },
@@ -84,7 +95,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   routeMocks.getApiSessionIdentity.mockResolvedValue({
     identity: "owner@mapia.local",
-    session: { user: { email: "owner@mapia.local" } },
+    userId: actorUserId,
+    actor: {
+      userId: actorUserId,
+      email: "owner@mapia.local",
+      providerId: "credentials",
+      authMode: "development_credentials",
+    },
+    session: {
+      user: {
+        id: actorUserId,
+        email: "owner@mapia.local",
+        authProvider: "credentials",
+        authMode: "development_credentials",
+      },
+    },
   });
   routeMocks.withServerTelemetrySpan.mockImplementation(
     async (
@@ -111,7 +136,7 @@ describe("semantic policy routes", () => {
 
   it("returns ownership failure before updating policy", async () => {
     const useCases = createUseCasesMock();
-    useCases.projects.getOwnedProject.execute.mockRejectedValueOnce(
+    useCases.projects.getProjectAccess.execute.mockRejectedValueOnce(
       new AppError("Projeto nao encontrado.", {
         code: "PROJECT_NOT_FOUND",
         status: 404,

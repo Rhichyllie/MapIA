@@ -11,6 +11,7 @@ import { importPrismaSchemaToGraphSnapshot } from "@/src/modules/importing/domai
 import type { ProjectRepository } from "@/src/modules/projects/application";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import type { WorkspaceRepository } from "@/src/modules/workspaces/application";
+import { workspaceRoleSatisfies } from "@/src/modules/workspaces/domain";
 import {
   AssistantCreationSettingsSchema,
   AssistantDraftSchema,
@@ -110,7 +111,10 @@ function applyErdRelationalLayout(snapshot: GraphSnapshot): GraphSnapshot {
     return snapshot;
   }
 
-  const columns = Math.max(2, Math.min(4, Math.ceil(Math.sqrt(entityNodes.length))));
+  const columns = Math.max(
+    2,
+    Math.min(4, Math.ceil(Math.sqrt(entityNodes.length))),
+  );
   const grid = new Map<string, { x: number; y: number }>();
 
   for (let index = 0; index < entityNodes.length; index += 1) {
@@ -162,7 +166,7 @@ function buildLayoutOptions(input: {
         ? "top-down"
         : input.layout === "horizontal"
           ? "left-right"
-          : input.context.flow?.direction ?? "left-right";
+          : (input.context.flow?.direction ?? "left-right");
 
     return resolveDiagramLayoutOptions("flow", {
       direction,
@@ -228,7 +232,9 @@ function buildInitialMapSnapshot(input: {
   draft: AssistantDraft;
   settings: AssistantCreationSettings;
 }) {
-  const diagramType = resolveDiagramTypeForInitialView(input.settings.initialView);
+  const diagramType = resolveDiagramTypeForInitialView(
+    input.settings.initialView,
+  );
   const layoutOptions = buildLayoutOptions({
     initialView: input.settings.initialView,
     layout: input.settings.layout,
@@ -309,11 +315,16 @@ function toSettingsFromDraft(draft: AssistantDraft): AssistantCreationSettings {
 }
 
 function resolveDraftWithDefaults(draft: AssistantDraft): AssistantDraft {
-  const baseContext = buildDefaultContextForView(draft.initialView, draft.profile);
+  const baseContext = buildDefaultContextForView(
+    draft.initialView,
+    draft.profile,
+  );
   const layoutDecision = normalizeLayoutForView({
     profile: draft.profile,
     initialView: draft.initialView,
-    layout: draft.layout ?? resolveRecommendedLayout(draft.initialView, draft.profile),
+    layout:
+      draft.layout ??
+      resolveRecommendedLayout(draft.initialView, draft.profile),
   });
 
   return AssistantDraftSchema.parse({
@@ -334,9 +345,10 @@ function sanitizeDraftForPersistence(draft: AssistantDraft) {
 
 async function getOrCreatePrimaryWorkspace(
   workspaceRepository: WorkspaceRepository,
+  actorUserId: string,
   ownerIdentity: string,
 ) {
-  const workspaces = await workspaceRepository.findByOwnerIdentity(ownerIdentity);
+  const workspaces = await workspaceRepository.findByUserId(actorUserId);
   if (workspaces.length > 0) {
     return workspaces[0];
   }
@@ -344,7 +356,8 @@ async function getOrCreatePrimaryWorkspace(
   return workspaceRepository.create({
     slug: buildPrimaryWorkspaceSlug(ownerIdentity),
     name: buildPrimaryWorkspaceName(ownerIdentity),
-    ownerIdentity,
+    ownerUserId: actorUserId,
+    legacyOwnerIdentity: ownerIdentity,
   });
 }
 
@@ -370,12 +383,12 @@ async function resolveUniqueProjectSlug(input: {
   return nextSlug;
 }
 
-async function assertProjectOwnership(
+async function assertProjectAccess(
   deps: Pick<
     CreationAssistantUseCaseDeps,
     "projectRepository" | "workspaceRepository"
   >,
-  input: { ownerIdentity: string; projectId: string },
+  input: { actorUserId: string; projectId: string },
 ) {
   const project = await deps.projectRepository.findById(input.projectId);
 
@@ -386,12 +399,26 @@ async function assertProjectOwnership(
     });
   }
 
-  const workspace = await deps.workspaceRepository.findById(project.workspaceId);
+  const membership = await deps.workspaceRepository.findMembership(
+    project.workspaceId,
+    input.actorUserId,
+  );
 
-  if (!workspace || workspace.ownerIdentity !== input.ownerIdentity) {
+  if (!membership) {
     throw new AppError("Projeto nao encontrado para o usuario autenticado.", {
       code: "PROJECT_NOT_FOUND",
       status: 404,
+    });
+  }
+
+  if (!workspaceRoleSatisfies(membership.role, "member")) {
+    throw new AppError("Permissao insuficiente para alterar este projeto.", {
+      code: "PROJECT_FORBIDDEN",
+      status: 403,
+      details: {
+        requiredRole: "member",
+        actualRole: membership.role,
+      },
     });
   }
 
@@ -400,21 +427,24 @@ async function assertProjectOwnership(
 
 async function applyCreationToProject(input: {
   deps: CreationAssistantUseCaseDeps;
+  actorUserId: string;
   ownerIdentity: string;
   projectId: string;
   createInitialMap: boolean;
   explicitDraft?: AssistantDraft;
 }): Promise<ApplyCreationResult> {
-  const project = await assertProjectOwnership(input.deps, {
-    ownerIdentity: input.ownerIdentity,
+  const project = await assertProjectAccess(input.deps, {
+    actorUserId: input.actorUserId,
     projectId: input.projectId,
   });
 
   const draftFromState = input.explicitDraft
     ? input.explicitDraft
-    : (await input.deps.projectCreationStateRepository.findDraftByProjectId(
-        project.id,
-      ))?.draft;
+    : (
+        await input.deps.projectCreationStateRepository.findDraftByProjectId(
+          project.id,
+        )
+      )?.draft;
 
   if (!draftFromState) {
     throw new AppError(
@@ -457,7 +487,8 @@ async function applyCreationToProject(input: {
   const settingsForApply =
     input.createInitialMap &&
     settings.startSource === "prisma-schema" &&
-    normalizeSourceStatusCode(settings.sourceStatus) === "ready_to_attempt_import"
+    normalizeSourceStatusCode(settings.sourceStatus) ===
+      "ready_to_attempt_import"
       ? applyResolvedSourceLifecycleToSettings(settings, {
           markAsImported: true,
         })
@@ -474,11 +505,12 @@ async function applyCreationToProject(input: {
     template,
   });
 
-  const applied = await input.deps.projectCreationStateRepository.saveAppliedByProjectId({
-    projectId: project.id,
-    settings: settingsForApply,
-    appliedByIdentity: input.ownerIdentity,
-  });
+  const applied =
+    await input.deps.projectCreationStateRepository.saveAppliedByProjectId({
+      projectId: project.id,
+      settings: settingsForApply,
+      appliedByIdentity: input.ownerIdentity,
+    });
 
   let initialSnapshot: GraphSnapshot | undefined;
   if (input.createInitialMap) {
@@ -511,14 +543,15 @@ export class GetProjectCreationSettingsUseCase {
 
   async execute(input: GetProjectCreationSettingsInput) {
     const parsed = GetProjectCreationSettingsInputSchema.parse(input);
-    await assertProjectOwnership(this.deps, {
-      ownerIdentity: parsed.ownerIdentity,
+    await assertProjectAccess(this.deps, {
+      actorUserId: parsed.actorUserId,
       projectId: parsed.projectId,
     });
 
-    const applied = await this.deps.projectCreationStateRepository.findAppliedByProjectId(
-      parsed.projectId,
-    );
+    const applied =
+      await this.deps.projectCreationStateRepository.findAppliedByProjectId(
+        parsed.projectId,
+      );
     return applied?.settings ?? null;
   }
 }
@@ -528,8 +561,8 @@ export class GetProjectCreationSettingsSummaryUseCase {
 
   async execute(input: GetProjectCreationSettingsInput) {
     const parsed = GetProjectCreationSettingsInputSchema.parse(input);
-    await assertProjectOwnership(this.deps, {
-      ownerIdentity: parsed.ownerIdentity,
+    await assertProjectAccess(this.deps, {
+      actorUserId: parsed.actorUserId,
       projectId: parsed.projectId,
     });
 
@@ -544,8 +577,8 @@ export class SaveProjectCreationSettingsUseCase {
 
   async execute(input: SaveProjectCreationSettingsInput) {
     const parsed = SaveProjectCreationSettingsInputSchema.parse(input);
-    await assertProjectOwnership(this.deps, {
-      ownerIdentity: parsed.ownerIdentity,
+    await assertProjectAccess(this.deps, {
+      actorUserId: parsed.actorUserId,
       projectId: parsed.projectId,
     });
 
@@ -562,8 +595,8 @@ export class GetProjectCreationDraftUseCase {
 
   async execute(input: GetProjectCreationDraftInput) {
     const parsed = GetProjectCreationDraftInputSchema.parse(input);
-    await assertProjectOwnership(this.deps, {
-      ownerIdentity: parsed.ownerIdentity,
+    await assertProjectAccess(this.deps, {
+      actorUserId: parsed.actorUserId,
       projectId: parsed.projectId,
     });
 
@@ -578,8 +611,8 @@ export class SaveProjectCreationDraftUseCase {
 
   async execute(input: SaveProjectCreationDraftInput) {
     const parsed = SaveProjectCreationDraftInputSchema.parse(input);
-    await assertProjectOwnership(this.deps, {
-      ownerIdentity: parsed.ownerIdentity,
+    await assertProjectAccess(this.deps, {
+      actorUserId: parsed.actorUserId,
       projectId: parsed.projectId,
     });
 
@@ -602,6 +635,7 @@ export class CreateProjectWithAssistantUseCase {
     const draft = sanitizeDraftForPersistence(parsed.draft);
     const workspace = await getOrCreatePrimaryWorkspace(
       this.deps.workspaceRepository,
+      parsed.actorUserId,
       parsed.ownerIdentity,
     );
     const slug = await resolveUniqueProjectSlug({
@@ -631,18 +665,18 @@ export class CreateProjectWithAssistantUseCase {
     const settings = toSettingsFromDraft(draft);
     const settingsForApply =
       settings.startSource === "prisma-schema" &&
-      normalizeSourceStatusCode(settings.sourceStatus) === "ready_to_attempt_import"
+      normalizeSourceStatusCode(settings.sourceStatus) ===
+        "ready_to_attempt_import"
         ? applyResolvedSourceLifecycleToSettings(settings, {
             markAsImported: true,
           })
         : settings;
-    const applied = await this.deps.projectCreationStateRepository.saveAppliedByProjectId(
-      {
+    const applied =
+      await this.deps.projectCreationStateRepository.saveAppliedByProjectId({
         projectId: project.id,
         settings: settingsForApply,
         appliedByIdentity: parsed.ownerIdentity,
-      },
-    );
+      });
 
     const initialSnapshot = buildInitialMapSnapshot({
       projectId: project.id,
@@ -675,6 +709,7 @@ export class ApplyProjectCreationUseCase {
     const parsed = ApplyProjectCreationInputSchema.parse(input);
     return applyCreationToProject({
       deps: this.deps,
+      actorUserId: parsed.actorUserId,
       ownerIdentity: parsed.ownerIdentity,
       projectId: parsed.projectId,
       createInitialMap: parsed.createInitialMap,
@@ -690,6 +725,7 @@ export class ApplyAssistantDraftToProjectUseCase {
     const parsed = ApplyAssistantDraftToProjectInputSchema.parse(input);
     return applyCreationToProject({
       deps: this.deps,
+      actorUserId: parsed.actorUserId,
       ownerIdentity: parsed.ownerIdentity,
       projectId: parsed.projectId,
       createInitialMap: true,

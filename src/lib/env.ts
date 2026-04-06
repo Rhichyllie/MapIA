@@ -10,6 +10,12 @@ const serverEnvSchema = z.object({
     .default("development"),
   NEXTAUTH_URL: z.string().url().default("http://localhost:3000"),
   NEXTAUTH_SECRET: z.string().min(8).default("dev-only-nextauth-secret"),
+  AUTH_MODE: z.enum(["development", "oidc"]).optional(),
+  AUTH_OIDC_ISSUER_URL: z.string().url().optional(),
+  AUTH_OIDC_CLIENT_ID: z.string().min(1).optional(),
+  AUTH_OIDC_CLIENT_SECRET: z.string().min(1).optional(),
+  AUTH_OIDC_PROVIDER_NAME: z.string().min(1).default("Single Sign-On"),
+  AUTH_OIDC_SCOPE: z.string().min(1).default("openid profile email"),
   TELEMETRY_HASH_SALT: z
     .string()
     .min(8)

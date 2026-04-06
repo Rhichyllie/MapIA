@@ -5,7 +5,7 @@ import {
 } from "@/src/server/app/api-response";
 import {
   requireAuthenticatedApiRequest,
-  requireOwnedProjectForApi,
+  requireProjectAccessForApi,
 } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { SaveEditorFullSnapshotInputSchema } from "@/src/modules/editor/application";
@@ -30,10 +30,11 @@ export async function GET(
     const params = ParamsSchema.parse(await context.params);
     const useCases = createServerUseCases();
 
-    await requireOwnedProjectForApi({
+    await requireProjectAccessForApi({
       route: "GET /api/projects/[projectId]/working-snapshot",
       projectId: params.projectId,
-      ownerIdentity: auth.identity,
+      minimumRole: "viewer",
+      auth,
       useCases,
     });
 
@@ -58,10 +59,11 @@ export async function PUT(
     const body = SaveWorkingSnapshotRequestSchema.parse(await request.json());
     const useCases = createServerUseCases();
 
-    await requireOwnedProjectForApi({
+    await requireProjectAccessForApi({
       route: "PUT /api/projects/[projectId]/working-snapshot",
       projectId: params.projectId,
-      ownerIdentity: auth.identity,
+      minimumRole: "member",
+      auth,
       useCases,
     });
 

@@ -3,7 +3,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import {
   buildAssistantDraftFromLegacyWizard,
@@ -23,10 +23,11 @@ export async function PUT(
 ) {
   try {
     const useCases = createServerUseCases();
-    const { auth, params, project } = await requireOwnedProjectRouteContext({
+    const { auth, params, project } = await requireProjectRouteContext({
       route: "PUT /api/projects/[projectId]/wizard-draft",
       params: context.params,
       paramsSchema: ParamsSchema,
+      minimumRole: "member",
       useCases,
     });
     const body = SaveLegacyWizardDraftInputSchema.parse(await request.json());
@@ -39,6 +40,7 @@ export async function PUT(
       payload: body.payload,
     });
     await useCases.creationAssistant.saveProjectCreationDraft.execute({
+      actorUserId: auth.userId,
       ownerIdentity: auth.identity,
       projectId: params.projectId,
       draft: assistantDraft,

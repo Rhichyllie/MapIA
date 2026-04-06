@@ -8,14 +8,18 @@ import {
 import { WorkingSnapshotEditorGateway } from "@/src/modules/editor/infrastructure";
 import {
   CreateProjectUseCase,
-  GetOwnedProjectUseCase,
+  GetProjectAccessUseCase,
   ListProjectsByWorkspaceUseCase,
   UpdateProjectMetadataUseCase,
 } from "@/src/modules/projects/application";
 import { PrismaProjectRepository } from "@/src/modules/projects/infrastructure";
 import {
-  GetOrCreatePrimaryWorkspaceForIdentityUseCase,
-  ListWorkspacesForIdentityUseCase,
+  GetOrCreatePrimaryWorkspaceForActorUseCase,
+  GetWorkspaceAccessUseCase,
+  ListWorkspaceMembershipsUseCase,
+  ListWorkspacesForActorUseCase,
+  RemoveWorkspaceMembershipUseCase,
+  UpsertWorkspaceMembershipUseCase,
 } from "@/src/modules/workspaces/application";
 import { PrismaWorkspaceRepository } from "@/src/modules/workspaces/infrastructure";
 import {
@@ -86,7 +90,7 @@ function getOrCreateImportingTelemetryCollectorProvider() {
 }
 
 export function createServerRepositories() {
-  const workspaceRepository = new PrismaWorkspaceRepository(prisma.workspace);
+  const workspaceRepository = new PrismaWorkspaceRepository(prisma);
   const projectRepository = new PrismaProjectRepository(prisma.project);
   const projectCreationStateRepository =
     new PrismaProjectCreationStateRepository(
@@ -142,11 +146,23 @@ export function createServerUseCases() {
   return {
     repositories,
     workspaces: {
-      getOrCreatePrimaryWorkspaceForIdentity:
-        new GetOrCreatePrimaryWorkspaceForIdentityUseCase({
+      getOrCreatePrimaryWorkspaceForActor:
+        new GetOrCreatePrimaryWorkspaceForActorUseCase({
           workspaceRepository: repositories.workspaceRepository,
         }),
-      listWorkspacesForIdentity: new ListWorkspacesForIdentityUseCase({
+      listWorkspacesForActor: new ListWorkspacesForActorUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+      }),
+      getWorkspaceAccess: new GetWorkspaceAccessUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+      }),
+      listWorkspaceMemberships: new ListWorkspaceMembershipsUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+      }),
+      upsertWorkspaceMembership: new UpsertWorkspaceMembershipUseCase({
+        workspaceRepository: repositories.workspaceRepository,
+      }),
+      removeWorkspaceMembership: new RemoveWorkspaceMembershipUseCase({
         workspaceRepository: repositories.workspaceRepository,
       }),
     },
@@ -159,7 +175,7 @@ export function createServerUseCases() {
         projectRepository: repositories.projectRepository,
         workspaceRepository: repositories.workspaceRepository,
       }),
-      getOwnedProject: new GetOwnedProjectUseCase({
+      getProjectAccess: new GetProjectAccessUseCase({
         projectRepository: repositories.projectRepository,
         workspaceRepository: repositories.workspaceRepository,
       }),

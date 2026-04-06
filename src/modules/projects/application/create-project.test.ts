@@ -3,6 +3,9 @@ import type { ProjectRepository } from "@/src/modules/projects/application";
 import type { WorkspaceRepository } from "@/src/modules/workspaces/application";
 import { CreateProjectUseCase } from "./use-cases";
 
+const ACTOR_USER_ID = "11111111-1111-4111-8111-111111111111";
+const WORKSPACE_ID = "58f3ca26-085e-4237-80d9-adcc42f7142b";
+
 function buildWorkspaceRepositoryMock(): WorkspaceRepository {
   return {
     create: vi.fn(),
@@ -14,7 +17,36 @@ function buildWorkspaceRepositoryMock(): WorkspaceRepository {
       createdAt: new Date(),
       updatedAt: new Date(),
     })),
-    findByOwnerIdentity: vi.fn(async () => []),
+    findBySlug: vi.fn(async () => null),
+    findByUserId: vi.fn(async (userId: string) =>
+      userId === ACTOR_USER_ID
+        ? [
+            {
+              id: WORKSPACE_ID,
+              slug: "ws-owner",
+              name: "Workspace owner",
+              ownerIdentity: "admin@mapia.local",
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ]
+        : [],
+    ),
+    findMembership: vi.fn(async (workspaceId: string, userId: string) =>
+      workspaceId === WORKSPACE_ID && userId === ACTOR_USER_ID
+        ? {
+            id: "22222222-2222-4222-8222-222222222222",
+            workspaceId,
+            userId,
+            role: "owner" as const,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+        : null,
+    ),
+    listMemberships: vi.fn(async () => []),
+    upsertMembership: vi.fn(),
+    removeMembership: vi.fn(),
   };
 }
 
@@ -67,8 +99,8 @@ describe("CreateProjectUseCase", () => {
     });
 
     const project = await useCase.execute({
-      ownerIdentity: "admin@mapia.local",
-      workspaceId: "58f3ca26-085e-4237-80d9-adcc42f7142b",
+      actorUserId: ACTOR_USER_ID,
+      workspaceId: WORKSPACE_ID,
       name: "Mapa Onboarding",
       template: "graph",
       description: "Fluxo inicial",

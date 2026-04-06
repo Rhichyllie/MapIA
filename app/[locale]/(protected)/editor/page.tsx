@@ -14,10 +14,7 @@ import type {
 import { resolveCreationRecipe } from "@/src/modules/creation-assistant/domain";
 import { resolveCreationContext } from "@/src/modules/projects/domain";
 import { createServerUseCases } from "@/src/server/app/container";
-import {
-  requireSession,
-  requireSessionIdentity,
-} from "@/src/server/auth/session";
+import { requireAuthenticatedSession } from "@/src/server/auth/session";
 import {
   recordCreationLegacyTemplateFallback,
   recordCreationRecipeRuntimeResolved,
@@ -74,8 +71,7 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
       }
 
       span.setAttribute("editor.page.project_id", projectId);
-      const session = await requireSession();
-      const ownerIdentity = requireSessionIdentity(session);
+      const { actor } = await requireAuthenticatedSession();
       const { projects, graph, creationAssistant } = createServerUseCases();
       let viewModel: {
         project: {
@@ -94,16 +90,19 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
       let loadErrorMessage: string | null = null;
 
       try {
-        const project = await projects.getOwnedProject.execute({
-          ownerIdentity,
+        const projectAccess = await projects.getProjectAccess.execute({
+          actorUserId: actor.userId,
           projectId,
+          minimumRole: "viewer",
         });
+        const project = projectAccess.project;
         const workingSnapshot = await graph.loadWorkingSnapshot.execute({
           projectId,
         });
         const creationSettings =
           await creationAssistant.getProjectCreationSettings.execute({
-            ownerIdentity,
+            actorUserId: actor.userId,
+            ownerIdentity: actor.email,
             projectId,
           });
         const creationContextResolution = resolveCreationContext({
@@ -118,7 +117,7 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
         scheduleCreationTelemetryOperation(async () => {
           await recordCreationLegacyTemplateFallback({
             projectId: project.id,
-            ownerIdentity,
+            ownerIdentity: actor.email,
             source: "editor-page",
             fallbackMode:
               creationContextResolution.decisionTrace.legacyTemplateFallback
@@ -140,7 +139,7 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
           });
           await recordCreationRecipeRuntimeResolved({
             projectId: project.id,
-            ownerIdentity,
+            ownerIdentity: actor.email,
             profile: creationContextResolution.context.effectiveProfile,
             view: creationContextResolution.context.effectiveInitialView,
             recipeId:

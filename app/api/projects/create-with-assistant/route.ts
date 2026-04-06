@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     );
     const { creationAssistant } = createServerUseCases();
     const result = await creationAssistant.createProjectWithAssistant.execute({
+      actorUserId: auth.userId,
       ownerIdentity: auth.identity,
       draft: body,
     });
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       entityType: "project",
       entityId: result.projectId,
       action: "created",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route: "POST /api/projects/create-with-assistant",

@@ -5,7 +5,7 @@ import {
 } from "@/src/server/app/api-response";
 import {
   requireAuthenticatedApiRequest,
-  requireOwnedProjectForApi,
+  requireProjectAccessForApi,
 } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { withServerTelemetrySpan } from "@/src/server/observability/server-telemetry";
@@ -31,10 +31,11 @@ export async function GET(
         const params = ParamsSchema.parse(await context.params);
         const useCases = createServerUseCases();
 
-        await requireOwnedProjectForApi({
+        await requireProjectAccessForApi({
           route: "GET /api/projects/[projectId]/editor-snapshot",
           projectId: params.projectId,
-          ownerIdentity: auth.identity,
+          minimumRole: "viewer",
+          auth,
           useCases,
         });
 

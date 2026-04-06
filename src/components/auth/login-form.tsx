@@ -9,6 +9,7 @@ import { appRoutes } from "@/src/lib/routes";
 import { resolvePostLoginNavigationTarget } from "./login-navigation";
 
 type AuthErrorKey = "credentialsSignin" | "default";
+type LoginMode = "development_credentials" | "oidc" | "misconfigured";
 
 function getAuthErrorKey(errorCode: string | null): AuthErrorKey | null {
   if (!errorCode) return null;
@@ -20,18 +21,14 @@ function getAuthErrorKey(errorCode: string | null): AuthErrorKey | null {
 }
 
 type LoginFormProps = {
-  devCredentialsEnabled?: boolean;
+  mode: LoginMode;
+  providerName?: string;
 };
 
-type LoginFormInternalProps = {
-  devCredentialsEnabled: boolean;
-};
-
-export function LoginForm({ devCredentialsEnabled = true }: LoginFormProps) {
-  return <LoginFormInternal devCredentialsEnabled={devCredentialsEnabled} />;
-}
-
-function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
+export function LoginForm({
+  mode,
+  providerName = "Single Sign-On",
+}: LoginFormProps) {
   const t = useTranslations("Auth.form");
   const errorT = useTranslations("Auth.errors");
   const locale = useLocale();
@@ -45,9 +42,12 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
   const [email, setEmail] = useState("admin@mapia.local");
   const [password, setPassword] = useState("mapia123");
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleDevelopmentSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!devCredentialsEnabled) return;
+
+    if (mode !== "development_credentials") {
+      return;
+    }
 
     setSubmitErrorKey(null);
     setIsSubmitting(true);
@@ -72,21 +72,59 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
       currentOrigin: window.location.origin,
     });
 
-    if (/^https?:\/\//.test(nextTarget)) {
-      window.location.assign(nextTarget);
-      return;
-    }
-
     window.location.assign(nextTarget);
   }
 
+  async function handleOidcSubmit() {
+    if (mode !== "oidc") {
+      return;
+    }
+
+    setSubmitErrorKey(null);
+    setIsSubmitting(true);
+    await signIn("oidc", {
+      callbackUrl,
+    });
+    setIsSubmitting(false);
+  }
+
+  if (mode === "misconfigured") {
+    return (
+      <div className="stack-sm" data-testid="login-form">
+        <div className="error-box">{t("configurationMessage")}</div>
+      </div>
+    );
+  }
+
+  if (mode === "oidc") {
+    return (
+      <div className="stack-sm" data-testid="login-form">
+        {errorKey ? <div className="error-box">{errorT(errorKey)}</div> : null}
+        {submitErrorKey ? (
+          <div className="error-box">{errorT(submitErrorKey)}</div>
+        ) : null}
+        <p className="helper">{t("oidcHint", { providerName })}</p>
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={isSubmitting}
+          data-testid="login-submit-button"
+          onClick={handleOidcSubmit}
+        >
+          {isSubmitting
+            ? t("oidcSubmitting")
+            : t("oidcSubmit", { providerName })}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <form className="stack-sm" onSubmit={handleSubmit} data-testid="login-form">
-      {!devCredentialsEnabled ? (
-        <div className="error-box">
-          {t("disabledMessage")} <code className="mono">NODE_ENV=development</code>.
-        </div>
-      ) : null}
+    <form
+      className="stack-sm"
+      onSubmit={handleDevelopmentSubmit}
+      data-testid="login-form"
+    >
       {errorKey ? <div className="error-box">{errorT(errorKey)}</div> : null}
       {submitErrorKey ? <div className="error-box">{errorT(submitErrorKey)}</div> : null}
 
@@ -100,7 +138,6 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
           data-testid="login-email-input"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          disabled={!devCredentialsEnabled}
           required
         />
       </div>
@@ -115,21 +152,19 @@ function LoginFormInternal({ devCredentialsEnabled }: LoginFormInternalProps) {
           data-testid="login-password-input"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          disabled={!devCredentialsEnabled}
           required
         />
       </div>
 
       <p className="helper">
-        {t("credentialsHint")}{" "}
-        <code className="mono">DEV_LOGIN_EMAIL</code> /{" "}
+        {t("credentialsHint")} <code className="mono">DEV_LOGIN_EMAIL</code> /{" "}
         <code className="mono">DEV_LOGIN_PASSWORD</code>.
       </p>
 
       <button
         className="btn btn-primary"
         type="submit"
-        disabled={isSubmitting || !devCredentialsEnabled}
+        disabled={isSubmitting}
         data-testid="login-submit-button"
       >
         {isSubmitting ? t("submitting") : t("submit")}

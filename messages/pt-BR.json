@@ -73,7 +73,7 @@
     "page": {
       "badge": "Acesso autenticado",
       "title": "Entrar no MapIA",
-      "description": "Entre com as credenciais configuradas para o ambiente local. Em producao, este provider permanece desabilitado."
+      "description": "Entre com o provedor de autenticacao disponivel neste ambiente. O login dev-only existe apenas para desenvolvimento e teste."
     },
     "form": {
       "emailLabel": "Email",
@@ -81,7 +81,10 @@
       "credentialsHint": "Credenciais padrao configuraveis via DEV_LOGIN_EMAIL e DEV_LOGIN_PASSWORD.",
       "submit": "Entrar",
       "submitting": "Entrando...",
-      "disabledMessage": "O login por credenciais de desenvolvimento esta desabilitado fora de NODE_ENV=development."
+      "oidcHint": "Continue com o provedor configurado para este ambiente: {providerName}.",
+      "oidcSubmit": "Continuar com {providerName}",
+      "oidcSubmitting": "Redirecionando...",
+      "configurationMessage": "A autenticacao deste ambiente esta mal configurada. Revise AUTH_MODE, OIDC e NEXTAUTH_SECRET antes de operar em producao."
     },
     "errors": {
       "credentialsSignin": "Credenciais invalidas. Confira email e senha de desenvolvimento.",

@@ -3,11 +3,9 @@ import { DashboardProjectsPanel } from "@/src/components/dashboard/dashboard-pro
 import { buildLocalizedPageMetadata } from "@/src/i18n/metadata";
 import type { AppLocale } from "@/src/i18n/routing";
 import { isSupportedDiagramType } from "@/src/modules/graph/domain";
+import { getWorkspaceLegacyOwnerIdentity } from "@/src/modules/workspaces/domain";
 import { createServerUseCases } from "@/src/server/app/container";
-import {
-  requireSession,
-  requireSessionIdentity,
-} from "@/src/server/auth/session";
+import { requireAuthenticatedSession } from "@/src/server/auth/session";
 
 type DashboardPageProps = {
   params: Promise<{ locale: AppLocale }>;
@@ -21,16 +19,16 @@ export async function generateMetadata({
 }
 
 export default async function DashboardPage() {
-  const session = await requireSession();
-  const ownerIdentity = requireSessionIdentity(session);
+  const { actor } = await requireAuthenticatedSession();
   const { workspaces, projects, graph, versioning } = createServerUseCases();
 
   const primaryWorkspace =
-    await workspaces.getOrCreatePrimaryWorkspaceForIdentity.execute(
-      ownerIdentity,
-    );
+    await workspaces.getOrCreatePrimaryWorkspaceForActor.execute({
+      actorUserId: actor.userId,
+      legacyOwnerIdentity: actor.email,
+    });
   const projectList = await projects.listProjectsByWorkspace.execute({
-    ownerIdentity,
+    actorUserId: actor.userId,
     workspaceId: primaryWorkspace.id,
   });
   const projectCards = await Promise.all(
@@ -64,7 +62,8 @@ export default async function DashboardPage() {
         id: primaryWorkspace.id,
         slug: primaryWorkspace.slug,
         name: primaryWorkspace.name,
-        ownerIdentity: primaryWorkspace.ownerIdentity,
+        legacyOwnerIdentity:
+          getWorkspaceLegacyOwnerIdentity(primaryWorkspace) ?? undefined,
       }}
       projects={projectCards}
     />

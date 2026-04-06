@@ -5,7 +5,7 @@ import {
 } from "@/src/server/app/api-response";
 import {
   requireAuthenticatedApiRequest,
-  requireOwnedProjectForApi,
+  requireProjectAccessForApi,
 } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import {
@@ -49,10 +49,11 @@ export async function POST(
         const body = ApplyCommandsRequestSchema.parse(await request.json());
         const useCases = createServerUseCases();
 
-        await requireOwnedProjectForApi({
+        await requireProjectAccessForApi({
           route: "POST /api/projects/[projectId]/editor-commands",
           projectId: params.projectId,
-          ownerIdentity: auth.identity,
+          minimumRole: "member",
+          auth,
           useCases,
         });
 

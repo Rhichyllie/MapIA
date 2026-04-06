@@ -19,9 +19,9 @@ O MapIA hoje e uma aplicacao `Next.js App Router` com:
 
 Fluxo de alto nivel:
 
-1. pagina ou API route resolve locale, sessao e `ownerIdentity`;
+1. pagina ou API route resolve locale, sessao autenticada e ator interno (`userId` + email + provider);
 2. route/page chama `createServerUseCases()`;
-3. use case aplica regras de negocio e chama repositorios/integracoes;
+3. guards e use cases resolvem acesso por `workspace membership`/role e chamam repositorios/integracoes;
 4. repositorios Prisma validam boundary com schemas e invariantes;
 5. UI renderiza ou rota devolve envelope `{ data }` padronizado.
 
@@ -43,7 +43,9 @@ Fluxo de alto nivel:
 
 - `src/modules/workspaces` e `src/modules/projects` fazem ownership, listagem e criacao basica.
 - O dashboard em `app/[locale]/(protected)/dashboard/page.tsx` carrega workspace principal, lista projetos e projeta metadados a partir de snapshot de trabalho e versoes.
-- A autorizacao atual gira em torno de `ownerIdentity` associado ao workspace/projeto, sem modelo multi-user mais rico.
+- O backend agora usa memberships persistidas por workspace com roles `owner`, `admin`, `member` e `viewer`.
+- `Workspace.ownerIdentity` continua existindo como campo legado/compatibilidade, mas o controle de acesso ativo saiu do email isolado e foi para `app_users`, `auth_identities` e `workspace_memberships`.
+- O legado de `ownerIdentity` agora passa por boundary explicita em `src/modules/workspaces/domain/workspace-legacy-compat.ts`; novas regras de acesso nao devem ler esse campo diretamente.
 
 ### Dominio canonico do grafo
 
@@ -96,7 +98,10 @@ Fluxo de alto nivel:
 
 - `prisma/schema.prisma` hoje mistura estado operacional atual e legados de transicao.
 - Entidades centrais:
+  - `AppUser`
+  - `AuthIdentity`
   - `Workspace`
+  - `WorkspaceMembership`
   - `Project`
   - `ProjectCreationSettings`
   - `ProjectCreationDraft`
@@ -136,18 +141,24 @@ Fluxo de alto nivel:
 
 ### Autenticacao e autorizacao
 
-- `src/server/auth/options.ts` usa `NextAuth` com JWT e provider de credenciais apenas em `development`.
-- Em `production`, esse provider some; hoje nao existe outro provedor pronto no repositorio.
-- `requireSession()` protege paginas; `src/server/app/api-route-guards.ts` agora centraliza sessao backend e ownership por projeto nas rotas mais criticas.
-- A autorizacao principal e ownership por identidade do usuario, validada via casos de uso de `projects` e `workspaces`.
-- O hardening atual ja grava auditoria minima de `denied`, `created`, `updated`, `imported` e `restored` para operacoes sensiveis do backend em `audit_events`, com persistencia best-effort.
+- `src/server/auth/options.ts` usa `NextAuth` com JWT e dois modos reais de runtime:
+  - `development_credentials` em `development/test`
+  - `oidc` em ambiente compartilhado/producao com env valida
+- `src/server/auth/auth-runtime.ts` e o gate central de configuracao; em `production` mal configurado o backend falha em modo `fail-closed`.
+- `src/server/auth/auth-runtime-readiness.ts` e `scripts/auth-runtime-preflight.ts` agora oferecem preflight operacional de staging, incluindo validacao do discovery document do issuer sem depender de `client_secret` embutido no repositorio.
+- A sessao backend agora carrega `user.id`, `authProvider` e `authMode`, e `src/server/auth/session.ts` resolve o ator interno validando `app_users`.
+- `src/server/app/api-route-guards.ts` centraliza auth backend, acesso por projeto/workspace e auditoria de acesso negado.
+- A autorizacao principal deixou de ser apenas `ownerIdentity`: hoje passa por membership persistida e role minima requerida por rota/use case.
+- Existem rotas dedicadas para operar memberships em `app/api/workspaces/[workspaceId]/memberships/route.ts` (`GET` para `admin+`, `PUT` para `owner`) e `app/api/workspaces/[workspaceId]/memberships/[memberUserId]/route.ts` (`DELETE` para `owner`).
+- O lifecycle de membership agora protege o ultimo `owner` tanto em downgrade quanto em remocao.
+- O hardening atual grava auditoria minima de `denied`, `created`, `updated`, `imported` e `restored` para operacoes sensiveis do backend em `audit_events`, com `actorUserId` e persistencia best-effort.
 
 ### Seguranca operacional e runtime
 
 - `next.config.ts` agora aplica um baseline conservador de headers de seguranca e `no-store` para respostas de API.
 - `proxy.ts` reaplica esses headers tambem em respostas geradas pelo middleware, incluindo redirects de auth/locale.
-- `.env.example` passou a refletir variaveis reais de release, service name, observabilidade interna e telemetria usadas pelo runtime.
-- `docs/operations/runtime-env-and-migrations.md` formaliza o baseline operacional para envs e comandos Prisma.
+- `.env.example` passou a refletir variaveis reais de release, service name, observabilidade interna, telemetria e auth OIDC.
+- `docs/operations/runtime-env-and-migrations.md` formaliza o baseline operacional para envs, modos de auth, seed e comandos Prisma.
 - `pnpm prisma:migrate` agora falha de forma explicita; o fluxo correto ficou separado entre `pnpm prisma:migrate:dev` e `pnpm prisma:migrate:deploy`.
 
 ### APIs
@@ -156,6 +167,7 @@ Fluxo de alto nivel:
 - Erros de validacao, auth, forbidden, dominio e erro interno agora seguem `error/code/message`, com `issues` ou `details` quando aplicavel.
 - Grupos de rotas ativas hoje:
   - autenticacao: `app/api/auth/[...nextauth]/route.ts`
+  - workspaces e acesso: `app/api/workspaces/[workspaceId]/memberships/route.ts`, `app/api/workspaces/[workspaceId]/memberships/[memberUserId]/route.ts`
   - projetos: `app/api/projects/route.ts`, `app/api/projects/create-with-assistant/route.ts`
   - creation assistant: `creation-draft`, `creation-apply`, `creation-settings`, `creation-settings/draft`, `creation-settings/apply-initial-map`
   - editor/grafo: `editor-snapshot`, `editor-commands`, `working-snapshot`, `nodes/*`, `edges/*`
@@ -174,12 +186,14 @@ Fluxo de alto nivel:
 - A cobertura atual e melhor em:
   - helpers de editor;
   - importacao;
+  - auth runtime/session e guards de API;
   - observabilidade;
   - contratos de rota mais centrais do editor, criacao, importacao e versionamento.
 - Lacunas visiveis:
-  - as rotas mais criticas ja tem guardrails dedicados em `/api/projects`, `creation-draft` e `creation-apply` (via `api-contracts.test.ts`), `editor-commands`, `working-snapshot`, `editor-snapshot`, `snapshot-versions`, `semantic/policy|validate` e importacao principal, mas ainda faltam aliases de compatibilidade e parte de `creation-settings*`;
+  - as rotas mais criticas e os aliases ativos de criacao agora tem guardrails dedicados em `/api/projects`, `creation-draft`, `creation-apply`, `creation-settings*`, `wizard-*`, `editor-commands`, `working-snapshot`, `editor-snapshot`, `snapshot-versions`, `semantic/policy|validate` e importacao principal;
   - E2E dependem de Postgres local, `next dev`, credenciais dev e browser do Playwright instalado.
   - a baseline minima agora pode ser reproduzida com `pnpm validate` e tambem roda na CI.
+  - o modelo novo de memberships/roles ja domina o backend; o que sobra na frente de criacao sao aliases de compatibilidade de payload/URL, nao mais fallback central de ownership.
 
 Baseline revalidada em `2026-04-02`:
 
@@ -229,6 +243,7 @@ Os logs de timeout/fallback da suite de observabilidade continuam aparecendo em 
 - Mexer em semantica sem revalidar a matriz por modo de diagrama tende a reabrir drift entre editor, auditoria, save e restore.
 - Mexer em importacao sem formalizar o shape final do payload tende a gerar regressao silenciosa em consumidores do editor.
 - Qualquer iniciativa de enterprise readiness vai bater primeiro em auth, ownership e aliases legados de API.
+- O backend protegido de projeto/workspace agora passa por `getProjectAccess`/`getWorkspaceAccess` sem shim central de ownership; os aliases que restam usam o mesmo modelo de membership/role.
 
 ## Leitura recomendada junto com este documento
 

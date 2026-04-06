@@ -30,6 +30,7 @@
     "db:down": "docker compose down",
     "db:check": "tsx scripts/db-check.ts",
     "db:check:wait": "tsx scripts/db-check.ts --wait=30000",
+    "auth:preflight:staging": "tsx scripts/auth-runtime-preflight.ts",
     "db:seed": "prisma db seed",
     "db:reset-local": "docker compose down -v && docker compose up -d postgres && pnpm prisma migrate deploy && pnpm db:seed",
     "telemetry:local:smoke": "tsx scripts/telemetry-local-smoke.ts",

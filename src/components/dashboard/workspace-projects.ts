@@ -6,7 +6,7 @@ export type DashboardWorkspace = {
   id: string;
   slug: string;
   name: string;
-  ownerIdentity?: string;
+  legacyOwnerIdentity?: string;
 };
 
 export type DashboardProject = {
@@ -24,11 +24,7 @@ export type DashboardProject = {
 
 export type DiagramFilter = "all" | "tree" | "flow" | "mindmap" | "undefined";
 export type SnapshotFilter = "all" | "pending" | "generated";
-export type UpdatedAtFilter =
-  | "all"
-  | "today"
-  | "last-7-days"
-  | "last-30-days";
+export type UpdatedAtFilter = "all" | "today" | "last-7-days" | "last-30-days";
 export type SortOption = "name-asc" | "updated-desc" | "created-desc";
 export type WorkspaceViewMode = "grid" | "list";
 export type WorkspaceDensity = "compact" | "comfortable";
@@ -182,7 +178,11 @@ export function filterAndSortProjects(
   const referenceTimestamp = filters.referenceTimestamp ?? Date.now();
   const filtered = projects.filter((project) => {
     if (normalizedSearchTerm.length > 0) {
-      const searchableText = buildSearchIndex(project, filters.workspaceMode, copy);
+      const searchableText = buildSearchIndex(
+        project,
+        filters.workspaceMode,
+        copy,
+      );
       if (!searchableText.includes(normalizedSearchTerm)) {
         return false;
       }
@@ -341,7 +341,10 @@ export function buildWorkspacePaginationItems(input: {
 
   if (currentPage >= pageCount - boundaryCount - siblingCount - 1) {
     for (
-      let page = Math.max(1, pageCount - (boundaryCount + siblingCount * 2 + 2));
+      let page = Math.max(
+        1,
+        pageCount - (boundaryCount + siblingCount * 2 + 2),
+      );
       page <= pageCount;
       page += 1
     ) {

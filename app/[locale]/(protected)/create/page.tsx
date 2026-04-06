@@ -11,10 +11,7 @@ import type { AssistantDraft } from "@/src/modules/creation-assistant/domain";
 import { resolveCreationRecipe } from "@/src/modules/creation-assistant/domain";
 import { resolveCreationContext } from "@/src/modules/projects/domain";
 import { createServerUseCases } from "@/src/server/app/container";
-import {
-  requireSession,
-  requireSessionIdentity,
-} from "@/src/server/auth/session";
+import { requireAuthenticatedSession } from "@/src/server/auth/session";
 import {
   recordCreationLegacyTemplateFallback,
   recordCreationRecipeRuntimeResolved,
@@ -46,8 +43,7 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
   const params = await searchParams;
   const fromProjectId = getStringParam(params, "fromProjectId");
   const mode = fromProjectId ? "existing" : "new";
-  const session = await requireSession();
-  const ownerIdentity = requireSessionIdentity(session);
+  const { actor } = await requireAuthenticatedSession();
   const { projects, creationAssistant, graph } = createServerUseCases();
 
   let loadErrorMessage: string | null = null;
@@ -72,27 +68,31 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
   if (fromProjectId) {
     try {
       const [project, settings, draftState, workingSnapshot] = await Promise.all([
-        projects.getOwnedProject.execute({
-          ownerIdentity,
+        projects.getProjectAccess.execute({
+          actorUserId: actor.userId,
           projectId: fromProjectId,
+          minimumRole: "viewer",
         }),
         creationAssistant.getProjectCreationSettings.execute({
-          ownerIdentity,
+          actorUserId: actor.userId,
+          ownerIdentity: actor.email,
           projectId: fromProjectId,
         }),
         creationAssistant.getProjectCreationDraft.execute({
-          ownerIdentity,
+          actorUserId: actor.userId,
+          ownerIdentity: actor.email,
           projectId: fromProjectId,
         }),
         graph.loadWorkingSnapshot.execute({
           projectId: fromProjectId,
         }),
       ]);
+      const accessedProject = project.project;
       initialProject = {
-        id: project.id,
-        name: project.name,
-        objective: project.description,
-        template: project.template,
+        id: accessedProject.id,
+        name: accessedProject.name,
+        objective: accessedProject.description,
+        template: accessedProject.template,
       };
       initialSettings = settings;
       initialDraftState = draftState
@@ -107,7 +107,7 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
       const contextResolution = resolveCreationContext({
         creationSettings: settings,
         snapshotDiagramType,
-        template: project.template,
+        template: accessedProject.template,
       });
       const recipe = resolveCreationRecipe({
         profile: contextResolution.context.effectiveProfile,
@@ -115,8 +115,8 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
       });
       scheduleCreationTelemetryOperation(async () => {
         await recordCreationLegacyTemplateFallback({
-          projectId: project.id,
-          ownerIdentity,
+          projectId: accessedProject.id,
+          ownerIdentity: actor.email,
           source: "create-page",
           fallbackMode:
             contextResolution.decisionTrace.legacyTemplateFallback.fallbackMode,
@@ -132,8 +132,8 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
           },
         });
         await recordCreationRecipeRuntimeResolved({
-          projectId: project.id,
-          ownerIdentity,
+          projectId: accessedProject.id,
+          ownerIdentity: actor.email,
           profile: contextResolution.context.effectiveProfile,
           view: contextResolution.context.effectiveInitialView,
           recipeId:

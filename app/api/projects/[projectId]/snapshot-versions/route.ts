@@ -5,7 +5,7 @@ import {
 } from "@/src/server/app/api-response";
 import {
   requireAuthenticatedApiRequest,
-  requireOwnedProjectForApi,
+  requireProjectAccessForApi,
 } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
@@ -29,10 +29,11 @@ export async function GET(
     const params = ParamsSchema.parse(await context.params);
     const useCases = createServerUseCases();
 
-    await requireOwnedProjectForApi({
+    await requireProjectAccessForApi({
       route: "GET /api/projects/[projectId]/snapshot-versions",
       projectId: params.projectId,
-      ownerIdentity: auth.identity,
+      minimumRole: "viewer",
+      auth,
       useCases,
     });
 
@@ -56,10 +57,11 @@ export async function POST(
     const params = ParamsSchema.parse(await context.params);
     const body = CreateSnapshotVersionRequestSchema.parse(await request.json());
     const useCases = createServerUseCases();
-    const project = await requireOwnedProjectForApi({
+    const access = await requireProjectAccessForApi({
       route: "POST /api/projects/[projectId]/snapshot-versions",
       projectId: params.projectId,
-      ownerIdentity: auth.identity,
+      minimumRole: "member",
+      auth,
       useCases,
     });
 
@@ -72,14 +74,16 @@ export async function POST(
         },
       );
     await recordServerAuditEvent({
-      workspaceId: project.workspaceId,
+      workspaceId: access.project.workspaceId,
       projectId: params.projectId,
       entityType: "graph_version",
       entityId: snapshotVersion.id,
       action: "created",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route: "POST /api/projects/[projectId]/snapshot-versions",
+        actorRole: access.membership.role,
         origin: snapshotVersion.origin,
         label: snapshotVersion.label ?? null,
       },

@@ -3,7 +3,7 @@ import {
   apiErrorResponse,
   apiSuccessResponse,
 } from "@/src/server/app/api-response";
-import { requireOwnedProjectRouteContext } from "@/src/server/app/api-route-guards";
+import { requireProjectRouteContext } from "@/src/server/app/api-route-guards";
 import { createServerUseCases } from "@/src/server/app/container";
 import { recordServerAuditEvent } from "@/src/server/audit/server-audit";
 import { withServerTelemetrySpan } from "@/src/server/observability/server-telemetry";
@@ -35,10 +35,11 @@ export async function GET(
       },
       async (span) => {
         const useCases = createServerUseCases();
-        const { auth, params } = await requireOwnedProjectRouteContext({
+        const { auth, params } = await requireProjectRouteContext({
           route: "GET /api/projects/[projectId]/semantic/policy",
           params: context.params,
           paramsSchema: ParamsSchema,
+          minimumRole: "viewer",
           useCases,
         });
 
@@ -68,12 +69,14 @@ export async function PUT(
 ) {
   try {
     const useCases = createServerUseCases();
-    const { auth, params, project } = await requireOwnedProjectRouteContext({
-      route: "PUT /api/projects/[projectId]/semantic/policy",
-      params: context.params,
-      paramsSchema: ParamsSchema,
-      useCases,
-    });
+    const { auth, params, project, membership } =
+      await requireProjectRouteContext({
+        route: "PUT /api/projects/[projectId]/semantic/policy",
+        params: context.params,
+        paramsSchema: ParamsSchema,
+        minimumRole: "admin",
+        useCases,
+      });
     const body = UpdateSemanticPolicyRequestSchema.parse(await request.json());
 
     const policy = await useCases.semantics.updatePolicy.execute({
@@ -87,6 +90,7 @@ export async function PUT(
       entityType: "project",
       entityId: params.projectId,
       action: "updated",
+      actorUserId: auth.userId,
       actorIdentity: auth.identity,
       payload: {
         route: "PUT /api/projects/[projectId]/semantic/policy",
@@ -95,6 +99,7 @@ export async function PUT(
         enforceOnServer: policy.enforceOnServer,
         allowTechOverride: policy.allowTechOverride,
         requireOverrideReason: policy.requireOverrideReason,
+        actorRole: membership.role,
       },
     });
 

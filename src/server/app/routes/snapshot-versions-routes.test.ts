@@ -23,6 +23,7 @@ import { POST as postSnapshotVersionRestore } from "@/app/api/projects/[projectI
 
 const projectId = "58f3ca26-085e-4237-80d9-adcc42f7142b";
 const versionId = "1aa7a983-1fda-4438-93d7-b964c82685f4";
+const actorUserId = "11111111-1111-4111-8111-111111111111";
 
 function createProjectContext() {
   return {
@@ -49,10 +50,20 @@ function createJsonRequest(url: string, method: string, body: unknown) {
 function createUseCasesMock() {
   return {
     projects: {
-      getOwnedProject: {
+      getProjectAccess: {
         execute: vi.fn().mockResolvedValue({
-          id: projectId,
-          workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          project: {
+            id: projectId,
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+          },
+          membership: {
+            id: "22222222-2222-4222-8222-222222222222",
+            workspaceId: "7c96ab95-fd65-48b7-bb8d-7402c0dd92e2",
+            userId: actorUserId,
+            role: "member",
+            createdAt: new Date("2026-04-02T10:00:00.000Z"),
+            updatedAt: new Date("2026-04-02T10:00:00.000Z"),
+          },
         }),
       },
     },
@@ -141,7 +152,21 @@ beforeEach(() => {
   vi.clearAllMocks();
   routeMocks.getApiSessionIdentity.mockResolvedValue({
     identity: "owner@mapia.local",
-    session: { user: { email: "owner@mapia.local" } },
+    userId: actorUserId,
+    actor: {
+      userId: actorUserId,
+      email: "owner@mapia.local",
+      providerId: "credentials",
+      authMode: "development_credentials",
+    },
+    session: {
+      user: {
+        id: actorUserId,
+        email: "owner@mapia.local",
+        authProvider: "credentials",
+        authMode: "development_credentials",
+      },
+    },
   });
 });
 
@@ -182,7 +207,7 @@ describe("snapshot version routes", () => {
       error: "VALIDATION_ERROR",
       message: "Dados invalidos.",
     });
-    expect(useCases.projects.getOwnedProject.execute).not.toHaveBeenCalled();
+    expect(useCases.projects.getProjectAccess.execute).not.toHaveBeenCalled();
   });
 
   it("lists snapshot versions with the expected success envelope", async () => {
@@ -196,9 +221,10 @@ describe("snapshot version routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(useCases.projects.getOwnedProject.execute).toHaveBeenCalledWith({
-      ownerIdentity: "owner@mapia.local",
+    expect(useCases.projects.getProjectAccess.execute).toHaveBeenCalledWith({
+      actorUserId,
       projectId,
+      minimumRole: "viewer",
     });
     expect(
       useCases.versioning.listSnapshotVersions.execute,
