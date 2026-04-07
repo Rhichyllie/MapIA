@@ -88,6 +88,12 @@
     },
     "errors": {
       "credentialsSignin": "Credenciais invalidas. Confira email e senha de desenvolvimento.",
+      "authStorageNotReady": "O storage de autenticacao deste ambiente ainda nao esta pronto. Aplique a fundacao de auth e tente novamente.",
+      "authStorageMigrationIncomplete": "O rollout de migrations da autenticacao ainda esta incompleto neste ambiente. Termine `prisma:migrate:deploy` antes de tentar login.",
+      "authStorageIntegrityInvalid": "A integridade do storage de autenticacao ainda esta invalida neste ambiente. Repare os IDs da auth antes de tentar login.",
+      "authIdentityConflict": "A identidade autenticada entrou em conflito com um usuario interno ja existente.",
+      "authAccessDenied": "A autenticacao foi negada pelas regras ativas do MapIA.",
+      "sessionInvalid": "O login nao concluiu uma sessao valida. Autentique novamente.",
       "default": "Nao foi possivel autenticar. Tente novamente."
     },
     "signOut": "Sair"
@@ -241,6 +247,10 @@
       "cancelButton": "Cancelar"
     },
     "diagramTypes": {
+      "graph": {
+        "label": "Grafo",
+        "description": "Estrutura canonica flexivel usada por views como grafo, ERD e timeline."
+      },
       "tree": {
         "label": "Hierarquia",
         "description": "Estruturas com niveis e relacao pai-filho."

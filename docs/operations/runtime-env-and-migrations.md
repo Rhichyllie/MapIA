@@ -75,6 +75,50 @@ Sensivel e recomendada para ambientes compartilhados:
 - `INTERNAL_OBSERVABILITY_ALLOWED_IDENTITIES` deve listar apenas identidades internas reais; o bypass por `DEV_LOGIN_EMAIL` vale apenas em `development/test`.
 - O backend agora persiste usuarios internos, identidades autenticadas e memberships de workspace. Seed/migrations precisam refletir esse modelo, nao apenas `ownerIdentity`.
 - Sessao/JWT do backend devem carregar `user.id`, `user.email`, `authProvider` e `authMode`; claims ausentes ou inconsistentes fazem a leitura de sessao falhar em modo fechado.
+- Sessao/JWT legado ou inconsistente nao volta a ser aceito implicitamente: o runtime agora invalida esse estado para sessao ausente e exige reautenticacao limpa.
+
+## Readiness de storage da auth
+
+Comando operacional:
+
+- `pnpm auth:storage:check`
+
+O check:
+
+- carrega `.env.local` e `.env` quando presentes;
+- valida que o schema atual do `DATABASE_URL` contem `app_users`, `auth_identities` e `workspace_memberships`;
+- valida o historico de rollout em `_prisma_migrations` e exige as migrations `20260402160000_auth_access_foundation`, `20260406190000_auth_uuid_integrity_repair` e `20260407113000_auth_storage_rollout_guardrails`;
+- valida tambem se os IDs persistidos em `app_users`, `auth_identities` e `workspace_memberships` continuam compativeis com o contrato de claims/schemas atual;
+- classifica explicitamente o estado como `foundation_missing`, `foundation_partial`, `migration_incomplete`, `integrity_invalid` ou `ready`;
+- falha com exit code `1` quando a fundacao de auth/acesso ainda nao foi migrada;
+- orienta o caminho objetivo de bootstrap local.
+
+Leitura operacional rapida:
+
+- `foundation_missing`
+  - o schema nao tem a fundacao minima de auth
+- `foundation_partial`
+  - o schema ficou pela metade ou sofreu drift manual
+- `migration_incomplete`
+  - as tabelas existem, mas o rollout versionado nao esta completo/confiavel
+- `integrity_invalid`
+  - as tabelas existem, mas os IDs persistidos ainda quebram o contrato exigido por JWT/session
+- `ready`
+  - fundacao, historico de migrations e integridade de IDs estao coerentes
+
+Quando o storage nao estiver pronto:
+
+1. rode `pnpm prisma:migrate:deploy`
+2. rode `pnpm auth:storage:check`
+3. se o objetivo for login local por `development_credentials`, rode `pnpm db:seed`
+4. rode `pnpm auth:storage:check` novamente
+5. se o banco local for descartavel e voce quiser rebootstrap completo, rode `pnpm db:reset-local`
+
+Comportamento esperado do backend:
+
+- login nao conclui com falso sucesso quando `auth_identities`/`app_users`/`workspace_memberships` estao ausentes;
+- `syncAuthenticatedActor` e leituras de sessao falham com `AUTH_STORAGE_NOT_READY`, `AUTH_STORAGE_MIGRATION_INCOMPLETE` ou `AUTH_STORAGE_INTEGRITY_INVALID`, conforme a classe real do problema;
+- `development_credentials` so deve ser usado depois do storage check passar.
 
 ## Preflight de auth para staging
 
@@ -137,14 +181,22 @@ Esta fase adiciona:
   - cria `workspace_memberships`
   - adiciona `actorUserId` em `audit_events`
   - faz backfill de usuarios/memberships a partir de `workspaces.ownerIdentity`
+- `20260406190000_auth_uuid_integrity_repair`
+  - repara UUIDs invalidos introduzidos no backfill inicial da auth
+- `20260407113000_auth_storage_rollout_guardrails`
+  - reaplica o reparo de UUID de forma idempotente
+  - falha a migration se residuos invalidos permanecerem apos o reparo
+  - deixa o rollout rastreavel tambem pelo historico de migrations exigido no readiness check
 
 Aplicacao esperada:
 
 1. atualizar codigo e lockfile
 2. rodar `pnpm install --frozen-lockfile`
 3. rodar `pnpm prisma:migrate:deploy` no ambiente compartilhado
-4. se o ambiente usar seed local, rodar `pnpm db:seed`
-5. rodar `pnpm validate`
+4. rodar `pnpm auth:storage:check -- --json` e exigir estado `ready`
+5. se o ambiente usar seed local, rodar `pnpm db:seed`
+6. rodar `pnpm auth:storage:check`
+7. rodar `pnpm validate`
 
 ## Seed local
 
@@ -154,6 +206,23 @@ Aplicacao esperada:
   - workspace demo com membership `owner`
   - projeto demo e working snapshot inicial
 - o objetivo do seed e deixar o banco coerente com o modelo de acesso atual, nao apenas com o legado `ownerIdentity`
+
+## Bootstrap local recomendado para login dev
+
+Fluxo minimo:
+
+1. `pnpm db:up`
+2. `pnpm auth:bootstrap:local`
+3. `pnpm dev:with-db`
+
+Atalhos uteis:
+
+- `pnpm db:reset-local`
+  - recria o Postgres local, aplica migrations, roda seed e valida o storage de auth
+- `pnpm auth:bootstrap:local`
+  - espera o banco, aplica migrations, valida rollout/integridade, roda seed e valida readiness novamente
+- `pnpm dev:with-db`
+  - usa o bootstrap canonico de auth e so entao sobe `next dev`
 
 ## Relacao com a baseline
 

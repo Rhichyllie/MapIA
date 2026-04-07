@@ -88,6 +88,12 @@
     },
     "errors": {
       "credentialsSignin": "Invalid credentials. Check the development email and password.",
+      "authStorageNotReady": "The authentication storage for this environment is not ready yet. Apply the auth foundation and try again.",
+      "authStorageMigrationIncomplete": "The authentication migration rollout is still incomplete in this environment. Finish `prisma:migrate:deploy` before trying to sign in.",
+      "authStorageIntegrityInvalid": "The authentication storage integrity is still invalid in this environment. Repair auth IDs before trying to sign in.",
+      "authIdentityConflict": "The authenticated identity conflicted with an existing internal user.",
+      "authAccessDenied": "Authentication was denied by the active MapIA rules.",
+      "sessionInvalid": "The sign-in flow did not produce a valid session. Please authenticate again.",
       "default": "Authentication failed. Please try again."
     },
     "signOut": "Sign out"
@@ -241,6 +247,10 @@
       "cancelButton": "Cancel"
     },
     "diagramTypes": {
+      "graph": {
+        "label": "Graph",
+        "description": "Flexible canonical structure used by graph, ERD and timeline views."
+      },
       "tree": {
         "label": "Hierarchy",
         "description": "Structures with levels and parent-child relationships."

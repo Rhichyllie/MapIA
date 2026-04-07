@@ -238,6 +238,7 @@ export function WorkspaceToolbar({
                 data-testid="workspace-filter-diagram"
               >
                 <option value="all">{copy.filters.allOption}</option>
+                <option value="graph">{copy.getDiagramTypeLabel("graph")}</option>
                 <option value="tree">{copy.getDiagramTypeLabel("tree")}</option>
                 <option value="flow">{copy.getDiagramTypeLabel("flow")}</option>
                 <option value="mindmap">{copy.getDiagramTypeLabel("mindmap")}</option>

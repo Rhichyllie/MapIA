@@ -73,7 +73,8 @@ describe("importPrismaSchemaToGraphSnapshot", () => {
     expect(result.snapshot.nodes).toHaveLength(2);
     expect(result.snapshot.edges).toHaveLength(1);
     expect(result.snapshot.viewport.zoom).toBe(1);
-    expect(result.snapshot.diagramType).toBe("erd");
+    expect(result.snapshot.diagramType).toBe("graph");
+    expect(result.snapshot.diagramView).toBe("erd");
 
     const userNode = result.snapshot.nodes.find((node) => node.label === "User");
     const postNode = result.snapshot.nodes.find((node) => node.label === "Post");

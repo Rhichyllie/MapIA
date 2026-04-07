@@ -112,11 +112,26 @@ function resolvePolicyDiagramType(policy: SemanticPolicyRecord, snapshotDiagramT
     return policy.diagramType;
   }
 
+  if (snapshotDiagramType && snapshotDiagramType.trim() === "erd") {
+    return "erd";
+  }
+
   if (snapshotDiagramType && snapshotDiagramType.trim()) {
     return snapshotDiagramType;
   }
 
   return undefined;
+}
+
+function resolveSnapshotSemanticDiagramType(snapshot: {
+  diagramType?: string;
+  diagramView?: string;
+}) {
+  if (snapshot.diagramView === "erd") {
+    return "erd";
+  }
+
+  return snapshot.diagramType;
 }
 
 function buildSemanticEngineOptions(
@@ -304,7 +319,7 @@ export class RestoreWorkingSnapshotFromVersionUseCase {
     const policy = await loadOrCreateSemanticPolicy(this.deps, {
       projectId: parsed.projectId,
       actorIdentity: parsed.actorIdentity,
-      snapshotDiagramType: snapshotToRestore.diagramType,
+      snapshotDiagramType: resolveSnapshotSemanticDiagramType(snapshotToRestore),
     });
 
     if (policy.enforceOnServer) {
@@ -326,7 +341,10 @@ export class RestoreWorkingSnapshotFromVersionUseCase {
             payload: edge.data,
           })),
         },
-        resolvePolicyDiagramType(policy, snapshotToRestore.diagramType),
+        resolvePolicyDiagramType(
+          policy,
+          resolveSnapshotSemanticDiagramType(snapshotToRestore),
+        ),
         "operational",
         engineOptions,
       );

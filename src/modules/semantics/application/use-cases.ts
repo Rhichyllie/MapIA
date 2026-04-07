@@ -51,9 +51,14 @@ function resolveSemanticMode(mode: "operational" | "technical" | undefined): Sem
 function resolvePolicyDiagramType(input: {
   policyDiagramType?: string;
   snapshotDiagramType?: string;
+  snapshotDiagramView?: string;
 }) {
   if (input.policyDiagramType && input.policyDiagramType.trim()) {
     return input.policyDiagramType;
+  }
+
+  if (input.snapshotDiagramView === "erd") {
+    return "erd";
   }
 
   if (input.snapshotDiagramType && input.snapshotDiagramType.trim()) {
@@ -133,12 +138,15 @@ async function loadOrCreatePolicy(
 
       return deps.semanticPolicyRepository.create({
         projectId: parsed.projectId,
-        diagramType: workingSnapshot?.snapshot.diagramType,
+        diagramType:
+          workingSnapshot?.snapshot.diagramView === "erd"
+            ? "erd"
+            : workingSnapshot?.snapshot.diagramType,
         strictEnabled: true,
         enforceOnServer: true,
         allowTechOverride: false,
         requireOverrideReason: true,
-        ...(workingSnapshot?.snapshot.diagramType === "erd"
+        ...(workingSnapshot?.snapshot.diagramView === "erd"
           ? {
               customRulesJson: {
                 erd: normalizeErdPolicyFromCustomRules(undefined),
@@ -162,6 +170,7 @@ function buildSemanticAuditResult(input: {
     resolvePolicyDiagramType({
       policyDiagramType: input.policy.diagramType,
       snapshotDiagramType: input.snapshot.diagramType,
+      snapshotDiagramView: input.snapshot.diagramView,
     }),
     input.mode,
     engineOptions,

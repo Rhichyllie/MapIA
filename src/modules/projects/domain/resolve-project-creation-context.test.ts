@@ -19,7 +19,8 @@ describe("resolveProjectCreationContext", () => {
         },
         context: {},
       },
-      snapshotDiagramType: "erd",
+      snapshotDiagramType: "graph",
+      snapshotDiagramView: "erd",
       template: "sitemap",
     });
 
@@ -34,7 +35,8 @@ describe("resolveProjectCreationContext", () => {
 
   it("falls back to snapshot diagram type when settings are missing", () => {
     const result = resolveProjectCreationContext({
-      snapshotDiagramType: "erd",
+      snapshotDiagramType: "graph",
+      snapshotDiagramView: "erd",
       template: "graph",
     });
 
@@ -122,5 +124,16 @@ describe("resolveProjectCreationContext", () => {
     expect(result.decisionTrace.legacyTemplateFallback.dependencyReal).toBe(true);
     expect(result.decisionTrace.legacyTemplateFallback.fallbackMode).toBe("partial");
     expect(result.decisionTrace.legacyTemplateFallback.fallbackReason).toBe("invalid_settings");
+  });
+
+  it("treats sitemap as tree canonically while preserving sitemap view intent", () => {
+    const result = resolveProjectCreationContext({
+      snapshotDiagramType: "tree",
+      snapshotDiagramView: "sitemap",
+    });
+
+    expect(result.effectiveInitialView).toBe("sitemap");
+    expect(result.sources.initialView).toBe("snapshot");
+    expect(result.decisionTrace.legacyTemplateFallback.dependencyReal).toBe(false);
   });
 });

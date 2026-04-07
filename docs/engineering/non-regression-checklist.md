@@ -61,7 +61,7 @@ Documentos de apoio:
 - Comando E2E alvo:
   - `pnpm exec playwright test tests/e2e/i18n-login-locale.spec.ts tests/e2e/i18n-language-switcher.spec.ts --project=chromium`
 - Comando unitario alvo:
-  - `pnpm exec vitest run src/server/auth/auth-runtime.test.ts src/server/auth/auth-runtime-readiness.test.ts src/server/auth/session.test.ts src/server/app/api-route-guards.test.ts`
+  - `pnpm exec vitest run src/server/auth/auth-runtime.test.ts src/server/auth/auth-runtime-readiness.test.ts src/server/auth/auth-storage-readiness.test.ts src/server/auth/options.test.ts src/server/auth/session.test.ts src/server/auth/nextauth-route.test.ts src/server/app/api-route-guards.test.ts`
 - Rodar quando:
   - `app/[locale]/login`
   - protecao de rotas
@@ -124,6 +124,8 @@ Rode quando a mudanca tocar a area correspondente. Registre no PR o que foi vali
 
 - abrir `/login`
 - autenticar com `DEV_LOGIN_EMAIL` e `DEV_LOGIN_PASSWORD` em `AUTH_MODE=development`
+- rodar `pnpm auth:bootstrap:local` antes do smoke quando a mudanca tocar `src/server/auth/*`, `prisma/`, seed ou bootstrap local
+- se a mudanca tocar rollout/readiness da auth, rodar tambem `pnpm auth:storage:check -- --json` e registrar o estado (`ready`, `foundation_*`, `migration_incomplete` ou `integrity_invalid`)
 - confirmar redirect para `/dashboard`
 - tentar abrir uma rota protegida sem sessao quando a mudanca tocar guard de auth
 - se a mudanca tocar `AUTH_MODE=oidc` ou `src/server/auth/auth-runtime.ts`, validar tambem que producao mal configurada falha de forma segura em vez de cair para login dev-only

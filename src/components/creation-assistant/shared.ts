@@ -48,6 +48,7 @@ export type CreationAssistantShellProps = {
     updatedAt: string;
   } | null;
   snapshotDiagramType?: string;
+  snapshotDiagramView?: string;
 };
 
 export const STEP_IDS = [
@@ -282,6 +283,7 @@ export function buildInitialDraft(input: {
   initialSettings?: AssistantCreationSettings | null;
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
+  snapshotDiagramView?: string;
   labels?: CreationAssistantDefaultLabels;
 }): InitialDraftState {
   const labels = input.labels ?? DEFAULT_INITIAL_DRAFT_LABELS;
@@ -299,6 +301,7 @@ export function buildInitialDraft(input: {
   const { context } = resolveCreationContext({
     creationSettings: input.initialSettings,
     snapshotDiagramType: input.snapshotDiagramType,
+    snapshotDiagramView: input.snapshotDiagramView,
     template: input.initialProject?.template,
   });
   const profile = context.effectiveProfile;

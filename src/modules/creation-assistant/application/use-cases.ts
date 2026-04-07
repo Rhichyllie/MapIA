@@ -4,7 +4,7 @@ import { ensureSlug } from "@/src/lib/slug";
 import type { WorkingSnapshotRepository } from "@/src/modules/graph/application";
 import {
   applyDiagramLayoutToSnapshot,
-  isSupportedDiagramType,
+  isAutoLayoutDiagramType,
   resolveDiagramLayoutOptions,
 } from "@/src/modules/graph/domain";
 import { importPrismaSchemaToGraphSnapshot } from "@/src/modules/importing/domain/prisma-schema-importer";
@@ -23,7 +23,7 @@ import {
   normalizeSourceStatusCode,
   redactAssistantCreationSettings,
   redactAssistantDraft,
-  resolveDiagramTypeForInitialView,
+  resolveDiagramIdentityForInitialView,
   resolveRecommendedLayout,
   validateStrictByRecipe,
   type AssistantCreationSettings,
@@ -143,9 +143,9 @@ function buildLayoutOptions(input: {
   layout: LayoutChoice;
   context: AssistantCreationSettings["context"];
 }) {
-  const diagramType = resolveDiagramTypeForInitialView(input.initialView);
+  const { diagramType } = resolveDiagramIdentityForInitialView(input.initialView);
 
-  if (diagramType === "tree" || diagramType === "sitemap") {
+  if (diagramType === "tree") {
     const direction =
       input.layout === "horizontal"
         ? "left-right"
@@ -186,18 +186,21 @@ function applyPreferredLayout(
   snapshot: GraphSnapshot,
   settings: AssistantCreationSettings,
 ): GraphSnapshot {
-  const diagramType = resolveDiagramTypeForInitialView(settings.initialView);
+  const diagramIdentity = resolveDiagramIdentityForInitialView(
+    settings.initialView,
+  );
   const layoutOptions = buildLayoutOptions({
     initialView: settings.initialView,
     layout: settings.layout,
     context: settings.context,
   });
 
-  if (settings.initialView === "sitemap") {
+  if (diagramIdentity.diagramView === "sitemap") {
     const laidOut = applyDiagramLayoutToSnapshot(
       {
         ...snapshot,
         diagramType: "tree",
+        diagramView: "sitemap",
       },
       "tree",
       layoutOptions,
@@ -205,24 +208,37 @@ function applyPreferredLayout(
 
     return {
       ...laidOut,
-      diagramType: "sitemap",
+      diagramType: "tree",
+      diagramView: "sitemap",
       layoutOptions,
     };
   }
 
-  if (isSupportedDiagramType(diagramType)) {
-    return applyDiagramLayoutToSnapshot(snapshot, diagramType, layoutOptions);
+  if (isAutoLayoutDiagramType(diagramIdentity.diagramType)) {
+    return applyDiagramLayoutToSnapshot(
+      {
+        ...snapshot,
+        diagramType: diagramIdentity.diagramType,
+        diagramView: diagramIdentity.diagramView,
+      },
+      diagramIdentity.diagramType,
+      layoutOptions,
+    );
   }
 
   if (settings.initialView === "erd" && settings.layout !== "free") {
     return {
       ...applyErdRelationalLayout(snapshot),
+      diagramType: diagramIdentity.diagramType,
+      diagramView: diagramIdentity.diagramView,
       layoutOptions,
     };
   }
 
   return {
     ...snapshot,
+    diagramType: diagramIdentity.diagramType,
+    diagramView: diagramIdentity.diagramView,
     layoutOptions,
   };
 }
@@ -232,7 +248,7 @@ function buildInitialMapSnapshot(input: {
   draft: AssistantDraft;
   settings: AssistantCreationSettings;
 }) {
-  const diagramType = resolveDiagramTypeForInitialView(
+  const diagramIdentity = resolveDiagramIdentityForInitialView(
     input.settings.initialView,
   );
   const layoutOptions = buildLayoutOptions({
@@ -260,7 +276,8 @@ function buildInitialMapSnapshot(input: {
 
     const base = GraphSnapshotSchema.parse({
       ...imported,
-      diagramType,
+      diagramType: diagramIdentity.diagramType,
+      diagramView: diagramIdentity.diagramView,
       layoutOptions,
       rootNodeName: undefined,
       allowReapplyLayout: input.settings.automation.autoOrganizeOnCreate,
@@ -283,7 +300,8 @@ function buildInitialMapSnapshot(input: {
       y: 0,
       zoom: 1,
     },
-    diagramType,
+    diagramType: diagramIdentity.diagramType,
+    diagramView: diagramIdentity.diagramView,
     layoutOptions,
     rootNodeName: seeded.rootNodeName,
     allowReapplyLayout: input.settings.automation.autoOrganizeOnCreate,

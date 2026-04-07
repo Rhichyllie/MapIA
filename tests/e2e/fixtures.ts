@@ -137,7 +137,7 @@ export async function ensureLoggedIn(page: Page, credentials: DevCredentials) {
       : "";
 
     throw new Error(
-      `Falha no login dev do E2E. Verifique DEV_LOGIN_EMAIL/DEV_LOGIN_PASSWORD (.env/.env.local) e NODE_ENV=development.${extraMessage}`,
+      `Falha no login dev do E2E. Verifique DEV_LOGIN_EMAIL/DEV_LOGIN_PASSWORD (.env/.env.local), NODE_ENV=development e rode pnpm auth:bootstrap:local antes do smoke.${extraMessage}`,
       { cause: error },
     );
   }

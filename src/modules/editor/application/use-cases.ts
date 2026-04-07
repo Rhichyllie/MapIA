@@ -65,6 +65,10 @@ function resolvePolicyDiagramType(policy: SemanticPolicyRecord, snapshotDiagramT
     return policy.diagramType;
   }
 
+  if (snapshotDiagramType && snapshotDiagramType.trim() === "erd") {
+    return "erd";
+  }
+
   if (snapshotDiagramType && snapshotDiagramType.trim()) {
     return snapshotDiagramType;
   }
@@ -93,6 +97,17 @@ function isErdDiagramType(diagramType: string | undefined) {
   return diagramType === "erd";
 }
 
+function resolveSnapshotSemanticDiagramType(snapshot: {
+  diagramType?: string;
+  diagramView?: string;
+}) {
+  if (snapshot.diagramView === "erd") {
+    return "erd";
+  }
+
+  return snapshot.diagramType;
+}
+
 function enrichCommandForSemanticPolicy(input: {
   command: EditorCommand;
   snapshot: WorkingSnapshotRecord["snapshot"];
@@ -101,7 +116,7 @@ function enrichCommandForSemanticPolicy(input: {
   const command = input.command;
   const diagramType = resolvePolicyDiagramType(
     input.policy,
-    input.snapshot.diagramType,
+    resolveSnapshotSemanticDiagramType(input.snapshot),
   );
 
   if (diagramType !== "erd") {
@@ -814,7 +829,7 @@ export class ApplyEditorCommandUseCase {
       deps: this.deps,
       projectId: parsed.projectId,
       actorIdentity: parsed.actorIdentity,
-      snapshotDiagramType: current.snapshot.diagramType,
+      snapshotDiagramType: resolveSnapshotSemanticDiagramType(current.snapshot),
     });
     const command = enrichCommandForSemanticPolicy({
       command: parsed.command,
@@ -879,7 +894,7 @@ export class ApplyEditorCommandsUseCase {
       deps: this.deps,
       projectId: parsed.projectId,
       actorIdentity: parsed.actorIdentity,
-      snapshotDiagramType: current.snapshot.diagramType,
+      snapshotDiagramType: resolveSnapshotSemanticDiagramType(current.snapshot),
     });
 
     let nextSnapshot = current.snapshot;
@@ -949,7 +964,7 @@ export class SaveEditorFullSnapshotUseCase {
       deps: this.deps,
       projectId: parsed.projectId,
       actorIdentity: parsed.actorIdentity,
-      snapshotDiagramType: snapshot.diagramType,
+      snapshotDiagramType: resolveSnapshotSemanticDiagramType(snapshot),
     });
 
     await enforceSnapshotSemantics({

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { GraphSnapshotSchema } from "@/src/domain";
 import { AuditWorkingSnapshotUseCase } from "./use-cases";
 
 describe("AuditWorkingSnapshotUseCase", () => {
@@ -36,10 +37,10 @@ describe("AuditWorkingSnapshotUseCase", () => {
           projectId: "58f3ca26-085e-4237-80d9-adcc42f7142b",
           versionNumber: 1,
           revision: 9,
-          snapshot: {
+          snapshot: GraphSnapshotSchema.parse({
             nodes: [
               {
-                id: "node-1",
+                id: "11111111-1111-4111-8111-111111111111",
                 projectId: "58f3ca26-085e-4237-80d9-adcc42f7142b",
                 kind: "flow-step" as const,
                 label: "Etapa",
@@ -50,8 +51,9 @@ describe("AuditWorkingSnapshotUseCase", () => {
             ],
             edges: [],
             viewport: { x: 0, y: 0, zoom: 1 },
-            diagramType: "erd",
-          },
+            diagramType: "graph",
+            diagramView: "erd",
+          }),
           createdAt: new Date("2026-03-09T12:00:00.000Z"),
         })),
         save: vi.fn(),
@@ -71,7 +73,7 @@ describe("AuditWorkingSnapshotUseCase", () => {
           code: "NODE_KIND_OUT_OF_PROFILE",
           severity: "error",
           targetType: "node",
-          targetId: "node-1",
+          targetId: "11111111-1111-4111-8111-111111111111",
         }),
       ]),
     );

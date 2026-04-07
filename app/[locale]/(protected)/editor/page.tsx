@@ -108,6 +108,7 @@ export default async function EditorPage({ searchParams }: EditorPageProps) {
         const creationContextResolution = resolveCreationContext({
           creationSettings,
           snapshotDiagramType: workingSnapshot?.snapshot.diagramType,
+          snapshotDiagramView: workingSnapshot?.snapshot.diagramView,
           template: project.template,
         });
         const recipe = resolveCreationRecipe({

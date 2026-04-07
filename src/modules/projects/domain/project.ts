@@ -13,6 +13,8 @@ export const ProjectSchema = z.object({
   slug: z.string().min(2).max(80),
   name: z.string().min(1).max(120),
   description: z.string().max(500).optional(),
+  // Legacy compatibility only. Canonical diagram identity lives in the
+  // working/versioned snapshot via diagramType + diagramView.
   template: ProjectTemplateSchema,
   createdAt: z.date(),
   updatedAt: z.date(),

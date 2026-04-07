@@ -10,10 +10,10 @@ import {
   getViewCompatibilityRank,
   isLayoutAllowedForView,
   resolveRecommendedStartStrategy,
+  resolveDiagramIdentityForInitialView,
   resolveSourceConfigPreview,
   resolveSourceLifecycle,
   SourcePrecheckResultSchema,
-  resolveDiagramTypeForInitialView,
 } from "./creation-assistant";
 
 describe("creation-assistant domain", () => {
@@ -118,13 +118,31 @@ describe("creation-assistant domain", () => {
     expect(processSources).toEqual(["spreadsheet", "csv"]);
   });
 
-  it("maps initialView to diagramType compatibly", () => {
-    expect(resolveDiagramTypeForInitialView("hierarchy")).toBe("tree");
-    expect(resolveDiagramTypeForInitialView("flow")).toBe("flow");
-    expect(resolveDiagramTypeForInitialView("mindmap")).toBe("mindmap");
-    expect(resolveDiagramTypeForInitialView("erd")).toBe("erd");
-    expect(resolveDiagramTypeForInitialView("sitemap")).toBe("sitemap");
-    expect(resolveDiagramTypeForInitialView("free")).toBe("graph");
+  it("maps initialView to canonical diagram identity and keeps view separate", () => {
+    expect(resolveDiagramIdentityForInitialView("hierarchy")).toEqual({
+      diagramType: "tree",
+      diagramView: "tree",
+    });
+    expect(resolveDiagramIdentityForInitialView("flow")).toEqual({
+      diagramType: "flow",
+      diagramView: "flow",
+    });
+    expect(resolveDiagramIdentityForInitialView("mindmap")).toEqual({
+      diagramType: "mindmap",
+      diagramView: "mindmap",
+    });
+    expect(resolveDiagramIdentityForInitialView("erd")).toEqual({
+      diagramType: "graph",
+      diagramView: "erd",
+    });
+    expect(resolveDiagramIdentityForInitialView("sitemap")).toEqual({
+      diagramType: "tree",
+      diagramView: "sitemap",
+    });
+    expect(resolveDiagramIdentityForInitialView("free")).toEqual({
+      diagramType: "graph",
+      diagramView: "graph",
+    });
   });
 
   it("resolves recommended start strategy with explainable reason", () => {

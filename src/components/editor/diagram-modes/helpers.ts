@@ -1170,9 +1170,13 @@ export function createRenderStrategy(
 }
 
 export function createRendererResolver(modeId: EditorDiagramModeId) {
-  return (input: { template?: ProjectTemplate; layoutOptions?: unknown }) =>
+  return (input: {
+    diagramView?: string;
+    template?: ProjectTemplate;
+    layoutOptions?: unknown;
+  }) =>
     resolveDiagramRenderer({
-      diagramType: modeId,
+      diagramView: input.diagramView ?? modeId,
       template: input.template,
       layoutOptions: input.layoutOptions,
     });

@@ -1,17 +1,24 @@
 import { z } from "zod";
-import type { GraphSnapshot } from "@/src/domain";
+import {
+  CanonicalDiagramTypeSchema,
+  DiagramViewSchema,
+  type CanonicalDiagramType,
+  type DiagramView,
+  type GraphSnapshot,
+} from "@/src/domain";
 
-export const DiagramTypeSchema = z.enum(["tree", "flow", "mindmap"]);
-export const LegacyDiagramTypeSchema = z.enum([
-  "graph",
+export const DiagramTypeSchema = CanonicalDiagramTypeSchema;
+export const DiagramViewTypeSchema = DiagramViewSchema;
+export const AutoLayoutDiagramTypeSchema = z.enum(["tree", "flow", "mindmap"]);
+export const LegacyDiagramViewAliasSchema = z.enum([
   "sitemap",
   "flowchart",
   "erd",
   "timeline",
 ]);
-export const AnyDiagramTypeSchema = z.union([
-  DiagramTypeSchema,
-  LegacyDiagramTypeSchema,
+export const DiagramIdentityAliasSchema = z.union([
+  DiagramViewTypeSchema,
+  LegacyDiagramViewAliasSchema,
 ]);
 
 const SpacingSchema = z.number().finite().min(24).max(2000);
@@ -58,9 +65,11 @@ export const DiagramLayoutOptionsSchema = z.discriminatedUnion("type", [
   MindmapLayoutOptionsSchema,
 ]);
 
-export type DiagramType = z.infer<typeof DiagramTypeSchema>;
-export type LegacyDiagramType = z.infer<typeof LegacyDiagramTypeSchema>;
-export type AnyDiagramType = z.infer<typeof AnyDiagramTypeSchema>;
+export type DiagramType = CanonicalDiagramType;
+export type DiagramViewType = DiagramView;
+export type AutoLayoutDiagramType = z.infer<typeof AutoLayoutDiagramTypeSchema>;
+export type LegacyDiagramViewAlias = z.infer<typeof LegacyDiagramViewAliasSchema>;
+export type DiagramIdentityAlias = z.infer<typeof DiagramIdentityAliasSchema>;
 export type TreeDirection = z.infer<typeof DirectionSchema>;
 
 export type TreeLayoutOptions = z.infer<typeof TreeLayoutOptionsSchema>;
@@ -80,7 +89,7 @@ type LayoutEdgeInput = { sourceNodeId: string; targetNodeId: string };
 
 export type DiagramLayoutPositions = Record<string, LayoutPosition>;
 
-type DiagramLayoutRegistryEntry<TType extends DiagramType> = {
+type DiagramLayoutRegistryEntry<TType extends AutoLayoutDiagramType> = {
   type: TType;
   label: string;
   defaultOptions: DiagramLayoutOptionsByType[TType];
@@ -482,19 +491,53 @@ export function isSupportedDiagramType(
   return DiagramTypeSchema.safeParse(diagramType).success;
 }
 
+export function isAutoLayoutDiagramType(
+  diagramType: unknown,
+): diagramType is AutoLayoutDiagramType {
+  return AutoLayoutDiagramTypeSchema.safeParse(diagramType).success;
+}
+
+export function isDiagramViewType(
+  diagramView: unknown,
+): diagramView is DiagramViewType {
+  return DiagramViewTypeSchema.safeParse(diagramView).success;
+}
+
 export function getDiagramTypeLabel(diagramType: string | undefined) {
   if (!diagramType) {
     return "Nao definido";
   }
 
-  const registryEntry = isSupportedDiagramType(diagramType)
+  if (diagramType === "graph") {
+    return "Grafo canonico";
+  }
+
+  const registryEntry = isAutoLayoutDiagramType(diagramType)
     ? DIAGRAM_TYPE_REGISTRY[diagramType]
     : undefined;
 
-  return registryEntry?.label ?? `Legado (${diagramType})`;
+  return registryEntry?.label ?? `Compatibilidade (${diagramType})`;
 }
 
-export function resolveDiagramLayoutOptions<TType extends DiagramType>(
+export function getDiagramViewLabel(diagramView: string | undefined) {
+  if (!diagramView) {
+    return "Nao definido";
+  }
+
+  const labels: Record<DiagramViewType, string> = {
+    graph: "Grafo",
+    tree: "Hierarquia",
+    flow: "Processo",
+    mindmap: "Mapa mental",
+    erd: "ERD",
+    sitemap: "Sitemap",
+    timeline: "Timeline",
+  };
+
+  return labels[diagramView as DiagramViewType] ?? `Compatibilidade (${diagramView})`;
+}
+
+export function resolveDiagramLayoutOptions<TType extends AutoLayoutDiagramType>(
   diagramType: TType,
   rawOptions?: unknown,
 ): DiagramLayoutOptionsByType[TType] {
@@ -543,10 +586,10 @@ export const DIAGRAM_TYPE_REGISTRY = {
     applyLayout: applyMindmapLayout,
   },
 } as const satisfies {
-  [TType in DiagramType]: DiagramLayoutRegistryEntry<TType>;
+  [TType in AutoLayoutDiagramType]: DiagramLayoutRegistryEntry<TType>;
 };
 
-export function computeDiagramLayoutPositions<TType extends DiagramType>(input: {
+export function computeDiagramLayoutPositions<TType extends AutoLayoutDiagramType>(input: {
   nodes: LayoutNodeInput[];
   edges: LayoutEdgeInput[];
   diagramType: TType;
@@ -566,7 +609,7 @@ export function computeDiagramLayoutPositions<TType extends DiagramType>(input: 
   return applyMindmapLayout(input.nodes, input.edges, resolvedOptions);
 }
 
-export function applyDiagramLayoutToSnapshot<TType extends DiagramType>(
+export function applyDiagramLayoutToSnapshot<TType extends AutoLayoutDiagramType>(
   snapshot: GraphSnapshot,
   diagramType: TType,
   options?: unknown,
@@ -594,7 +637,7 @@ export function applyDiagramLayoutToSnapshot<TType extends DiagramType>(
 }
 
 export function reapplyLayoutForSnapshot(snapshot: GraphSnapshot): GraphSnapshot {
-  if (!isSupportedDiagramType(snapshot.diagramType)) {
+  if (!isAutoLayoutDiagramType(snapshot.diagramType)) {
     return snapshot;
   }
 

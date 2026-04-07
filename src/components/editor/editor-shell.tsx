@@ -21,7 +21,12 @@ import type {
   OnConnectStartParams,
   ReactFlowInstance,
 } from "@xyflow/react";
-import { EdgeKindSchema, type EdgeKind, type NodeKind } from "@/src/domain";
+import {
+  EdgeKindSchema,
+  resolveDiagramView,
+  type EdgeKind,
+  type NodeKind,
+} from "@/src/domain";
 import {
   resolveGraphNodeSemantic,
   writeDiagramRoleToPayload,
@@ -34,7 +39,7 @@ import type {
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import {
   getDiagramTypeLabel,
-  isSupportedDiagramType,
+  isAutoLayoutDiagramType,
   reapplyLayoutForSnapshot,
 } from "@/src/modules/graph/domain";
 import type { EditorCommand } from "@/src/modules/editor/application";
@@ -921,11 +926,13 @@ export function EditorShell({
     () =>
       resolveEditorDiagramMode({
         diagramType: layoutMetadata.diagramType,
+        diagramView: layoutMetadata.diagramView,
         template: project.template,
         layoutOptions: layoutMetadata.layoutOptions,
       }),
     [
       layoutMetadata.diagramType,
+      layoutMetadata.diagramView,
       layoutMetadata.layoutOptions,
       project.template,
     ],
@@ -1549,7 +1556,7 @@ export function EditorShell({
     layoutMetadata.allowReapplyLayout === false;
   const canReapplyLayout = useMemo(
     () =>
-      isSupportedDiagramType(layoutMetadata.diagramType) &&
+      isAutoLayoutDiagramType(layoutMetadata.diagramType) &&
       !isReapplyLayoutBlockedByPolicy,
     [layoutMetadata.diagramType, isReapplyLayoutBlockedByPolicy],
   );
@@ -2204,9 +2211,12 @@ export function EditorShell({
         diagramType: getDiagramTypeLabel(layoutMetadata.diagramType),
       })
     : editorT("shell.diagram.pending");
+  const requestedDiagramView = resolveDiagramView({
+    diagramType: layoutMetadata.diagramType,
+    diagramView: layoutMetadata.diagramView,
+  });
   const hasDiagramRendererMismatch =
-    isSupportedDiagramType(layoutMetadata.diagramType) &&
-    renderer.key !== layoutMetadata.diagramType;
+    Boolean(requestedDiagramView) && renderer.key !== requestedDiagramView;
   const inlineRenamePopoverStyle = useMemo(() => {
     if (!inlineRenameNode) {
       return undefined;
@@ -4453,7 +4463,7 @@ export function EditorShell({
       return;
     }
 
-    if (!isSupportedDiagramType(currentSnapshot.diagramType)) {
+    if (!isAutoLayoutDiagramType(currentSnapshot.diagramType)) {
       setGlobalErrorMessage(
         editorT("shell.errors.reapplyLayoutRequiresSupportedType"),
       );
@@ -4990,7 +5000,7 @@ export function EditorShell({
             project={project}
             diagramDefinitionLabel={diagramDefinitionLabel}
             rendererLabel={editorT(`shell.rendererLabels.${renderer.key}`)}
-            isSupportedDiagramType={isSupportedDiagramType(
+            isSupportedDiagramType={isAutoLayoutDiagramType(
               layoutMetadata.diagramType,
             )}
             layoutPolicyLabel={layoutPolicyLabel}

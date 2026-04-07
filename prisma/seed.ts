@@ -1,10 +1,17 @@
 import { randomUUID } from "crypto";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { GraphSnapshotSchema } from "../src/domain";
+import { assertAuthStorageReady } from "../src/server/auth/auth-storage-readiness";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  await assertAuthStorageReady({
+    rawQueryDelegate: prisma,
+    databaseUrl: process.env.DATABASE_URL,
+    useCache: false,
+  });
+
   const [seedUser] = await prisma.$queryRaw<
     Array<{
       id: string;

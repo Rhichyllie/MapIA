@@ -2,19 +2,48 @@
 
 import { FormEvent, useState } from "react";
 import { useTranslations, useLocale } from "next-intl";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { getPathname } from "@/src/i18n/navigation";
 import { appRoutes } from "@/src/lib/routes";
 import { resolvePostLoginNavigationTarget } from "./login-navigation";
 
-type AuthErrorKey = "credentialsSignin" | "default";
+type AuthErrorKey =
+  | "credentialsSignin"
+  | "authStorageNotReady"
+  | "authStorageMigrationIncomplete"
+  | "authStorageIntegrityInvalid"
+  | "authIdentityConflict"
+  | "authAccessDenied"
+  | "sessionInvalid"
+  | "default";
 type LoginMode = "development_credentials" | "oidc" | "misconfigured";
 
 function getAuthErrorKey(errorCode: string | null): AuthErrorKey | null {
   if (!errorCode) return null;
   if (errorCode === "CredentialsSignin") {
     return "credentialsSignin";
+  }
+  if (errorCode === "AuthStorageNotReady") {
+    return "authStorageNotReady";
+  }
+  if (errorCode === "AuthStorageMigrationIncomplete") {
+    return "authStorageMigrationIncomplete";
+  }
+  if (errorCode === "AuthStorageIntegrityInvalid") {
+    return "authStorageIntegrityInvalid";
+  }
+  if (errorCode === "AuthIdentityConflict") {
+    return "authIdentityConflict";
+  }
+  if (errorCode === "AuthAccessDenied") {
+    return "authAccessDenied";
+  }
+  if (errorCode === "AccessDenied") {
+    return "authAccessDenied";
+  }
+  if (errorCode === "AuthSigninFailed") {
+    return "default";
   }
 
   return "default";
@@ -61,6 +90,14 @@ export function LoginForm({
 
     if (result?.error) {
       setSubmitErrorKey(getAuthErrorKey(result.error));
+      setIsSubmitting(false);
+      return;
+    }
+
+    const session = await getSession();
+
+    if (!session?.user?.id || !session.user.authProvider || !session.user.authMode) {
+      setSubmitErrorKey("sessionInvalid");
       setIsSubmitting(false);
       return;
     }

@@ -17,12 +17,18 @@ export type DashboardProject = {
   template: "sitemap" | "flowchart" | "erd" | "graph";
   createdAt?: string;
   updatedAt?: string;
-  selectedDiagramType?: "tree" | "flow" | "mindmap";
+  selectedDiagramType?: "graph" | "tree" | "flow" | "mindmap";
   hasInitialSnapshot: boolean;
   snapshotVersionCount: number;
 };
 
-export type DiagramFilter = "all" | "tree" | "flow" | "mindmap" | "undefined";
+export type DiagramFilter =
+  | "all"
+  | "graph"
+  | "tree"
+  | "flow"
+  | "mindmap"
+  | "undefined";
 export type SnapshotFilter = "all" | "pending" | "generated";
 export type UpdatedAtFilter = "all" | "today" | "last-7-days" | "last-30-days";
 export type SortOption = "name-asc" | "updated-desc" | "created-desc";

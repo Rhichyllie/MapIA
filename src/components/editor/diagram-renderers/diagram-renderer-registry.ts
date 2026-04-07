@@ -7,6 +7,7 @@ import {
   type NodeTypes,
 } from "@xyflow/react";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
+import { resolveDiagramView } from "@/src/domain";
 import {
   ErdNodeRenderer,
   FlowNodeRenderer,
@@ -51,6 +52,7 @@ export type RendererConfig = {
 
 type ResolveDiagramRendererInput = {
   diagramType?: string;
+  diagramView?: string;
   template?: ProjectTemplate;
   layoutOptions?: unknown;
 };
@@ -309,32 +311,6 @@ function createTimelineRenderer(
   };
 }
 
-function resolveLegacyRendererFromDiagramType(
-  diagramType: string | undefined,
-): DiagramRendererKey | undefined {
-  if (diagramType === "erd") {
-    return "erd";
-  }
-
-  if (diagramType === "sitemap") {
-    return "sitemap";
-  }
-
-  if (diagramType === "graph") {
-    return "graph";
-  }
-
-  if (diagramType === "timeline") {
-    return "timeline";
-  }
-
-  if (diagramType === "flowchart") {
-    return "graph";
-  }
-
-  return undefined;
-}
-
 function resolveLegacyRendererFromTemplate(
   template: ProjectTemplate | undefined,
 ): DiagramRendererKey {
@@ -346,33 +322,54 @@ function resolveLegacyRendererFromTemplate(
     return "sitemap";
   }
 
+  if (template === "flowchart") {
+    return "flow";
+  }
+
   return "graph";
 }
 
 export function resolveDiagramRenderer(
   input: ResolveDiagramRendererInput,
 ): RendererConfig {
-  if (input.diagramType === "tree") {
+  const diagramView = resolveDiagramView({
+    diagramType: input.diagramType,
+    diagramView: input.diagramView,
+  });
+
+  if (diagramView === "tree") {
     return createTreeRenderer(input);
   }
 
-  if (input.diagramType === "flow") {
+  if (diagramView === "flow") {
     return createFlowRenderer(input);
   }
 
-  if (input.diagramType === "mindmap") {
+  if (diagramView === "mindmap") {
     return createMindmapRenderer();
   }
 
-  if (input.diagramType === "timeline") {
+  if (diagramView === "timeline") {
     return createTimelineRenderer(input);
   }
 
-  const legacyFromDiagramType = resolveLegacyRendererFromDiagramType(
-    input.diagramType,
-  );
-  const legacyKey =
-    legacyFromDiagramType ?? resolveLegacyRendererFromTemplate(input.template);
+  if (diagramView === "erd") {
+    return createErdRenderer();
+  }
+
+  if (diagramView === "sitemap") {
+    return createSitemapRenderer(input);
+  }
+
+  if (diagramView === "graph") {
+    return createGraphRenderer();
+  }
+
+  const legacyKey = resolveLegacyRendererFromTemplate(input.template);
+
+  if (legacyKey === "flow") {
+    return createFlowRenderer(input);
+  }
 
   if (legacyKey === "erd") {
     return createErdRenderer();

@@ -26,4 +26,28 @@ describe("GraphSnapshotSchema", () => {
     expect(snapshot.rootNodeName).toBe("Arquitetura Geral");
     expect(snapshot.allowReapplyLayout).toBe(false);
   });
+
+  it("normalizes legacy snapshot diagramType into canonical type plus explicit view", () => {
+    const snapshot = GraphSnapshotSchema.parse({
+      nodes: [],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      diagramType: "erd",
+    });
+
+    expect(snapshot.diagramType).toBe("graph");
+    expect(snapshot.diagramView).toBe("erd");
+  });
+
+  it("rejects incompatible canonical type and diagramView pairs", () => {
+    expect(() =>
+      GraphSnapshotSchema.parse({
+        nodes: [],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+        diagramType: "flow",
+        diagramView: "erd",
+      }),
+    ).toThrow(/diagramView/i);
+  });
 });

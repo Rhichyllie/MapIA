@@ -167,8 +167,94 @@ describe("auth options", () => {
         },
       } as never),
     ).rejects.toMatchObject({
-      code: "AUTH_IDENTITY_CONFLICT",
-      status: 409,
+      message: "AuthIdentityConflict",
+    });
+  });
+
+  it("maps auth storage readiness failures to a stable callback error code", async () => {
+    mocks.syncAuthenticatedActor.mockRejectedValueOnce(
+      new AppError(
+        "Storage de autenticacao do MapIA nao esta pronto. Aplique as migrations de auth antes de executar login ou validar sessao.",
+        {
+          code: "AUTH_STORAGE_NOT_READY",
+          status: 503,
+        },
+      ),
+    );
+
+    await expect(
+      getCallbacks().signIn?.({
+        user: { email: "user@mapia.local", name: "OIDC User" },
+        account: {
+          provider: "oidc",
+          providerAccountId: "subject-123",
+          type: "oauth",
+        },
+        profile: {
+          sub: "subject-123",
+          email: "user@mapia.local",
+        },
+      } as never),
+    ).rejects.toMatchObject({
+      message: "AuthStorageNotReady",
+    });
+  });
+
+  it("maps auth migration rollout failures to a stable callback error code", async () => {
+    mocks.syncAuthenticatedActor.mockRejectedValueOnce(
+      new AppError(
+        "O rollout de migrations obrigatorias da auth esta incompleto neste ambiente.",
+        {
+          code: "AUTH_STORAGE_MIGRATION_INCOMPLETE",
+          status: 503,
+        },
+      ),
+    );
+
+    await expect(
+      getCallbacks().signIn?.({
+        user: { email: "user@mapia.local", name: "OIDC User" },
+        account: {
+          provider: "oidc",
+          providerAccountId: "subject-123",
+          type: "oauth",
+        },
+        profile: {
+          sub: "subject-123",
+          email: "user@mapia.local",
+        },
+      } as never),
+    ).rejects.toMatchObject({
+      message: "AuthStorageMigrationIncomplete",
+    });
+  });
+
+  it("maps auth integrity failures to a stable callback error code", async () => {
+    mocks.syncAuthenticatedActor.mockRejectedValueOnce(
+      new AppError(
+        "A integridade do storage de autenticacao do MapIA esta invalida neste ambiente.",
+        {
+          code: "AUTH_STORAGE_INTEGRITY_INVALID",
+          status: 503,
+        },
+      ),
+    );
+
+    await expect(
+      getCallbacks().signIn?.({
+        user: { email: "user@mapia.local", name: "OIDC User" },
+        account: {
+          provider: "oidc",
+          providerAccountId: "subject-123",
+          type: "oauth",
+        },
+        profile: {
+          sub: "subject-123",
+          email: "user@mapia.local",
+        },
+      } as never),
+    ).rejects.toMatchObject({
+      message: "AuthStorageIntegrityInvalid",
     });
   });
 
@@ -189,22 +275,49 @@ describe("auth options", () => {
     });
   });
 
-  it("fails closed when session callback receives a token without required claims", async () => {
-    await expect(
-      getCallbacks().session?.({
-        session: {
-          expires: "2099-01-01T00:00:00.000Z",
-          user: {},
-        },
-        token: {
-          sub: "11111111-1111-4111-8111-111111111111",
-          email: "user@mapia.local",
-          authProvider: "oidc",
-        },
-      } as never),
-    ).rejects.toMatchObject({
-      code: "AUTH_SESSION_CLAIMS_MISSING",
-      status: 401,
+  it("invalidates legacy jwt tokens without required MapIA claims", async () => {
+    const token = await getCallbacks().jwt?.({
+      token: {
+        sub: "11111111-1111-4111-8111-111111111111",
+        email: "user@mapia.local",
+        authProvider: "oidc",
+      },
+    } as never);
+
+    expect(token).toMatchObject({
+      mapiaSessionInvalid: true,
+      mapiaSessionErrorCode: "AUTH_JWT_CLAIMS_MISSING",
     });
+  });
+
+  it("returns an empty session payload when the jwt was invalidated", async () => {
+    const result = await getCallbacks().session?.({
+      session: {
+        expires: "2099-01-01T00:00:00.000Z",
+        user: {},
+      },
+      token: {
+        mapiaSessionInvalid: true,
+        mapiaSessionErrorCode: "AUTH_JWT_CLAIMS_MISSING",
+      },
+    } as never);
+
+    expect(result).toEqual({});
+  });
+
+  it("treats tokens without required claims as an invalid session payload instead of throwing", async () => {
+    const result = await getCallbacks().session?.({
+      session: {
+        expires: "2099-01-01T00:00:00.000Z",
+        user: {},
+      },
+      token: {
+        sub: "11111111-1111-4111-8111-111111111111",
+        email: "user@mapia.local",
+        authProvider: "oidc",
+      },
+    } as never);
+
+    expect(result).toEqual({});
   });
 });

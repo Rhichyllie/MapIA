@@ -142,6 +142,7 @@ export function buildAssistantDraftFromLegacyWizard(input: {
 }): AssistantDraft {
   const contextResolution = resolveCreationContext({
     snapshotDiagramType: input.payload.diagramType,
+    snapshotDiagramView: input.payload.diagramType,
     template: input.project.template,
   });
   const { effectiveProfile, effectiveInitialView, effectiveContextDefaults, effectiveLayout } =

@@ -108,6 +108,10 @@ export function createDashboardCopy(
     messages: messages.messages,
     legacyTemplateOptions: templates,
     getDiagramTypeLabel(diagramType) {
+      if (diagramType === "graph") {
+        return messages.diagramTypes.graph.label;
+      }
+
       if (diagramType === "tree") {
         return messages.diagramTypes.tree.label;
       }

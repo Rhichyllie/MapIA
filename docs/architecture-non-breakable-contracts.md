@@ -9,6 +9,10 @@ Os contratos abaixo sao os pontos que futuras fases nao devem quebrar sem migrac
 - Nome: `GraphSnapshot`
 - Local no codigo: `src/domain/canonical-graph.ts`
 - Por que e critico: e o payload comum entre editor, importadores, versionamento, semantica e persistencia.
+- Regra estrutural atual:
+  - `diagramType` e a identidade canonica do diagrama (`graph`, `tree`, `flow`, `mindmap`)
+  - `diagramView` e a projecao/view sobre o mesmo grafo (`graph`, `erd`, `timeline`, `tree`, `sitemap`, `flow`, `mindmap`)
+  - pares invalidos entre `diagramType` e `diagramView` devem falhar no schema
 - Risco de quebra: alto. Qualquer mudanca estrutural reverbera em quase todo o produto.
 - Como validar integridade: parse em `GraphSnapshotSchema`, carga/salvamento via repositorios e testes de `graph`, `editor`, `versioning` e `importing`.
 - Impacto em caso de regressao: snapshots antigos deixam de abrir, APIs de editor quebram e importadores passam a gerar payload invalido.
@@ -62,10 +66,12 @@ Os contratos abaixo sao os pontos que futuras fases nao devem quebrar sem migrac
 
 - Nome: `resolveProjectCreationContext`
 - Local no codigo: `src/modules/projects/domain/resolve-project-creation-context.ts`
-- Por que e critico: e a ponte entre dados novos (`draft`, `creation settings`, `diagramType`) e legado (`Project.template`).
+- Por que e critico: e a ponte entre dados novos (`draft`, `creation settings`, `diagramType` + `diagramView`) e legado (`Project.template`).
 - Risco de quebra: alto. E usado tanto em `/create` quanto em `/editor` e alimenta telemetria de fallback.
 - Como validar integridade: abrir create/editor para projetos novos, antigos e com template legado; conferir `decisionTrace`.
 - Impacto em caso de regressao: projeto abre no modo errado, layout e recipe errados, telemetria de migracao perde confiabilidade.
+- Regra adicional: `initialView`, `layout`, `profile` e `startStrategy` pertencem ao create flow e nao podem voltar a competir com a identidade canonica persistida no snapshot.
+- Regra adicional: `Project.template` so pode atuar como compatibilidade de boundary; novas decisoes de runtime nao devem usá-lo como fonte de verdade principal.
 
 ## 8. Envelope padrao de API
 
@@ -82,7 +88,7 @@ Os contratos abaixo sao os pontos que futuras fases nao devem quebrar sem migrac
 - Local no codigo: `src/server/auth/options.ts`, `src/server/auth/auth-runtime.ts`, `src/server/auth/session.ts`, `src/server/auth/api-session.ts`, `src/server/auth/auth-user-store.ts`, `src/server/app/api-route-guards.ts`, casos de uso de `projects` e `workspaces`, `prisma/schema.prisma`
 - Por que e critico: a protecao principal agora depende da resolucao consistente entre identidade autenticada, usuario interno e membership/role no workspace correto.
 - Risco de quebra: alto. Essa e a base do produto multiusuario e do fail-closed em producao.
-- Como validar integridade: testes de `auth-runtime`, `auth-runtime-readiness`, `options`, `session`, guards de API, `api/auth/[...nextauth]`, `pnpm auth:preflight:staging`, `test:routes:critical` e rotas de membership.
+- Como validar integridade: testes de `auth-runtime`, `auth-runtime-readiness`, `options`, `session`, guards de API, `api/auth/[...nextauth]`, `pnpm auth:preflight:staging`, `pnpm auth:storage:check -- --json`, `test:routes:critical` e rotas de membership.
 - Impacto em caso de regressao: login aparentemente valido com sessao inconsistente, acesso indevido entre workspaces/projetos, ou falha total de auth em ambiente compartilhado.
 - Regra adicional: `Workspace.ownerIdentity` nao pode voltar a ser fonte de autorizacao; ele permanece apenas como compatibilidade de dados.
 - Regra adicional: o ultimo `owner` de um workspace nao pode ser rebaixado nem removido.

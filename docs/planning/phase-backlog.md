@@ -18,7 +18,7 @@ Legenda curta:
 | PLAT-02 | Fechar baseline vermelha atual e registrar dono/remocao para os fails de lint/test | alto  | alto    | plataforma/testes     | imediata | Fase 1 - hardening baseline      |
 | SEM-01  | Corrigir drift de semantica antes de ampliar regras ou UX semantica                | alto  | alto    | semantica/editor      | imediata | Fase 1 - hardening baseline      |
 | IMP-01  | Travar contrato do importador Prisma/Postgres com testes de shape e provenance     | alto  | alto    | importadores          | imediata | Fase 1 - contratos de integracao |
-| DOM-01  | Consolidar fonte de verdade de diagrama (`template` x `diagramType` x aliases)     | alto  | alto    | dominio/editor/create | curta    | Fase 2 - consolidacao de dominio |
+| DOM-02  | Revisar snapshots/versionamento para separar melhor identidade estrutural e estado derivado | medio | alto    | dominio/versioning    | curta    | Fase 2 - consolidacao de dominio |
 | EDT-01  | Quebrar o `EditorShell` em modulos testaveis                                       | alto  | alto    | editor                | curta    | Fase 3 - modularizacao do editor |
 
 ## Status apos Fase 1A
@@ -32,7 +32,8 @@ Legenda curta:
 - `OBS-02` avancou em `2026-04-02`: as rotas internas de observabilidade passaram a usar o mesmo comportamento de sessao backend, `forbidden` padronizado e tratamento de erro das demais APIs protegidas.
 - Fase `1B` de hardening de plataforma em `2026-04-02`: auth/session backend, ownership por projeto, headers conservadores, auditoria minima e runbook de env/migration ficaram mais centralizados e reutilizaveis.
 - Fase `1C` avancou em `2026-04-02`: auth OIDC production-capable, sessao com ator interno, `app_users/auth_identities/workspace_memberships`, roles ativas no backend e rota de memberships ficaram implementadas.
-- Proximos candidatos naturais apos esta fase: `DOM-01`, `OBS-01`, fechamento do restante de `PLAT-04` e expansao seletiva de route tests.
+- Fase `2A` executada em `2026-04-06`: `GraphSnapshot` passou a distinguir `diagramType` canonico e `diagramView`, `Project.template` virou boundary de compatibilidade explicita, e o create flow/aliases deixaram de competir como fonte de verdade do diagrama.
+- Proximos candidatos naturais apos este marco: `DOM-02`, `SEM-02`, `OBS-01`, fechamento do restante de `PLAT-04` e expansao seletiva de route tests.
 
 ## Plataforma e seguranca
 
@@ -47,8 +48,8 @@ Legenda curta:
 
 | ID     | Item                                                                                                                                             | Risco | Impacto | Dependencias                                        | Area afetada                         | Urgencia | Fase recomendada                  |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ------- | --------------------------------------------------- | ------------------------------------ | -------- | --------------------------------- |
-| DOM-01 | Consolidar a fonte de verdade de selecao de diagrama e reduzir sobreposicao entre `Project.template`, `snapshot.diagramType` e aliases do editor | alto  | alto    | mapear consumidores atuais e definir migracao       | create, editor, renderers, telemetry | curta    | Fase 2 - consolidacao de dominio  |
 | DOM-02 | Revisar o uso de `GraphVersion` v1 como working snapshot operacional e deixar o contrato de armazenamento menos ambiguo                          | medio | alto    | entendimento de restore/versionamento atual         | graph, versioning, prisma            | media    | Fase 3 - evolucao de persistencia |
+| DOM-04 | Formalizar melhor a fronteira entre identidade canonica, semantica e roles de diagrama sem reintroduzir aliases como verdade do dominio         | medio | alto    | consolidacao de `diagramType` + `diagramView`       | semantics, editor, diagram roles     | media    | Fase 2 - contratos de dominio     |
 | DOM-03 | Reduzir o tamanho e a mistura de responsabilidades em `creation-assistant.ts` sem mudar contrato externo                                         | medio | medio   | separar validacao, recipe runtime e compatibilidade | creation assistant                   | media    | Fase 3 - modularizacao de dominio |
 
 ## Semantica
@@ -117,6 +118,18 @@ Legenda curta:
   - staging auth ganhou preflight operacional real com `pnpm auth:preflight:staging` e probe de discovery sem credencial embutida;
   - `Workspace.ownerIdentity` ficou encapsulado como legado via boundary explicita, em vez de permanecer espalhado nas bordas;
   - memberships passaram a ter rota de revogacao dedicada com protecao do ultimo `owner` tambem na remocao.
+- Correcao operacional executada em `2026-04-06` (auth/login regression):
+  - storage/migration da auth ganhou readiness explicita com `pnpm auth:storage:check`;
+  - callback/sign-in deixou de mascarar falha do auth store como sucesso JSON `200`;
+  - JWT legado/invalido passou a degradar para sessao ausente em vez de gerar ruido repetitivo.
+- Hardening operacional executado em `2026-04-07` (auth rollout/migration readiness):
+  - `pnpm auth:storage:check` passou a classificar fundacao ausente/parcial, rollout de migrations incompleto e integridade invalida de IDs;
+  - `auth:bootstrap:local` virou o caminho canonico para bootstrap local com migrate, seed e dupla verificacao de readiness;
+  - o rollout da auth passou a exigir tambem a migration `20260407113000_auth_storage_rollout_guardrails` para provar integridade pos-reparo.
+- Fechamento executado em `2026-04-06` (Fase 2A):
+  - `GraphSnapshot` passou a exigir identidade coerente entre `diagramType` e `diagramView`;
+  - o create flow passou a tratar `initialView`/`layout` como entrada de experiencia, nao como verdade canônica;
+  - `Project.template` ficou reduzido a compatibilidade de boundary e nao deve mais orientar novos write paths.
 - Pendencias naturais apos esse marco:
   - conectar credenciais reais do IdP por ambiente;
   - medir uso restante dos aliases para definir janela real de retirada;

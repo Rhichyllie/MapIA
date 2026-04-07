@@ -1,4 +1,5 @@
 import type { Account, NextAuthOptions, Profile } from "next-auth";
+import type { JWT } from "next-auth/jwt";
 import type { OAuthConfig } from "next-auth/providers/oauth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
@@ -9,6 +10,7 @@ import {
   resolveAuthRuntimeConfig,
 } from "@/src/server/auth/auth-runtime";
 import { syncAuthenticatedActor } from "@/src/server/auth/auth-user-store";
+import { toAuthCallbackError } from "@/src/server/auth/auth-callback-error";
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -24,6 +26,11 @@ type OidcProfile = Profile & {
   email_verified?: boolean;
   preferred_username?: string;
   picture?: string;
+};
+
+type MapiaInvalidJwt = JWT & {
+  mapiaSessionInvalid: true;
+  mapiaSessionErrorCode: string;
 };
 
 function normalizeEmailClaim(input?: string | null) {
@@ -178,6 +185,17 @@ function buildProviderList(
   return [];
 }
 
+function buildInvalidJwtToken(errorCode: string): MapiaInvalidJwt {
+  return {
+    mapiaSessionInvalid: true,
+    mapiaSessionErrorCode: errorCode,
+  };
+}
+
+function isInvalidJwtToken(token: JWT): token is MapiaInvalidJwt {
+  return token.mapiaSessionInvalid === true;
+}
+
 export function getAuthOptions(): NextAuthOptions {
   const env = getServerEnv();
   const runtime = resolveAuthRuntimeConfig(env);
@@ -188,6 +206,7 @@ export function getAuthOptions(): NextAuthOptions {
     },
     pages: {
       signIn: "/login",
+      error: "/login",
     },
     providers: buildProviderList(runtime),
     callbacks: {
@@ -237,14 +256,20 @@ export function getAuthOptions(): NextAuthOptions {
           return false;
         }
 
-        const actor = await syncAuthenticatedActor({
-          providerId: account.provider,
-          providerType,
-          subject,
-          email: normalizedEmail,
-          displayName: user.name,
-          authMode: runtime.mode,
-        });
+        let actor;
+
+        try {
+          actor = await syncAuthenticatedActor({
+            providerId: account.provider,
+            providerType,
+            subject,
+            email: normalizedEmail,
+            displayName: user.name,
+            authMode: runtime.mode,
+          });
+        } catch (error) {
+          throw toAuthCallbackError(error);
+        }
 
         user.id = actor.userId;
         user.email = actor.email;
@@ -276,11 +301,39 @@ export function getAuthOptions(): NextAuthOptions {
           token.name = user.name;
           token.authProvider = authProvider;
           token.authMode = authMode.data;
+          delete token.mapiaSessionInvalid;
+          delete token.mapiaSessionErrorCode;
+          return token;
+        }
+
+        const persistedUserId = userIdClaimSchema.safeParse(
+          typeof token.sub === "string" ? token.sub.trim() : undefined,
+        );
+        const persistedEmail = normalizeEmailClaim(
+          typeof token.email === "string" ? token.email : null,
+        );
+        const persistedAuthProvider =
+          typeof token.authProvider === "string"
+            ? token.authProvider.trim()
+            : "";
+        const persistedAuthMode = authModeClaimSchema.safeParse(token.authMode);
+
+        if (
+          !persistedUserId.success ||
+          !persistedEmail ||
+          !persistedAuthProvider ||
+          !persistedAuthMode.success
+        ) {
+          return buildInvalidJwtToken("AUTH_JWT_CLAIMS_MISSING");
         }
 
         return token;
       },
       async session({ session, token }) {
+        if (isInvalidJwtToken(token)) {
+          return {} as never;
+        }
+
         if (session.user) {
           const userId = userIdClaimSchema.safeParse(
             typeof token.sub === "string" ? token.sub.trim() : undefined,
@@ -295,10 +348,7 @@ export function getAuthOptions(): NextAuthOptions {
           const authMode = authModeClaimSchema.safeParse(token.authMode);
 
           if (!userId.success || !email || !authProvider || !authMode.success) {
-            throw new AppError("Sessao JWT sem claims obrigatorias do MapIA.", {
-              code: "AUTH_SESSION_CLAIMS_MISSING",
-              status: 401,
-            });
+            return {} as never;
           }
 
           session.user.id = userId.data;

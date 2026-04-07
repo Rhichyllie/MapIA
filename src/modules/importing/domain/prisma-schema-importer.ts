@@ -1177,7 +1177,8 @@ export function importPrismaSchemaToGraphSnapshot(
           nodes,
           edges,
           viewport: { x: 0, y: 0, zoom: 1 },
-          diagramType: "erd",
+          diagramType: "graph",
+          diagramView: "erd",
         });
         const validateParseStep = completeStep(validateParseStepHandle, {
           status: "success",

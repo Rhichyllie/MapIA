@@ -3,6 +3,10 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { AppError } from "@/src/lib/app-error";
 import { prisma } from "@/src/server/db/client";
+import {
+  assertAuthStorageReady,
+  normalizeAuthStorageError,
+} from "./auth-storage-readiness";
 import type { SupportedAuthRuntimeMode } from "./auth-runtime";
 
 const AppUserSchema = z.object({
@@ -188,23 +192,29 @@ async function updateExistingUserTx(input: {
 }
 
 export async function findAppUserById(userId: string) {
-  const rows = await prisma.$queryRaw<AppUserRecord[]>(
-    Prisma.sql`
-      SELECT
-        "id",
-        "email",
-        "emailNormalized",
-        "displayName",
-        "active",
-        "createdAt",
-        "updatedAt"
-      FROM "app_users"
-      WHERE "id" = ${userId}::uuid
-      LIMIT 1
-    `,
-  );
+  try {
+    await assertAuthStorageReady();
 
-  return rows[0] ? AppUserSchema.parse(rows[0]) : null;
+    const rows = await prisma.$queryRaw<AppUserRecord[]>(
+      Prisma.sql`
+        SELECT
+          "id",
+          "email",
+          "emailNormalized",
+          "displayName",
+          "active",
+          "createdAt",
+          "updatedAt"
+        FROM "app_users"
+        WHERE "id" = ${userId}::uuid
+        LIMIT 1
+      `,
+    );
+
+    return rows[0] ? AppUserSchema.parse(rows[0]) : null;
+  } catch (error) {
+    throw normalizeAuthStorageError(error);
+  }
 }
 
 export async function findActiveAppUserById(userId: string) {
@@ -228,13 +238,19 @@ export async function upsertAppUserByEmail(input: {
     });
   }
 
-  return prisma.$transaction((tx) =>
-    upsertUserByEmailTx({
-      tx,
-      email: input.email,
-      displayName: input.displayName,
-    }),
-  );
+  try {
+    await assertAuthStorageReady();
+
+    return prisma.$transaction((tx) =>
+      upsertUserByEmailTx({
+        tx,
+        email: input.email,
+        displayName: input.displayName,
+      }),
+    );
+  } catch (error) {
+    throw normalizeAuthStorageError(error);
+  }
 }
 
 export async function syncAuthenticatedActor(input: {
@@ -276,161 +292,170 @@ export async function syncAuthenticatedActor(input: {
     });
   }
 
-  return prisma.$transaction(async (tx) => {
-    const identityRows = await tx.$queryRaw<IdentityLookupRow[]>(
-      Prisma.sql`
-        SELECT
-          ai."id",
-          ai."userId",
-          ai."providerId",
-          ai."providerType",
-          ai."subject",
-          ai."emailAtLogin",
-          ai."createdAt",
-          ai."updatedAt",
-          ai."lastSeenAt",
-          au."email" AS "userEmail",
-          au."emailNormalized" AS "userEmailNormalized",
-          au."displayName" AS "userDisplayName",
-          au."active" AS "userActive"
-        FROM "auth_identities" ai
-        INNER JOIN "app_users" au ON au."id" = ai."userId"
-        WHERE ai."providerId" = ${providerId}
-          AND ai."subject" = ${subject}
-        LIMIT 1
-      `,
-    );
+  try {
+    await assertAuthStorageReady();
 
-    if (identityRows.length > 0) {
-      const existingIdentity = identityRows[0];
+    return prisma.$transaction(async (tx) => {
+      const identityRows = await tx.$queryRaw<IdentityLookupRow[]>(
+        Prisma.sql`
+          SELECT
+            ai."id",
+            ai."userId",
+            ai."providerId",
+            ai."providerType",
+            ai."subject",
+            ai."emailAtLogin",
+            ai."createdAt",
+            ai."updatedAt",
+            ai."lastSeenAt",
+            au."email" AS "userEmail",
+            au."emailNormalized" AS "userEmailNormalized",
+            au."displayName" AS "userDisplayName",
+            au."active" AS "userActive"
+          FROM "auth_identities" ai
+          INNER JOIN "app_users" au ON au."id" = ai."userId"
+          WHERE ai."providerId" = ${providerId}
+            AND ai."subject" = ${subject}
+          LIMIT 1
+        `,
+      );
 
-      if (!existingIdentity.userActive) {
-        throw new AppError("O usuario autenticado esta desativado no MapIA.", {
-          code: "AUTH_USER_DISABLED",
-          status: 403,
+      if (identityRows.length > 0) {
+        const existingIdentity = identityRows[0];
+
+        if (!existingIdentity.userActive) {
+          throw new AppError(
+            "O usuario autenticado esta desativado no MapIA.",
+            {
+              code: "AUTH_USER_DISABLED",
+              status: 403,
+            },
+          );
+        }
+
+        const updatedUser = await updateExistingUserTx({
+          tx,
+          userId: existingIdentity.userId,
+          email,
+          displayName: input.displayName,
+        });
+
+        await tx.$executeRaw(
+          Prisma.sql`
+            UPDATE "auth_identities"
+            SET
+              "emailAtLogin" = ${email},
+              "lastSeenAt" = CURRENT_TIMESTAMP,
+              "updatedAt" = CURRENT_TIMESTAMP
+            WHERE "id" = ${existingIdentity.id}::uuid
+          `,
+        );
+
+        return toAuthenticatedActor({
+          user: updatedUser,
+          providerId,
+          authMode: input.authMode,
         });
       }
 
-      const updatedUser = await updateExistingUserTx({
+      const conflictingIdentityRows = await tx.$queryRaw<
+        Array<{ id: string; userId: string; subject: string }>
+      >(
+        Prisma.sql`
+          SELECT
+            ai."id",
+            ai."userId",
+            ai."subject"
+          FROM "auth_identities" ai
+          INNER JOIN "app_users" au ON au."id" = ai."userId"
+          WHERE ai."providerId" = ${providerId}
+            AND ai."subject" <> ${subject}
+            AND au."emailNormalized" = ${email}
+          LIMIT 1
+        `,
+      );
+
+      if (conflictingIdentityRows.length > 0) {
+        throw new AppError(
+          "A identidade externa autenticada conflita com um usuario interno ja vinculado a outro subject.",
+          {
+            code: "AUTH_IDENTITY_CONFLICT",
+            status: 409,
+          },
+        );
+      }
+
+      const user = await upsertUserByEmailTx({
         tx,
-        userId: existingIdentity.userId,
         email,
         displayName: input.displayName,
       });
 
-      await tx.$executeRaw(
+      const insertedIdentityRows = await tx.$queryRaw<AuthIdentityRow[]>(
         Prisma.sql`
-          UPDATE "auth_identities"
-          SET
-            "emailAtLogin" = ${email},
+          INSERT INTO "auth_identities" (
+            "id",
+            "userId",
+            "providerType",
+            "providerId",
+            "subject",
+            "emailAtLogin",
+            "createdAt",
+            "updatedAt",
+            "lastSeenAt"
+          )
+          VALUES (
+            ${randomUUID()}::uuid,
+            ${user.id}::uuid,
+            ${input.providerType}::"AuthProviderType",
+            ${providerId},
+            ${subject},
+            ${email},
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP,
+            CURRENT_TIMESTAMP
+          )
+          ON CONFLICT ("providerId", "subject")
+          DO UPDATE SET
+            "emailAtLogin" = EXCLUDED."emailAtLogin",
             "lastSeenAt" = CURRENT_TIMESTAMP,
             "updatedAt" = CURRENT_TIMESTAMP
-          WHERE "id" = ${existingIdentity.id}::uuid
+          RETURNING
+            "id",
+            "userId",
+            "providerId",
+            "providerType",
+            "subject",
+            "emailAtLogin",
+            "createdAt",
+            "updatedAt",
+            "lastSeenAt"
         `,
       );
 
+      const identity = insertedIdentityRows[0];
+      const resolvedUser =
+        identity.userId === user.id
+          ? user
+          : await findUserByIdTx(tx, identity.userId);
+
+      if (!resolvedUser || !resolvedUser.active) {
+        throw new AppError(
+          "Nao foi possivel resolver o usuario autenticado do MapIA.",
+          {
+            code: "AUTH_USER_NOT_FOUND",
+            status: 401,
+          },
+        );
+      }
+
       return toAuthenticatedActor({
-        user: updatedUser,
+        user: resolvedUser,
         providerId,
         authMode: input.authMode,
       });
-    }
-
-    const conflictingIdentityRows = await tx.$queryRaw<
-      Array<{ id: string; userId: string; subject: string }>
-    >(
-      Prisma.sql`
-        SELECT
-          ai."id",
-          ai."userId",
-          ai."subject"
-        FROM "auth_identities" ai
-        INNER JOIN "app_users" au ON au."id" = ai."userId"
-        WHERE ai."providerId" = ${providerId}
-          AND ai."subject" <> ${subject}
-          AND au."emailNormalized" = ${email}
-        LIMIT 1
-      `,
-    );
-
-    if (conflictingIdentityRows.length > 0) {
-      throw new AppError(
-        "A identidade externa autenticada conflita com um usuario interno ja vinculado a outro subject.",
-        {
-          code: "AUTH_IDENTITY_CONFLICT",
-          status: 409,
-        },
-      );
-    }
-
-    const user = await upsertUserByEmailTx({
-      tx,
-      email,
-      displayName: input.displayName,
     });
-
-    const insertedIdentityRows = await tx.$queryRaw<AuthIdentityRow[]>(
-      Prisma.sql`
-        INSERT INTO "auth_identities" (
-          "id",
-          "userId",
-          "providerType",
-          "providerId",
-          "subject",
-          "emailAtLogin",
-          "createdAt",
-          "updatedAt",
-          "lastSeenAt"
-        )
-        VALUES (
-          ${randomUUID()}::uuid,
-          ${user.id}::uuid,
-          ${input.providerType}::"AuthProviderType",
-          ${providerId},
-          ${subject},
-          ${email},
-          CURRENT_TIMESTAMP,
-          CURRENT_TIMESTAMP,
-          CURRENT_TIMESTAMP
-        )
-        ON CONFLICT ("providerId", "subject")
-        DO UPDATE SET
-          "emailAtLogin" = EXCLUDED."emailAtLogin",
-          "lastSeenAt" = CURRENT_TIMESTAMP,
-          "updatedAt" = CURRENT_TIMESTAMP
-        RETURNING
-          "id",
-          "userId",
-          "providerId",
-          "providerType",
-          "subject",
-          "emailAtLogin",
-          "createdAt",
-          "updatedAt",
-          "lastSeenAt"
-      `,
-    );
-
-    const identity = insertedIdentityRows[0];
-    const resolvedUser =
-      identity.userId === user.id
-        ? user
-        : await findUserByIdTx(tx, identity.userId);
-
-    if (!resolvedUser || !resolvedUser.active) {
-      throw new AppError(
-        "Nao foi possivel resolver o usuario autenticado do MapIA.",
-        {
-          code: "AUTH_USER_NOT_FOUND",
-          status: 401,
-        },
-      );
-    }
-
-    return toAuthenticatedActor({
-      user: resolvedUser,
-      providerId,
-      authMode: input.authMode,
-    });
-  });
+  } catch (error) {
+    throw normalizeAuthStorageError(error);
+  }
 }

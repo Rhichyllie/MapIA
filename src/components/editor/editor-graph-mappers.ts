@@ -3,13 +3,19 @@ import type {
   Node as FlowNode,
   Viewport,
 } from "@xyflow/react";
-import type { Edge, ExternalRef, GraphSnapshot, Node } from "@/src/domain";
+import {
+  resolveDiagramView,
+  type DiagramView,
+  type Edge,
+  type ExternalRef,
+  type GraphSnapshot,
+  type Node,
+} from "@/src/domain";
 import {
   normalizeDiagramSnapshot,
   resolveDiagramRole,
   type DiagramRole,
 } from "@/src/modules/diagrams/domain";
-import type { DiagramType } from "@/src/modules/graph/domain";
 
 export type EditorNodeData = {
   nodeId?: string;
@@ -43,16 +49,14 @@ export type RFNode = FlowNode<EditorNodeData>;
 export type RFEdge = FlowEdge<EditorEdgeData>;
 export type EditorSnapshotLayoutMetadata = Pick<
   GraphSnapshot,
-  "diagramType" | "layoutOptions" | "rootNodeName" | "allowReapplyLayout"
+  | "diagramType"
+  | "diagramView"
+  | "layoutOptions"
+  | "rootNodeName"
+  | "allowReapplyLayout"
 >;
 
-type DiagramTypeEffective =
-  | DiagramType
-  | "erd"
-  | "sitemap"
-  | "graph"
-  | "timeline"
-  | undefined;
+type DiagramViewEffective = DiagramView | undefined;
 
 function buildNodeTestDomAttributes(nodeId: string): RFNode["domAttributes"] {
   // React's HTMLAttributes typing does not include data-* keys explicitly,
@@ -68,39 +72,32 @@ function buildEdgeTestDomAttributes(edgeId: string): RFEdge["domAttributes"] {
   } as unknown as RFEdge["domAttributes"];
 }
 
-function resolveDiagramTypeEffective(
-  diagramType: string | undefined,
-): DiagramTypeEffective {
-  if (
-    diagramType === "tree" ||
-    diagramType === "flow" ||
-    diagramType === "mindmap" ||
-    diagramType === "erd" ||
-    diagramType === "sitemap" ||
-    diagramType === "graph" ||
-    diagramType === "timeline"
-  ) {
-    return diagramType;
-  }
-
-  return undefined;
+function resolveDiagramViewEffective(input: {
+  diagramType?: string;
+  diagramView?: string;
+}): DiagramViewEffective {
+  return resolveDiagramView(input);
 }
 
 export function toFlowNodes(
   snapshot: GraphSnapshot,
   options?: {
     hiddenNodeIds?: Set<string>;
-    diagramTypeEffective?: DiagramTypeEffective;
+    diagramViewEffective?: DiagramViewEffective;
     rootNodeName?: string;
   },
 ): RFNode[] {
   const hiddenNodeIds = options?.hiddenNodeIds ?? new Set<string>();
-  const diagramTypeEffective =
-    options?.diagramTypeEffective ?? resolveDiagramTypeEffective(snapshot.diagramType);
+  const diagramViewEffective =
+    options?.diagramViewEffective ??
+    resolveDiagramViewEffective({
+      diagramType: snapshot.diagramType,
+      diagramView: snapshot.diagramView,
+    });
 
   return snapshot.nodes.map((node) => {
     const diagramRole = resolveDiagramRole({
-      diagramType: diagramTypeEffective,
+      diagramType: diagramViewEffective,
       nodeKind: node.kind,
       nodePayload: node.data,
       nodeLabel: node.label,
@@ -176,6 +173,7 @@ export function toCanonicalSnapshotFromFlowState(
       zoom: viewport.zoom,
     },
     diagramType: layoutMetadata?.diagramType,
+    diagramView: layoutMetadata?.diagramView,
     layoutOptions: layoutMetadata?.layoutOptions,
     rootNodeName: layoutMetadata?.rootNodeName,
     allowReapplyLayout: layoutMetadata?.allowReapplyLayout,
@@ -190,10 +188,13 @@ export function fromCanonicalSnapshotToFlowState(snapshot: GraphSnapshot): {
   hiddenNodeIds: string[];
   computedRootNodeId?: string;
 } {
-  const diagramTypeEffective = resolveDiagramTypeEffective(snapshot.diagramType);
+  const diagramViewEffective = resolveDiagramViewEffective({
+    diagramType: snapshot.diagramType,
+    diagramView: snapshot.diagramView,
+  });
   const normalization = normalizeDiagramSnapshot({
     snapshot,
-    diagramTypeEffective,
+    diagramTypeEffective: diagramViewEffective,
     rootNodeName: snapshot.rootNodeName,
   });
   const hiddenNodeIds = new Set(normalization.hiddenNodeIds);
@@ -201,13 +202,14 @@ export function fromCanonicalSnapshotToFlowState(snapshot: GraphSnapshot): {
   return {
     nodes: toFlowNodes(normalization.normalizedSnapshot, {
       hiddenNodeIds,
-      diagramTypeEffective,
+      diagramViewEffective,
       rootNodeName: snapshot.rootNodeName,
     }),
     edges: toFlowEdges(normalization.normalizedSnapshot),
     viewport: normalization.normalizedSnapshot.viewport,
     layoutMetadata: {
       diagramType: snapshot.diagramType,
+      diagramView: snapshot.diagramView,
       layoutOptions: snapshot.layoutOptions,
       rootNodeName: snapshot.rootNodeName,
       allowReapplyLayout: snapshot.allowReapplyLayout,

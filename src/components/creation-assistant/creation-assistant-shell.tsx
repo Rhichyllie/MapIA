@@ -26,6 +26,7 @@ export function CreationAssistantShell({
   initialSettings,
   initialDraftState,
   snapshotDiagramType,
+  snapshotDiagramView,
 }: CreationAssistantShellProps) {
   const router = useRouter();
   const labels = useCreationAssistantLabels();
@@ -36,6 +37,7 @@ export function CreationAssistantShell({
     initialSettings,
     initialDraftState,
     snapshotDiagramType,
+    snapshotDiagramView,
     labels: labels.defaults,
   });
 

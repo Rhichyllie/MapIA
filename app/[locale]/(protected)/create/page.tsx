@@ -64,6 +64,7 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
     updatedAt: string;
   } | null = null;
   let snapshotDiagramType: string | undefined;
+  let snapshotDiagramView: string | undefined;
 
   if (fromProjectId) {
     try {
@@ -103,10 +104,12 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
           }
         : null;
       snapshotDiagramType = workingSnapshot?.snapshot.diagramType;
+      snapshotDiagramView = workingSnapshot?.snapshot.diagramView;
 
       const contextResolution = resolveCreationContext({
         creationSettings: settings,
         snapshotDiagramType,
+        snapshotDiagramView,
         template: accessedProject.template,
       });
       const recipe = resolveCreationRecipe({
@@ -178,6 +181,7 @@ export default async function CreatePage({ searchParams }: CreatePageProps) {
             initialSettings={initialSettings}
             initialDraftState={initialDraftState}
             snapshotDiagramType={snapshotDiagramType}
+            snapshotDiagramView={snapshotDiagramView}
           />
         )}
       </div>

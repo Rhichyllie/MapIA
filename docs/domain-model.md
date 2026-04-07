@@ -12,7 +12,8 @@
 
 - Unidade de trabalho principal.
 - Pertence a `Workspace`.
-- Define `template` inicial (ex.: `sitemap`, `flowchart`, `erd`, `graph`).
+- `template` continua existindo apenas como compatibilidade legada (`sitemap`, `flowchart`, `erd`, `graph`).
+- A identidade canonica do diagrama nao fica mais em `Project.template`; ela vive no snapshot.
 - `slug` continua obrigatorio tecnicamente no backend, mas na UX da Fase 5.2 e tratado como `ID tecnico` (somente leitura em area avancada).
 
 ### Node (canonico)
@@ -76,6 +77,9 @@ Todas as views (arvore, grafo, sitemap, fluxograma, ERD, timeline) devem projeta
 ## Snapshot (MVP)
 
 - `GraphVersion.snapshot`: JSON com `nodes`, `edges`, `viewport`
+- Metadados canonicos de identidade:
+  - `diagramType?: "graph" | "tree" | "flow" | "mindmap"`
+  - `diagramView?: "graph" | "erd" | "timeline" | "tree" | "sitemap" | "flow" | "mindmap"`
 - Metadados opcionais de UX/politica no snapshot canonico:
   - `rootNodeName?: string`
   - `allowReapplyLayout?: boolean`
@@ -85,7 +89,7 @@ Todas as views (arvore, grafo, sitemap, fluxograma, ERD, timeline) devem projeta
 ## Projecoes de UX (Fase 5.2)
 
 - Dashboard lista cada projeto com metadados derivados (read model de UI):
-  - `selectedDiagramType?: "tree" | "flow" | "mindmap"` (derivado do snapshot quando existir)
+  - `selectedDiagramType?: "graph" | "tree" | "flow" | "mindmap"` (derivado do snapshot quando existir)
   - `hasInitialSnapshot: boolean`
   - `snapshotVersionCount: number`
 - Esses campos nao alteram o modelo canonico; sao composicoes de consulta para leitura.
@@ -93,21 +97,35 @@ Todas as views (arvore, grafo, sitemap, fluxograma, ERD, timeline) devem projeta
   - nome local nao altera entidade `EditorSnapshotVersion`
   - persistencia apenas no `localStorage` do navegador por `projectId`
 
-## Distincao canônica (Fase 5.3)
+## Identidade canonica do diagrama (Fase 2A)
 
-### diagramType (produto) vs template (legado)
+### Fonte de verdade
 
-- `diagramType` e metadado de produto no snapshot (`tree`, `flow`, `mindmap`) e orienta layout e renderer visual.
-- `template` permanece no `Project` como compatibilidade de fluxos legados (`graph`, `sitemap`, `flowchart`, `erd`).
-- Regra de compatibilidade no frontend:
-  - usar `diagramType` quando suportado
-  - usar fallback por `template` quando `diagramType` estiver ausente/legado
+- `snapshot.diagramType` e a identidade estrutural canonica do diagrama.
+- `snapshot.diagramView` e a projecao visual/experiencia usada para abrir o mesmo grafo.
+- `Project.template` permanece no `Project` apenas como compatibilidade de fluxos legados.
+
+### Regras de compatibilidade
+
+- Pares validos atualmente:
+  - `graph` -> `graph | erd | timeline`
+  - `tree` -> `tree | sitemap`
+  - `flow` -> `flow`
+  - `mindmap` -> `mindmap`
+- Snapshots legados ainda podem chegar sem `diagramView` ou com `diagramType` legado; o schema normaliza isso para o par canonico.
+- `flowchart` nao e tipo canonico. Ele e normalizado para `diagramType=flow` e `diagramView=flow`.
+
+### Boundary de criacao e view
+
+- `initialView`, `layout`, `profile`, `startStrategy` e similares pertencem ao create flow.
+- Essas escolhas podem influenciar o snapshot inicial, mas nao substituem a identidade canonica persistida.
+- Renderers, modos de editor e aliases legados devem consumir `diagramView`/compatibilidade de boundary, nao disputar o papel de fonte de verdade.
 
 ### Layout de dominio vs renderer de UI
 
-- O dominio persiste somente snapshot canonico (nos/arestas/viewport + metadados de layout).
-- A renderizacao do canvas (nodeTypes/edgeTypes/background/minimap) fica no frontend via renderer registry.
-- Consequencia: evolucao visual nao altera contrato de API nem schema de dominio.
+- O dominio persiste somente snapshot canonico (nos/arestas/viewport + identidade estrutural + metadados de layout).
+- A renderizacao do canvas (nodeTypes/edgeTypes/background/minimap) fica no frontend via renderer registry e segue `diagramView`.
+- Consequencia: evolucao visual nao altera o contrato estrutural do grafo.
 
 ## Invariantes do grafo (Fase 2A)
 

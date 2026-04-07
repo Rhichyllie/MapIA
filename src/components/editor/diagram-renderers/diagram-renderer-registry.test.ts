@@ -17,7 +17,7 @@ describe("resolveDiagramRenderer", () => {
     expect(renderer.treeDirection).toBe("left-right");
   });
 
-  it("usa template legado quando diagramType nao existe", () => {
+  it("usa template legado como boundary de view quando snapshot ainda nao define diagramView", () => {
     const renderer = resolveDiagramRenderer({
       template: "erd",
     });
@@ -28,16 +28,18 @@ describe("resolveDiagramRenderer", () => {
 
   it("respeita snapshot legado quando diagramType legado e suportado", () => {
     const renderer = resolveDiagramRenderer({
-      diagramType: "sitemap",
+      diagramType: "tree",
+      diagramView: "sitemap",
       template: "graph",
     });
 
     expect(renderer.key).toBe("sitemap");
   });
 
-  it("resolve timeline renderer when timeline diagramType is provided", () => {
+  it("resolve timeline renderer when canonical graph uses timeline view", () => {
     const renderer = resolveDiagramRenderer({
-      diagramType: "timeline",
+      diagramType: "graph",
+      diagramView: "timeline",
       template: "graph",
       layoutOptions: {
         direction: "top-down",
@@ -47,6 +49,14 @@ describe("resolveDiagramRenderer", () => {
     expect(renderer.key).toBe("timeline");
     expect(renderer.label).toBe("Timeline");
     expect(renderer.treeDirection).toBe("top-down");
+  });
+
+  it("maps flowchart template fallback to flow renderer instead of generic graph", () => {
+    const renderer = resolveDiagramRenderer({
+      template: "flowchart",
+    });
+
+    expect(renderer.key).toBe("flow");
   });
 
   it("centraliza a apresentacao base do flow no registry", () => {

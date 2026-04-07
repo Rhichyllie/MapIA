@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este documento registra o estado tecnico real do MapIA em `2026-04-02`, baseado no codigo atual do repositorio. Ele nao substitui ADRs nem roadmap. Ele serve para leitura de engenharia, analise de risco e preparo de fases futuras.
+Este documento registra o estado tecnico real do MapIA em `2026-04-06`, baseado no codigo atual do repositorio. Ele nao substitui ADRs nem roadmap. Ele serve para leitura de engenharia, analise de risco e preparo de fases futuras.
 
 Para historico incremental de fases, ver `docs/architecture.md`.
 
@@ -50,6 +50,9 @@ Fluxo de alto nivel:
 ### Dominio canonico do grafo
 
 - `src/domain/canonical-graph.ts` define `Node`, `Edge`, `ExternalRef`, `ViewportState` e `GraphSnapshot`.
+- A identidade estrutural canonica do diagrama agora vive no proprio snapshot:
+  - `snapshot.diagramType`: tipo estrutural canonico (`graph`, `tree`, `flow`, `mindmap`)
+  - `snapshot.diagramView`: projecao visual/experiencia sobre o mesmo grafo (`graph`, `erd`, `timeline`, `tree`, `sitemap`, `flow`, `mindmap`)
 - `src/modules/graph/domain/graph-invariants.ts` e a barreira de integridade: trim de labels, numeros finitos, IDs unicos, edges sem orfaos e proibicao de relacao duplicada exata.
 - Quase tudo converge neste contrato: editor, importadores, versionamento, semantica e persistencia.
 
@@ -60,7 +63,10 @@ Fluxo de alto nivel:
 - Ha coexistencia de estado em duas formas:
   - `project_creation_drafts`
   - `project_creation_settings`
-- `src/modules/projects/domain/resolve-project-creation-context.ts` ainda faz ponte entre `creation settings`, `snapshot.diagramType` e `Project.template`.
+- `src/modules/projects/domain/resolve-project-creation-context.ts` faz a ponte entre:
+  - `creation settings` e draft do assistant;
+  - identidade canonica do snapshot (`diagramType` + `diagramView`);
+  - `Project.template` apenas como compatibilidade legada explicita.
 - O alias legado `/wizard` continua ativo apenas como redirect para `/create`.
 - As rotas `wizard-draft`, `wizard-generate` e `creation-settings` continuam de pe por compatibilidade e traduzem payload antigo para o modelo atual.
 
@@ -86,13 +92,16 @@ Fluxo de alto nivel:
 ### Diagramas e modos visuais
 
 - O layout engine de dominio em `src/modules/graph/domain/diagram-types.ts` considera como suportados `tree`, `flow` e `mindmap`.
-- O editor, por compatibilidade, ainda resolve modos e renderers para tipos legados como `graph`, `sitemap`, `flowchart`, `erd` e `timeline`.
-- Hoje existem fontes de verdade sobrepostas:
-  - `snapshot.diagramType`
+- O editor agora resolve o modo visual a partir de `snapshot.diagramView` e usa `diagramType` apenas para o que e estrutural/canonico.
+- Compatibilidade legada continua existindo, mas ficou empurrada para boundaries explicitas:
   - `Project.template`
-  - aliases de modo no editor
-  - registry de renderer
-- Isso funciona, mas e uma fronteira fragil para futuras evolucoes.
+  - aliases `wizard-*` / `creation-settings*`
+  - normalizacao de snapshots legados sem `diagramView`
+- A regra atual e:
+  - `diagramType` define a identidade estrutural do grafo;
+  - `diagramView` define renderer/projecao inicial;
+  - `initialView`, `layout`, `profile`, `startStrategy` pertencem ao create flow;
+  - `Project.template` nao deve ser usado como fonte de verdade do diagrama novo.
 
 ### Persistencia e versionamento
 
@@ -129,7 +138,7 @@ Fluxo de alto nivel:
   - texto Prisma inline;
   - arquivo `.prisma`;
   - introspeccao `postgres-live`.
-- O pipeline gera `GraphSnapshot` canonico, adiciona `externalRefs`, normaliza a saida e envia o resultado para persistencia do editor.
+- O pipeline gera `GraphSnapshot` canonico com `diagramType` estrutural e `diagramView` explicita quando a projecao nao coincide com o tipo estrutural (ex.: ERD importado).
 - Existe rastreabilidade deterministica de `externalRef.id` e `externalId`; o contrato critico de shape/provenance do importador Prisma/Postgres agora esta travado por testes, mas ainda faltam guardrails equivalentes para todas as rotas de importacao.
 
 ### Observabilidade
@@ -146,7 +155,9 @@ Fluxo de alto nivel:
   - `oidc` em ambiente compartilhado/producao com env valida
 - `src/server/auth/auth-runtime.ts` e o gate central de configuracao; em `production` mal configurado o backend falha em modo `fail-closed`.
 - `src/server/auth/auth-runtime-readiness.ts` e `scripts/auth-runtime-preflight.ts` agora oferecem preflight operacional de staging, incluindo validacao do discovery document do issuer sem depender de `client_secret` embutido no repositorio.
+- `src/server/auth/auth-storage-readiness.ts` e `scripts/auth-storage-check.ts` agora formam o gate operacional de storage/migration da auth local: login e leitura de sessao falham com erro explicito de fundacao ausente, rollout de migrations incompleto ou integridade invalida, em vez de cair em erro cru de banco.
 - A sessao backend agora carrega `user.id`, `authProvider` e `authMode`, e `src/server/auth/session.ts` resolve o ator interno validando `app_users`.
+- `src/server/auth/options.ts` invalida JWT legado/incompleto como sessao ausente em vez de deixar o runtime entrar em `JWT_SESSION_ERROR` repetitivo; claims obrigatorias continuam exigidas no sign-in autenticado.
 - `src/server/app/api-route-guards.ts` centraliza auth backend, acesso por projeto/workspace e auditoria de acesso negado.
 - A autorizacao principal deixou de ser apenas `ownerIdentity`: hoje passa por membership persistida e role minima requerida por rota/use case.
 - Existem rotas dedicadas para operar memberships em `app/api/workspaces/[workspaceId]/memberships/route.ts` (`GET` para `admin+`, `PUT` para `owner`) e `app/api/workspaces/[workspaceId]/memberships/[memberUserId]/route.ts` (`DELETE` para `owner`).
@@ -159,6 +170,7 @@ Fluxo de alto nivel:
 - `proxy.ts` reaplica esses headers tambem em respostas geradas pelo middleware, incluindo redirects de auth/locale.
 - `.env.example` passou a refletir variaveis reais de release, service name, observabilidade interna, telemetria e auth OIDC.
 - `docs/operations/runtime-env-and-migrations.md` formaliza o baseline operacional para envs, modos de auth, seed e comandos Prisma.
+- `app/api/auth/[...nextauth]/route.ts` agora reescreve respostas JSON de callback que antes saiam `200` com erro escondido, para status explicito quando o backend de auth falha antes de concluir o login.
 - `pnpm prisma:migrate` agora falha de forma explicita; o fluxo correto ficou separado entre `pnpm prisma:migrate:dev` e `pnpm prisma:migrate:deploy`.
 
 ### APIs
@@ -195,7 +207,7 @@ Fluxo de alto nivel:
   - a baseline minima agora pode ser reproduzida com `pnpm validate` e tambem roda na CI.
   - o modelo novo de memberships/roles ja domina o backend; o que sobra na frente de criacao sao aliases de compatibilidade de payload/URL, nao mais fallback central de ownership.
 
-Baseline revalidada em `2026-04-02`:
+Baseline revalidada em `2026-04-06`:
 
 - `pnpm lint` esta verde;
 - `pnpm test` esta verde;
@@ -229,7 +241,7 @@ Os logs de timeout/fallback da suite de observabilidade continuam aparecendo em 
 
 ### Fragilidades estruturais
 
-- `Project.template` ainda influencia comportamento do editor e do contexto de criacao, apesar de o snapshot ja carregar `diagramType`.
+- `Project.template` ainda existe por compatibilidade e ainda participa do contexto de criacao legado, mas a regra ativa agora e trata-lo como boundary e nao como identidade canonica.
 - O fluxo de criacao convive com contratos oficiais e aliases legados ao mesmo tempo.
 - Working snapshot e versionamento imutavel vivem em tabelas diferentes e com semanticas diferentes.
 - Semantica esta no caminho critico de salvar, importar e restaurar snapshots.
@@ -239,7 +251,8 @@ Os logs de timeout/fallback da suite de observabilidade continuam aparecendo em 
 ## Pontos frageis para as proximas fases
 
 - Nao quebrar o `GraphSnapshot` e suas invariantes deve ser prioridade absoluta; quase toda regressao estrutural nasce aqui.
-- Qualquer mudanca em `resolveProjectCreationContext()` mexe em `create`, `editor`, telemetria e fallback de template legado.
+- Qualquer mudanca em `resolveProjectCreationContext()` mexe em `create`, `editor`, telemetria e compatibilidade de `Project.template`.
+- `diagramType` e `diagramView` agora formam um contrato inseparavel para abrir/renderizar projetos sem ambiguidade; regressao nessa dupla reabre conflito entre dominio e view.
 - Mexer em semantica sem revalidar a matriz por modo de diagrama tende a reabrir drift entre editor, auditoria, save e restore.
 - Mexer em importacao sem formalizar o shape final do payload tende a gerar regressao silenciosa em consumidores do editor.
 - Qualquer iniciativa de enterprise readiness vai bater primeiro em auth, ownership e aliases legados de API.

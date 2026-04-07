@@ -1,3 +1,7 @@
+import {
+  resolveCanonicalDiagramType,
+  resolveDiagramView,
+} from "@/src/domain";
 import type {
   AssistantContext,
   AssistantCreationSettings,
@@ -7,7 +11,7 @@ import {
   buildDefaultContextForView,
   normalizeLayoutForView,
   resolveCreationRecipe,
-  resolveInitialViewFromDiagramType,
+  resolveInitialViewFromDiagramIdentity,
   resolveRecommendedLayout,
   type InitialView,
   type LayoutNormalizationWarningCode,
@@ -15,6 +19,7 @@ import {
   type ProjectProfile,
 } from "@/src/modules/creation-assistant/domain";
 import type { ProjectTemplate } from "./project";
+import { resolveDiagramIdentityFromLegacyTemplate } from "./project-template-compat";
 
 export type ProjectCreationContextSource =
   | "draft"
@@ -37,6 +42,7 @@ export type ResolveProjectCreationContextInput = {
   draft?: Partial<AssistantDraft> | null;
   creationSettings?: AssistantCreationSettings | null;
   snapshotDiagramType?: string;
+  snapshotDiagramView?: string;
   template?: ProjectTemplate;
 };
 
@@ -78,19 +84,8 @@ export type ProjectCreationContext = {
 };
 
 function inferInitialViewFromTemplate(template?: ProjectTemplate): InitialView {
-  if (template === "erd") {
-    return "erd";
-  }
-
-  if (template === "flowchart") {
-    return "flow";
-  }
-
-  if (template === "sitemap") {
-    return "sitemap";
-  }
-
-  return "graph";
+  const identity = resolveDiagramIdentityFromLegacyTemplate(template);
+  return resolveInitialViewFromDiagramIdentity(identity);
 }
 
 function inferProfileFromInitialView(initialView: InitialView): ProjectProfile {
@@ -132,26 +127,37 @@ function countTemplateFields(fields: ProjectCreationDecisionTrace["legacyTemplat
 export function resolveProjectCreationContext(
   input: ResolveProjectCreationContextInput,
 ): ProjectCreationContext {
+  const snapshotIdentity = {
+    diagramType: resolveCanonicalDiagramType({
+      diagramType: input.snapshotDiagramType,
+      diagramView: input.snapshotDiagramView,
+    }),
+    diagramView: resolveDiagramView({
+      diagramType: input.snapshotDiagramType,
+      diagramView: input.snapshotDiagramView,
+    }),
+  };
+  const hasSnapshotIdentity =
+    Boolean(input.snapshotDiagramType?.trim()) ||
+    Boolean(input.snapshotDiagramView?.trim());
   const profileFromDraft = input.draft?.profile;
   const profileFromSettings = input.creationSettings?.profile;
   const viewFromDraft = input.draft?.initialView;
   const viewFromSettings = input.creationSettings?.initialView;
-  const viewFromSnapshot = resolveInitialViewFromDiagramType(
-    input.snapshotDiagramType,
-  );
+  const viewFromSnapshot = resolveInitialViewFromDiagramIdentity(snapshotIdentity);
   const viewFromTemplate = inferInitialViewFromTemplate(input.template);
 
   const effectiveInitialView =
     viewFromDraft ??
     viewFromSettings ??
-    (input.snapshotDiagramType ? viewFromSnapshot : undefined) ??
+    (hasSnapshotIdentity ? viewFromSnapshot : undefined) ??
     viewFromTemplate;
   const initialViewSource: ProjectCreationContextSource =
     viewFromDraft
       ? "draft"
       : viewFromSettings
         ? "creation-settings"
-        : input.snapshotDiagramType
+        : hasSnapshotIdentity
           ? "snapshot"
           : input.template
             ? "template"
@@ -230,10 +236,9 @@ export function resolveProjectCreationContext(
   });
   const missingCreationSettings = !input.creationSettings && !input.draft;
   const snapshotCouldNotResolve =
-    Boolean(input.snapshotDiagramType) &&
+    hasSnapshotIdentity &&
     initialViewSource === "template" &&
-    viewFromSnapshot === "free" &&
-    input.snapshotDiagramType !== "graph";
+    viewFromSnapshot === "free";
 
   let fallbackReason: LegacyTemplateFallbackReason = "none";
   if (dependencyReal) {
@@ -266,7 +271,7 @@ export function resolveProjectCreationContext(
       [
         input.draft ? "draft" : null,
         input.creationSettings ? "creation-settings" : null,
-        input.snapshotDiagramType ? "snapshot" : null,
+        hasSnapshotIdentity ? "snapshot" : null,
         input.template ? "legacy-template" : null,
         "recipe-runtime",
         normalizedLayout.normalized ? "layout-normalizer" : null,

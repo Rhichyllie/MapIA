@@ -48,6 +48,7 @@ export type EditorDiagramCapability =
   | "erd-export-preview";
 
 export type EditorDiagramModeResolutionSource =
+  | "diagram-view"
   | "diagram-type"
   | "legacy-alias"
   | "template"
@@ -405,6 +406,7 @@ export type EditorDiagramModule = {
   templateFallbacks: readonly ProjectTemplate[];
   capabilities: readonly EditorDiagramCapability[];
   resolveRenderer(input: {
+    diagramView?: string;
     template?: ProjectTemplate;
     layoutOptions?: unknown;
   }): RendererConfig;

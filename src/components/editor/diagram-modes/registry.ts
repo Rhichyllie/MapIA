@@ -1,3 +1,4 @@
+import { resolveDiagramView } from "@/src/domain";
 import type { ProjectTemplate } from "@/src/modules/projects/domain";
 import { erdDiagramMode } from "./modes/erd-mode";
 import { flowDiagramMode } from "./modes/flow-mode";
@@ -23,37 +24,54 @@ const EDITOR_DIAGRAM_MODES = [
   timelineDiagramMode,
 ] as const satisfies readonly EditorDiagramModule[];
 
-const EDITOR_DIAGRAM_MODE_REGISTRY = new Map<EditorDiagramModeId, EditorDiagramModule>(
-  EDITOR_DIAGRAM_MODES.map((mode) => [mode.id, mode]),
-);
+const EDITOR_DIAGRAM_MODE_REGISTRY = new Map<
+  EditorDiagramModeId,
+  EditorDiagramModule
+>(EDITOR_DIAGRAM_MODES.map((mode) => [mode.id, mode]));
 
-function resolveModeFromDiagramType(
-  diagramType: string | undefined,
-): {
+function trimOptionalValue(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveModeFromDiagramIdentity(input: {
+  diagramType?: string;
+  diagramView?: string;
+}): {
   mode: EditorDiagramModule;
   source: ResolvedEditorDiagramMode["source"];
 } | null {
-  if (!diagramType) {
+  const requestedDiagramView = resolveDiagramView({
+    diagramType: input.diagramType,
+    diagramView: input.diagramView,
+  });
+
+  if (!requestedDiagramView) {
     return null;
   }
 
-  for (const mode of EDITOR_DIAGRAM_MODES) {
-    if (mode.id === diagramType) {
-      return {
-        mode,
-        source: "diagram-type",
-      };
-    }
+  const mode = EDITOR_DIAGRAM_MODE_REGISTRY.get(requestedDiagramView);
 
-    if (mode.aliases.includes(diagramType)) {
-      return {
-        mode,
-        source: "legacy-alias",
-      };
-    }
+  if (!mode) {
+    return null;
   }
 
-  return null;
+  const rawDiagramView = trimOptionalValue(input.diagramView);
+  const rawDiagramType = trimOptionalValue(input.diagramType);
+  const source: ResolvedEditorDiagramMode["source"] = rawDiagramView
+    ? rawDiagramView === requestedDiagramView
+      ? "diagram-view"
+      : "legacy-alias"
+    : rawDiagramType
+      ? rawDiagramType === requestedDiagramView
+        ? "diagram-type"
+        : "legacy-alias"
+      : "default";
+
+  return {
+    mode,
+    source,
+  };
 }
 
 function resolveModeFromTemplate(
@@ -95,20 +113,26 @@ export function hasEditorDiagramCapability(
 
 export function resolveEditorDiagramMode(input: {
   diagramType?: string;
+  diagramView?: string;
   template?: ProjectTemplate;
   layoutOptions?: unknown;
 }): ResolvedEditorDiagramMode {
-  const fromDiagramType = resolveModeFromDiagramType(input.diagramType);
+  const fromDiagramType = resolveModeFromDiagramIdentity(input);
 
   if (fromDiagramType) {
     return {
       mode: fromDiagramType.mode,
       renderer: fromDiagramType.mode.resolveRenderer({
+        diagramView: input.diagramView,
         template: input.template,
         layoutOptions: input.layoutOptions,
       }),
       source: fromDiagramType.source,
-      ...(input.diagramType ? { requestedDiagramType: input.diagramType } : {}),
+      ...(input.diagramView
+        ? { requestedDiagramType: input.diagramView }
+        : input.diagramType
+          ? { requestedDiagramType: input.diagramType }
+          : {}),
     };
   }
 
@@ -118,21 +142,31 @@ export function resolveEditorDiagramMode(input: {
     return {
       mode: fromTemplate,
       renderer: fromTemplate.resolveRenderer({
+        diagramView: input.diagramView,
         template: input.template,
         layoutOptions: input.layoutOptions,
       }),
       source: "template",
-      ...(input.diagramType ? { requestedDiagramType: input.diagramType } : {}),
+      ...(input.diagramView
+        ? { requestedDiagramType: input.diagramView }
+        : input.diagramType
+          ? { requestedDiagramType: input.diagramType }
+          : {}),
     };
   }
 
   return {
     mode: graphDiagramMode,
     renderer: graphDiagramMode.resolveRenderer({
+      diagramView: input.diagramView,
       template: input.template,
       layoutOptions: input.layoutOptions,
     }),
     source: "default",
-    ...(input.diagramType ? { requestedDiagramType: input.diagramType } : {}),
+    ...(input.diagramView
+      ? { requestedDiagramType: input.diagramView }
+      : input.diagramType
+        ? { requestedDiagramType: input.diagramType }
+        : {}),
   };
 }

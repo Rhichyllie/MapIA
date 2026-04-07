@@ -108,13 +108,25 @@ describe("editor diagram mode registry", () => {
     });
   });
 
-  it("resolves graph mode through legacy alias and exposes graph semantics", () => {
+  it("maps flowchart compatibility into canonical flow mode", () => {
     const resolved = resolveEditorDiagramMode({
       diagramType: "flowchart",
       template: "graph",
     });
 
     expect(resolved.source).toBe("legacy-alias");
+    expect(resolved.mode.id).toBe("flow");
+    expect(resolved.renderer.key).toBe("flow");
+  });
+
+  it("resolves graph mode from explicit diagramView and exposes graph semantics", () => {
+    const resolved = resolveEditorDiagramMode({
+      diagramType: "graph",
+      diagramView: "graph",
+      template: "graph",
+    });
+
+    expect(resolved.source).toBe("diagram-view");
     expect(resolved.mode.id).toBe("graph");
     expect(resolved.renderer.key).toBe("graph");
     expect(

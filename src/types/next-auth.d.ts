@@ -19,5 +19,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     authProvider?: string;
     authMode?: "development_credentials" | "oidc";
+    mapiaSessionInvalid?: boolean;
+    mapiaSessionErrorCode?: string;
   }
 }

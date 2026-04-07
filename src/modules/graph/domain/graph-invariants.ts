@@ -6,7 +6,7 @@ import {
   type Node,
 } from "@/src/domain";
 import {
-  isSupportedDiagramType,
+  isAutoLayoutDiagramType,
   resolveDiagramLayoutOptions,
 } from "./diagram-types";
 
@@ -68,15 +68,17 @@ export function validateGraphSnapshotInvariants(
       ? snapshot.allowReapplyLayout
       : undefined;
   const normalizedLayoutMetadata = (() => {
-    if (!isSupportedDiagramType(snapshot.diagramType)) {
+    if (!isAutoLayoutDiagramType(snapshot.diagramType)) {
       return {
         diagramType: snapshot.diagramType,
+        diagramView: snapshot.diagramView,
         layoutOptions: snapshot.layoutOptions,
       };
     }
 
     return {
       diagramType: snapshot.diagramType,
+      diagramView: snapshot.diagramView,
       layoutOptions: resolveDiagramLayoutOptions(
         snapshot.diagramType,
         snapshot.layoutOptions,
@@ -152,6 +154,7 @@ export function validateGraphSnapshotInvariants(
       zoom: snapshot.viewport.zoom,
     },
     diagramType: normalizedLayoutMetadata.diagramType,
+    diagramView: normalizedLayoutMetadata.diagramView,
     layoutOptions: normalizedLayoutMetadata.layoutOptions,
     ...(normalizedRootNodeName
       ? { rootNodeName: normalizedRootNodeName }

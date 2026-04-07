@@ -1,5 +1,10 @@
 import { z } from "zod";
 import {
+  resolveCanonicalDiagramTypeFromView,
+  type CanonicalDiagramType,
+  type DiagramView,
+} from "@/src/domain";
+import {
   DEFAULT_AUTOMATION_TOGGLES,
   resolveRecipeContextBlocks,
   resolveRecipeLayoutCatalog,
@@ -1485,7 +1490,9 @@ export function validateAssistantDraftForPhase(input: {
   return validateStrictByRecipeFromRegistry(input.draft).blockingIssueCodes;
 }
 
-export function resolveDiagramTypeForInitialView(initialView: InitialView) {
+export function resolveDiagramViewForInitialView(
+  initialView: InitialView,
+): DiagramView {
   switch (initialView) {
     case "hierarchy":
       return "tree";
@@ -1506,26 +1513,56 @@ export function resolveDiagramTypeForInitialView(initialView: InitialView) {
   }
 }
 
-export function resolveInitialViewFromDiagramType(
-  diagramType: string | undefined,
-): InitialView {
-  if (diagramType === "tree") {
+export function resolveDiagramIdentityForInitialView(
+  initialView: InitialView,
+): {
+  diagramType: CanonicalDiagramType;
+  diagramView: DiagramView;
+} {
+  const diagramView = resolveDiagramViewForInitialView(initialView);
+
+  return {
+    diagramType: resolveCanonicalDiagramTypeFromView(diagramView),
+    diagramView,
+  };
+}
+
+export function resolveInitialViewFromDiagramIdentity(input: {
+  diagramType?: CanonicalDiagramType;
+  diagramView?: DiagramView;
+}): InitialView {
+  const diagramView = input.diagramView;
+
+  if (diagramView === "tree") {
     return "hierarchy";
   }
-  if (diagramType === "flow" || diagramType === "flowchart") {
+  if (diagramView === "flow") {
     return "flow";
   }
-  if (diagramType === "mindmap") {
+  if (diagramView === "mindmap") {
     return "mindmap";
   }
-  if (diagramType === "erd") {
+  if (diagramView === "erd") {
     return "erd";
   }
-  if (diagramType === "sitemap") {
+  if (diagramView === "sitemap") {
     return "sitemap";
   }
-  if (diagramType === "timeline") {
+  if (diagramView === "timeline") {
     return "timeline";
+  }
+  if (diagramView === "graph") {
+    return "graph";
+  }
+
+  if (input.diagramType === "tree") {
+    return "hierarchy";
+  }
+  if (input.diagramType === "flow") {
+    return "flow";
+  }
+  if (input.diagramType === "mindmap") {
+    return "mindmap";
   }
 
   return "free";

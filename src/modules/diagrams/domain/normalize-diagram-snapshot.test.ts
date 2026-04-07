@@ -135,7 +135,8 @@ describe("normalizeDiagramSnapshot", () => {
 
   it("sitemap hides meta nodes and timeline creates fallback milestone when empty", () => {
     const sitemapSnapshot = createBaseSnapshot({
-      diagramType: "sitemap",
+      diagramType: "tree",
+      diagramView: "sitemap",
       nodes: [
         {
           id: "70000000-0000-4000-8000-000000000001",
@@ -160,7 +161,8 @@ describe("normalizeDiagramSnapshot", () => {
     });
 
     const timelineSnapshot = createBaseSnapshot({
-      diagramType: "timeline",
+      diagramType: "graph",
+      diagramView: "timeline",
       nodes: [
         {
           id: "72000000-0000-4000-8000-000000000001",

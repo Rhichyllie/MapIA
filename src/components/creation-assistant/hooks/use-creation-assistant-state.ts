@@ -52,6 +52,7 @@ export function resolveInitialAssistantState(input: {
   initialSettings?: CreationAssistantShellProps["initialSettings"];
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
+  snapshotDiagramView?: string;
   labels?: CreationAssistantDefaultLabels;
 }) {
   const hydratedInitialDraftState = buildInitialDraft({
@@ -59,6 +60,7 @@ export function resolveInitialAssistantState(input: {
     initialSettings: input.initialSettings,
     initialDraftState: input.initialDraftState,
     snapshotDiagramType: input.snapshotDiagramType,
+    snapshotDiagramView: input.snapshotDiagramView,
     labels: input.labels,
   });
   const stepState = resolveInitialStepState(input.mode);
@@ -76,6 +78,7 @@ export function useCreationAssistantState(input: {
   initialSettings?: CreationAssistantShellProps["initialSettings"];
   initialDraftState?: CreationAssistantShellProps["initialDraftState"];
   snapshotDiagramType?: string;
+  snapshotDiagramView?: string;
   labels?: CreationAssistantDefaultLabels;
 }) {
   const initialAssistantState = resolveInitialAssistantState(input);
